@@ -827,7 +827,7 @@
   const SUPABASE_KEY = "sb_publishable_t17xdBGDadspxbuo-KP2zA_MGoAQn0A";
   const SYNC_ROW_ID = "main";  // 個人用なので常に同じIDに保存
 
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   const STORAGE_KEY = "ichibou_v3";
   const DEFAULT_STATE = {
@@ -894,7 +894,7 @@
     }
     setSyncStatus("syncing", "同期中");
     try {
-      const { error } = await supabase
+      const { error } = await sb
         .from("ichibou_state")
         .upsert({ id: SYNC_ROW_ID, data: state, updated_at: new Date().toISOString() });
       if (error) throw error;
@@ -914,7 +914,7 @@
     }
     setSyncStatus("syncing", "読込中");
     try {
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("ichibou_state")
         .select("data, updated_at")
         .eq("id", SYNC_ROW_ID)
@@ -944,7 +944,7 @@
 
   // ===== リアルタイム購読: 他端末の変更を即座に反映 =====
   function subscribeRealtime() {
-    const channel = supabase
+    const channel = sb
       .channel("ichibou-sync")
       .on(
         "postgres_changes",
