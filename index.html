@@ -1,0 +1,1782 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>一望 — ichibou</title>
+<meta name="description" content="脳の外に出すための外部脳。プロジェクトの一望と、言葉にならない"もや"を受け止める場所。" />
+<meta name="theme-color" content="#f4f1ea" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="一望" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --bg-2: #ebe6da;
+    --ink: #1a1915;
+    --ink-soft: #4a4740;
+    --ink-mute: #8a857a;
+    --line: #cfc8b8;
+    --line-soft: #ddd6c5;
+    --accent: #c8502e;
+    --accent-soft: #e08566;
+    --green: #4a6b3a;
+    --amber: #b88a2e;
+    --blue: #3a5a7a;
+    --fog: #9fa8b8;
+    --paper-shadow: 0 1px 0 rgba(0,0,0,0.03), 0 4px 16px rgba(60,50,30,0.05);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Zen Kaku Gothic New", sans-serif;
+    font-size: 15px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased; min-height: 100vh;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(200,80,46,0.04) 0%, transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(74,107,58,0.04) 0%, transparent 40%);
+  }
+  .app { max-width: 1400px; margin: 0 auto; padding: 32px 28px 80px; }
+
+  header.top {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: baseline; gap: 16px; }
+  .brand h1 {
+    font-family: "Shippori Mincho", serif; font-size: 38px;
+    letter-spacing: 0.08em; font-weight: 700;
+  }
+  .brand .romaji {
+    font-family: "JetBrains Mono", monospace; font-size: 11px;
+    color: var(--ink-mute); letter-spacing: 0.3em; text-transform: uppercase;
+  }
+  .meta {
+    text-align: right; font-family: "JetBrains Mono", monospace;
+    font-size: 12px; color: var(--ink-mute); letter-spacing: 0.1em;
+  }
+  .meta .date { color: var(--ink-soft); font-size: 13px; }
+
+  nav.tabs {
+    display: flex; gap: 4px; margin-bottom: 32px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .tab {
+    padding: 12px 20px; font-family: "Shippori Mincho", serif;
+    font-size: 15px; letter-spacing: 0.1em; background: none;
+    border: none; cursor: pointer; color: var(--ink-mute);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: all 0.2s;
+  }
+  .tab:hover { color: var(--ink-soft); }
+  .tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .tab .count {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--ink-mute); margin-left: 6px;
+  }
+  .view { display: none; }
+  .view.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .ichibou-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .ichibou-title {
+    font-family: "Shippori Mincho", serif; font-size: 22px; letter-spacing: 0.05em;
+  }
+  .ichibou-title .sub {
+    font-size: 12px; color: var(--ink-mute); margin-left: 12px;
+    font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0;
+  }
+  .btn {
+    background: var(--ink); color: var(--bg); border: none;
+    padding: 10px 18px; font-family: "Zen Kaku Gothic New", sans-serif;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    letter-spacing: 0.08em; transition: transform 0.15s, background 0.15s;
+  }
+  .btn:hover { background: var(--accent); }
+  .btn:active { transform: scale(0.98); }
+  .btn.ghost {
+    background: transparent; color: var(--ink-soft); border: 1px solid var(--line);
+  }
+  .btn.ghost:hover { background: var(--bg-2); color: var(--ink); }
+
+  .projects {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+  }
+  .project {
+    background: #fbf9f3; border: 1px solid var(--line-soft);
+    padding: 22px 22px 18px; box-shadow: var(--paper-shadow);
+    position: relative; transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .project:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 0 rgba(0,0,0,0.03), 0 8px 24px rgba(60,50,30,0.08);
+  }
+  .project.frozen { background: #f0ede4; opacity: 0.7; }
+  .project.frozen::before {
+    content: "凍結中"; position: absolute; top: 12px; right: 16px;
+    font-size: 10px; color: var(--ink-mute); letter-spacing: 0.3em;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .project-name {
+    font-family: "Shippori Mincho", serif; font-size: 18px;
+    font-weight: 700; margin-bottom: 14px; padding-right: 80px;
+    cursor: text; outline: none; border-bottom: 1px dashed transparent;
+  }
+  .project-name:focus { border-bottom-color: var(--line); }
+  .field {
+    display: grid; grid-template-columns: 56px 1fr; gap: 12px;
+    margin-bottom: 10px; align-items: start; font-size: 13px;
+  }
+  .field .label {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--ink-mute); letter-spacing: 0.15em; padding-top: 3px;
+  }
+  .field .value {
+    color: var(--ink-soft); outline: none; min-height: 20px;
+    border-bottom: 1px dashed transparent; padding-bottom: 2px;
+  }
+  .field .value:focus { border-bottom-color: var(--line); color: var(--ink); }
+  .field .value:empty::before {
+    content: attr(data-placeholder); color: var(--ink-mute);
+    opacity: 0.5; font-style: italic;
+  }
+  .field.next .label { color: var(--accent); }
+  .field.next .value { color: var(--ink); font-weight: 500; }
+
+  .project-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line-soft);
+  }
+  .streak {
+    display: flex; align-items: center; gap: 8px;
+    font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute);
+  }
+  .streak-num { color: var(--green); font-size: 14px; font-weight: 600; }
+  .done-today {
+    background: none; border: 1px solid var(--line); padding: 6px 12px;
+    font-size: 11px; cursor: pointer;
+    font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.1em;
+    color: var(--ink-soft); transition: all 0.15s;
+  }
+  .done-today:hover { border-color: var(--green); color: var(--green); }
+  .done-today.done { background: var(--green); color: var(--bg); border-color: var(--green); }
+  .project-actions {
+    position: absolute; top: 18px; right: 18px;
+    display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s;
+  }
+  .project:hover .project-actions { opacity: 1; }
+  .project.frozen .project-actions { opacity: 1; }
+  .icon-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 14px; color: var(--ink-mute); padding: 2px 6px; border-radius: 2px;
+  }
+  .icon-btn:hover { background: var(--bg-2); color: var(--ink); }
+
+  .insights-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; background: var(--bg-2);
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--ink-soft); letter-spacing: 0.1em;
+    cursor: pointer; transition: background 0.15s; margin-top: 8px;
+  }
+  .insights-badge:hover { background: var(--accent-soft); color: white; }
+  .insights-badge.hot { background: var(--accent); color: white; }
+
+  .add-project {
+    border: 1px dashed var(--line); background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 220px; cursor: pointer; color: var(--ink-mute);
+    font-family: "Shippori Mincho", serif; font-size: 15px;
+    letter-spacing: 0.1em; transition: all 0.2s;
+  }
+  .add-project:hover {
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(200,80,46,0.03);
+  }
+
+  /* ===== もやビュー ===== */
+  .moya-wrap { max-width: 820px; margin: 0 auto; }
+  .moya-title {
+    font-family: "Shippori Mincho", serif; font-size: 22px;
+    margin-bottom: 8px; letter-spacing: 0.05em;
+  }
+  .moya-sub {
+    color: var(--ink-mute); font-size: 13px; margin-bottom: 8px;
+  }
+  .moya-explain {
+    background: rgba(159,168,184,0.08); border-left: 3px solid var(--fog);
+    padding: 14px 18px; margin-bottom: 24px; font-size: 13px;
+    color: var(--ink-soft); line-height: 1.8;
+  }
+  .moya-explain strong { color: var(--ink); }
+  .moya-input-box {
+    background: linear-gradient(135deg, #f7f5ee 0%, #ecebe3 100%);
+    border: 1px solid var(--line-soft); padding: 20px;
+    box-shadow: var(--paper-shadow); margin-bottom: 28px;
+    position: relative; overflow: hidden;
+  }
+  .moya-input-box::before {
+    content: "";
+    position: absolute; top: -40px; right: -40px;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, rgba(159,168,184,0.15), transparent 70%);
+    pointer-events: none;
+  }
+  .moya-input {
+    width: 100%; border: none; background: transparent;
+    font-family: "Zen Kaku Gothic New", sans-serif; font-size: 15px;
+    line-height: 1.8; resize: vertical; min-height: 70px; outline: none;
+    color: var(--ink); position: relative; z-index: 1;
+  }
+  .moya-input::placeholder { color: var(--ink-mute); opacity: 0.6; font-style: italic; }
+  .moya-actions {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line-soft);
+    position: relative; z-index: 1;
+  }
+  .moya-hint {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--ink-mute); letter-spacing: 0.15em;
+  }
+
+  .moya-list {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .moya-cloud {
+    background: linear-gradient(135deg, #f7f5ee 0%, #edebe3 100%);
+    border: 1px solid var(--line-soft);
+    padding: 16px 18px 14px; position: relative;
+    transition: all 0.2s; min-height: 120px;
+    display: flex; flex-direction: column;
+  }
+  .moya-cloud:hover {
+    border-color: var(--fog); box-shadow: 0 4px 16px rgba(159,168,184,0.15);
+    transform: translateY(-1px);
+  }
+  .moya-cloud::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at top right, rgba(159,168,184,0.1), transparent 60%);
+    pointer-events: none;
+  }
+  .moya-text {
+    flex: 1; font-size: 14px; line-height: 1.7;
+    color: var(--ink-soft); white-space: pre-wrap; word-break: break-word;
+    outline: none; margin-bottom: 12px;
+    border-bottom: 1px dashed transparent; padding-bottom: 4px;
+  }
+  .moya-text:focus { border-bottom-color: var(--line); color: var(--ink); }
+  .moya-meta {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--ink-mute); letter-spacing: 0.1em;
+    margin-bottom: 10px;
+  }
+  .moya-cloud-actions {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    padding-top: 10px; border-top: 1px dashed var(--line-soft);
+    position: relative; z-index: 1;
+  }
+  .moya-btn {
+    padding: 5px 10px; background: transparent; border: 1px solid var(--line);
+    color: var(--ink-soft); font-size: 11px; cursor: pointer;
+    font-family: "Zen Kaku Gothic New", sans-serif;
+    transition: all 0.15s;
+  }
+  .moya-btn:hover { background: var(--bg-2); color: var(--ink); }
+  .moya-btn.promote {
+    background: var(--accent); color: white; border-color: var(--accent);
+  }
+  .moya-btn.promote:hover { background: #a0421f; }
+  .moya-btn.delete { margin-left: auto; color: var(--ink-mute); border-color: transparent; }
+  .moya-btn.delete:hover { color: var(--accent); border-color: var(--line); }
+
+  .moya-age {
+    display: inline-block; padding: 2px 6px;
+    font-family: "JetBrains Mono", monospace; font-size: 9px;
+    letter-spacing: 0.15em; margin-left: 6px;
+  }
+  .moya-age.fresh { background: var(--bg-2); color: var(--ink-mute); }
+  .moya-age.aging { background: #e8dec8; color: var(--amber); }
+  .moya-age.old { background: #e8d0c8; color: var(--accent); }
+
+  /* ===== 雑メモ ===== */
+  .capture { max-width: 720px; margin: 0 auto; }
+  .capture-title {
+    font-family: "Shippori Mincho", serif; font-size: 22px;
+    margin-bottom: 8px; letter-spacing: 0.05em;
+  }
+  .capture-sub { color: var(--ink-mute); font-size: 13px; margin-bottom: 24px; }
+  .capture-box {
+    background: #fbf9f3; border: 1px solid var(--line-soft);
+    padding: 20px; box-shadow: var(--paper-shadow); margin-bottom: 24px;
+  }
+  .capture-input {
+    width: 100%; border: none; background: transparent;
+    font-family: "Zen Kaku Gothic New", sans-serif; font-size: 15px;
+    line-height: 1.7; resize: vertical; min-height: 80px; outline: none;
+    color: var(--ink);
+  }
+  .capture-input::placeholder { color: var(--ink-mute); opacity: 0.6; }
+  .capture-actions {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line-soft);
+  }
+  .capture-hint {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--ink-mute); letter-spacing: 0.15em;
+  }
+
+  .log { display: flex; flex-direction: column; gap: 14px; }
+  .log-day { margin-top: 24px; }
+  .log-day-label {
+    font-family: "JetBrains Mono", monospace; font-size: 11px;
+    color: var(--ink-mute); letter-spacing: 0.2em; margin-bottom: 10px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--line-soft);
+  }
+  .log-item {
+    background: #fbf9f3; border-left: 2px solid var(--line);
+    padding: 12px 16px; font-size: 14px; line-height: 1.7;
+    position: relative; white-space: pre-wrap;
+  }
+  .log-item:hover { border-left-color: var(--accent); }
+  .log-item.tagged { border-left-color: var(--blue); }
+  .log-time {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--ink-mute); letter-spacing: 0.1em; margin-bottom: 6px;
+  }
+  .log-actions {
+    display: flex; gap: 6px; margin-top: 10px; align-items: center;
+    flex-wrap: wrap;
+  }
+  .log-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; background: var(--blue); color: white;
+    font-size: 11px; border: none; cursor: pointer;
+    font-family: "Zen Kaku Gothic New", sans-serif;
+  }
+  .log-tag .remove { margin-left: 4px; opacity: 0.7; }
+  .log-assign-btn {
+    padding: 4px 10px; background: transparent;
+    border: 1px dashed var(--line); color: var(--ink-mute);
+    font-size: 11px; cursor: pointer;
+    font-family: "Zen Kaku Gothic New", sans-serif;
+  }
+  .log-assign-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .log-delete {
+    margin-left: auto; background: none; border: none;
+    color: var(--ink-mute); cursor: pointer; font-size: 11px;
+  }
+  .log-delete:hover { color: var(--accent); }
+
+  /* ===== タコ足 ===== */
+  .takoashi-wrap { max-width: 900px; margin: 0 auto; }
+  .takoashi-title {
+    font-family: "Shippori Mincho", serif; font-size: 22px;
+    margin-bottom: 8px; letter-spacing: 0.05em;
+  }
+  .takoashi-sub {
+    color: var(--ink-mute); font-size: 13px; margin-bottom: 24px;
+  }
+  .takoashi-canvas-wrap {
+    background: #fbf9f3; border: 1px solid var(--line-soft);
+    padding: 20px; box-shadow: var(--paper-shadow); margin-bottom: 20px;
+    text-align: center;
+  }
+  .takoashi-legend {
+    display: flex; gap: 24px; justify-content: center;
+    flex-wrap: wrap; margin-top: 16px; padding-top: 16px;
+    border-top: 1px dashed var(--line-soft);
+    font-size: 12px; color: var(--ink-mute);
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 50%; }
+  .takoashi-insights {
+    background: #fbf9f3; border: 1px solid var(--line-soft);
+    padding: 24px; box-shadow: var(--paper-shadow);
+  }
+  .takoashi-insights h3 {
+    font-family: "Shippori Mincho", serif; font-size: 17px;
+    margin-bottom: 16px; letter-spacing: 0.05em;
+    padding-bottom: 10px; border-bottom: 1px solid var(--line-soft);
+  }
+  .insight-row {
+    padding: 10px 0; border-bottom: 1px dashed var(--line-soft);
+    display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center;
+  }
+  .insight-row:last-child { border-bottom: none; }
+  .insight-verdict {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    padding: 3px 8px; letter-spacing: 0.15em;
+  }
+  .verdict-hot { background: var(--accent); color: white; }
+  .verdict-warm { background: var(--amber); color: white; }
+  .verdict-cold { background: var(--bg-2); color: var(--ink-mute); }
+  .verdict-dry { background: #8b4a3a; color: white; }
+  .verdict-fog { background: var(--fog); color: white; }
+
+  /* ===== 週次 ===== */
+  .weekly { max-width: 900px; margin: 0 auto; }
+  .weekly-title {
+    font-family: "Shippori Mincho", serif; font-size: 22px;
+    margin-bottom: 8px; letter-spacing: 0.05em;
+  }
+  .weekly-sub { color: var(--ink-mute); font-size: 13px; margin-bottom: 32px; }
+  .week-card {
+    background: #fbf9f3; border: 1px solid var(--line-soft);
+    padding: 28px; box-shadow: var(--paper-shadow); margin-bottom: 20px;
+  }
+  .week-card h3 {
+    font-family: "Shippori Mincho", serif; font-size: 17px;
+    margin-bottom: 16px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--line-soft); letter-spacing: 0.05em;
+  }
+  .streak-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .streak-row {
+    display: grid; grid-template-columns: 1fr auto auto;
+    gap: 16px; align-items: center; padding: 8px 0;
+    border-bottom: 1px dashed var(--line-soft);
+  }
+  .streak-row:last-child { border-bottom: none; }
+  .streak-name { font-family: "Shippori Mincho", serif; font-size: 15px; }
+  .streak-dots { display: flex; gap: 4px; }
+  .streak-dot {
+    width: 14px; height: 14px; border: 1px solid var(--line); background: transparent;
+  }
+  .streak-dot.filled { background: var(--green); border-color: var(--green); }
+  .streak-dot.today { border-color: var(--accent); border-width: 2px; }
+  .streak-label {
+    font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute);
+  }
+  .prompt-box {
+    background: var(--bg-2); border-left: 3px solid var(--accent);
+    padding: 16px 18px; margin-top: 16px; font-size: 13px;
+    line-height: 1.8; color: var(--ink-soft);
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .copy-btn {
+    margin-top: 12px; background: var(--ink); color: var(--bg);
+    border: none; padding: 8px 14px; font-size: 12px; cursor: pointer;
+    font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.1em;
+  }
+  .copy-btn:hover { background: var(--accent); }
+  .copy-btn.copied { background: var(--green); }
+
+  .empty {
+    text-align: center; padding: 60px 20px; color: var(--ink-mute);
+    font-family: "Shippori Mincho", serif; letter-spacing: 0.1em;
+  }
+
+  /* モーダル */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(26,25,21,0.4);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--bg); border: 1px solid var(--line);
+    padding: 32px; max-width: 480px; width: 90%;
+    max-height: 80vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  }
+  .modal h3 {
+    font-family: "Shippori Mincho", serif; font-size: 18px;
+    margin-bottom: 12px; letter-spacing: 0.05em;
+  }
+  .modal p { color: var(--ink-soft); font-size: 14px; margin-bottom: 20px; line-height: 1.7; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+  .pick-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+  .pick-item {
+    padding: 12px 16px; background: #fbf9f3; border: 1px solid var(--line-soft);
+    cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .pick-item:hover { border-color: var(--accent); background: rgba(200,80,46,0.04); }
+  .pick-item .pick-name { font-family: "Shippori Mincho", serif; }
+  .pick-item .pick-meta { font-size: 11px; color: var(--ink-mute); font-family: "JetBrains Mono", monospace; }
+  .pick-none {
+    padding: 12px 16px; background: transparent; border: 1px dashed var(--line);
+    cursor: pointer; color: var(--ink-mute); text-align: center;
+  }
+  .pick-none:hover { border-color: var(--accent); color: var(--accent); }
+
+  .insight-modal-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .insight-modal-item {
+    padding: 12px 14px; background: #fbf9f3; border-left: 2px solid var(--blue);
+    font-size: 14px; line-height: 1.7; position: relative;
+  }
+  .insight-modal-item .meta {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--ink-mute); margin-bottom: 4px; letter-spacing: 0.1em;
+  }
+
+  /* 昇格モーダル */
+  .promote-body { margin-bottom: 16px; }
+  .promote-body label {
+    display: block; font-family: "JetBrains Mono", monospace;
+    font-size: 10px; color: var(--ink-mute); letter-spacing: 0.15em;
+    margin-bottom: 4px; margin-top: 12px;
+  }
+  .promote-body input {
+    width: 100%; padding: 8px 10px; font-size: 14px;
+    border: 1px solid var(--line); background: #fbf9f3;
+    font-family: "Zen Kaku Gothic New", sans-serif; outline: none;
+  }
+  .promote-body input:focus { border-color: var(--accent); }
+  .promote-preview {
+    background: rgba(159,168,184,0.1); padding: 10px 12px;
+    font-size: 13px; color: var(--ink-soft); font-style: italic;
+    margin-bottom: 8px; border-left: 2px solid var(--fog);
+  }
+
+  /* ===== 同期状態インジケータ ===== */
+  .sync-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--ink-mute);
+    background: var(--bg-2);
+    margin-top: 6px;
+    transition: all 0.3s;
+    cursor: default;
+  }
+  .sync-indicator .sync-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ink-mute);
+    transition: background 0.3s;
+    flex-shrink: 0;
+  }
+  .sync-indicator.syncing .sync-dot { background: var(--amber); animation: pulse 1.2s ease-in-out infinite; }
+  .sync-indicator.synced .sync-dot { background: var(--green); }
+  .sync-indicator.error .sync-dot { background: var(--accent); cursor: pointer; }
+  .sync-indicator.offline .sync-dot { background: #999; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ===== Fold狭い画面(折りたたみ時 約374px〜) ===== */
+  @media (max-width: 420px) {
+    .app { padding: 16px 12px 60px; }
+    .brand h1 { font-size: 24px; }
+    .brand .romaji { display: none; }
+    header.top { margin-bottom: 24px; padding-bottom: 14px; }
+    .meta { font-size: 10px; }
+    .meta .date { font-size: 11px; }
+    nav.tabs { gap: 0; overflow-x: auto; margin-bottom: 20px; scrollbar-width: none; }
+    nav.tabs::-webkit-scrollbar { display: none; }
+    .tab { padding: 10px 12px; font-size: 13px; white-space: nowrap; letter-spacing: 0.05em; }
+    .projects { grid-template-columns: 1fr; gap: 14px; }
+    .moya-list { grid-template-columns: 1fr; }
+    .project { padding: 18px 16px 14px; }
+    .project-name { font-size: 16px; padding-right: 70px; }
+    .field { grid-template-columns: 48px 1fr; gap: 8px; font-size: 12px; }
+    .ichibou-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .ichibou-title { font-size: 19px; }
+    .ichibou-title .sub { display: block; margin-left: 0; margin-top: 4px; font-size: 11px; }
+    .moya-title, .capture-title, .takoashi-title, .weekly-title { font-size: 19px; }
+    .moya-explain { font-size: 12px; padding: 12px 14px; }
+    .week-card { padding: 20px 16px; }
+    .streak-row { grid-template-columns: 1fr; gap: 6px; }
+    .streak-dots { flex-wrap: wrap; }
+    .modal { padding: 24px 20px; }
+  }
+
+  /* ===== タブレット〜Fold広げた時(620px〜900px) ===== */
+  @media (min-width: 620px) and (max-width: 900px) {
+    .app { padding: 32px 28px 80px; max-width: 900px; }
+    .projects { grid-template-columns: repeat(2, 1fr); gap: 18px; }
+    .moya-list { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ===== Fold広げた時 / タブレット大 / デスクトップ(900px〜) ===== */
+  @media (min-width: 900px) {
+    .app { padding: 40px 48px 100px; }
+    .brand h1 { font-size: 44px; }
+    .projects { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 24px; }
+    .moya-list { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+  }
+
+  /* ===== PWA(ホーム画面から起動した時)の調整 ===== */
+  @media (display-mode: standalone) {
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .app {
+      padding-top: calc(32px + env(safe-area-inset-top));
+    }
+  }
+
+  /* ===== 横向き時の最適化(Fold折りたたみ横向きなど) ===== */
+  @media (max-height: 500px) and (orientation: landscape) {
+    header.top { margin-bottom: 16px; padding-bottom: 12px; }
+    .app { padding-top: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>一望</h1>
+      <span class="romaji">ichibou</span>
+    </div>
+    <div class="meta">
+      <div class="date" id="today-date"></div>
+      <div id="today-weekday"></div>
+      <div class="sync-indicator" id="sync-indicator" title="クリックで手動同期">
+        <span class="sync-dot"></span>
+        <span id="sync-text">起動中</span>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-view="projects">プロジェクト <span class="count" id="count-projects">0</span></button>
+    <button class="tab" data-view="moya">もや <span class="count" id="count-moya">0</span></button>
+    <button class="tab" data-view="capture">雑メモ <span class="count" id="count-logs">0</span></button>
+    <button class="tab" data-view="takoashi">タコ足</button>
+    <button class="tab" data-view="weekly">週次</button>
+  </nav>
+
+  <!-- プロジェクトビュー -->
+  <section class="view active" id="view-projects">
+    <div class="ichibou-header">
+      <div class="ichibou-title">
+        進行中<span class="sub">次の一手が書いてあるプロジェクトだけが、脳から降ろせる</span>
+      </div>
+      <button class="btn" id="add-btn">＋ 追加</button>
+    </div>
+    <div class="projects" id="projects-grid"></div>
+  </section>
+
+  <!-- もやビュー -->
+  <section class="view" id="view-moya">
+    <div class="moya-wrap">
+      <div class="moya-title">もや</div>
+      <div class="moya-sub">プロジェクトになる前の、言葉にならない何か。</div>
+      <div class="moya-explain">
+        <strong>ここは整理しない場所。</strong><br>
+        「なんかやらなきゃいけない気がする」「あの件、そろそろ考えないと」——そういうまとまらない断片を、構造化せずに放り込める場所。育ったら→プロジェクトに昇格。しばらく育たなければ→消してもいい。書くこと自体が、脳からメモリを降ろす作業。
+      </div>
+
+      <div class="moya-input-box">
+        <textarea class="moya-input" id="moya-input" placeholder="言葉にならなくていい。単語でも、半分の文でも。&#10;「◯◯のこと、気になってる」レベルでOK。"></textarea>
+        <div class="moya-actions">
+          <span class="moya-hint">⌘/Ctrl + ENTER で保存</span>
+          <button class="btn" id="moya-save">もやを置く</button>
+        </div>
+      </div>
+
+      <div class="moya-list" id="moya-list"></div>
+    </div>
+  </section>
+
+  <!-- 雑メモビュー -->
+  <section class="view" id="view-capture">
+    <div class="capture">
+      <div class="capture-title">雑メモ</div>
+      <div class="capture-sub">既に形のある記録。会話の抜粋、読んだ本、学んだこと。紐付けは後回しでOK。</div>
+      <div class="capture-box">
+        <textarea class="capture-input" id="capture-input" placeholder="Geminiとの会話の抜粋、本で読んだこと、会議のメモなど。"></textarea>
+        <div class="capture-actions">
+          <span class="capture-hint">⌘/Ctrl + ENTER で保存</span>
+          <button class="btn" id="capture-save">記録する</button>
+        </div>
+      </div>
+      <div class="log" id="log-list"></div>
+    </div>
+  </section>
+
+  <!-- タコ足ビュー -->
+  <section class="view" id="view-takoashi">
+    <div class="takoashi-wrap">
+      <div class="takoashi-title">タコ足マップ</div>
+      <div class="takoashi-sub">足の太さ=過去2週間の紐付き思考量。中心の"もや"も合わせて、頭全体の状態が見える。</div>
+      <div class="takoashi-canvas-wrap">
+        <svg id="takoashi-svg" viewBox="0 0 600 600" style="max-width:600px;width:100%;"></svg>
+        <div class="takoashi-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--accent)"></div>過熱(7件以上)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--amber)"></div>活発(3〜6件)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div>進行中(1〜2件)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#8b4a3a"></div>干からび(0件)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--fog)"></div>もや</div>
+        </div>
+      </div>
+      <div class="takoashi-insights">
+        <h3>診断</h3>
+        <div id="takoashi-verdict"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 週次ビュー -->
+  <section class="view" id="view-weekly">
+    <div class="weekly">
+      <div class="weekly-title">週次レビュー</div>
+      <div class="weekly-sub">日曜に15〜30分だけ眺める。</div>
+
+      <div class="week-card">
+        <h3>今週の実行記録</h3>
+        <div class="streak-grid" id="streak-grid"></div>
+      </div>
+
+      <div class="week-card">
+        <h3>点検リスト</h3>
+        <div id="review-check" style="font-size:14px; line-height:1.9;"></div>
+      </div>
+
+      <div class="week-card">
+        <h3>Claudeに貼るプロンプト</h3>
+        <div class="prompt-box">
+          下のテキストをコピーして、Claudeに貼る。もや・雑メモ・プロジェクト状況すべて入ってる。
+        </div>
+        <div class="prompt-box" style="border-left-color: var(--green);" id="prompt-text"></div>
+        <button class="copy-btn" id="copy-prompt">プロンプトをコピー</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- モーダル群 -->
+<div class="modal-backdrop" id="confirm-modal">
+  <div class="modal">
+    <h3 id="confirm-title">確認</h3>
+    <p id="confirm-message"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="confirm-cancel">キャンセル</button>
+      <button class="btn" id="confirm-ok">実行</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="pick-modal">
+  <div class="modal">
+    <h3>どのプロジェクトに紐付ける?</h3>
+    <p style="font-size:13px;">紐付けたメモは、そのプロジェクトの「思考ログ」として残ります。</p>
+    <div class="pick-list" id="pick-list"></div>
+    <div class="pick-none" id="pick-none">紐付けを解除する</div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn ghost" id="pick-cancel">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="insights-modal">
+  <div class="modal">
+    <h3 id="insights-title">思考ログ</h3>
+    <div class="insight-modal-list" id="insights-list"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="insights-close">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- もや→プロジェクト昇格モーダル -->
+<div class="modal-backdrop" id="promote-modal">
+  <div class="modal">
+    <h3>もやをプロジェクトに昇格</h3>
+    <p style="font-size:13px;">このもやが育って、プロジェクトとして扱えそうなら昇格させよう。書けない項目は空でOK。</p>
+    <div class="promote-preview" id="promote-preview"></div>
+    <div class="promote-body">
+      <label>プロジェクト名</label>
+      <input type="text" id="promote-name" placeholder="一行で" />
+      <label>次の一手(30秒〜5分で始められる物理行動)</label>
+      <input type="text" id="promote-next" placeholder="例: 〇〇に電話する、△△のフォルダを開く" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="promote-cancel">キャンセル</button>
+      <button class="btn" id="promote-ok">昇格させる</button>
+    </div>
+  </div>
+</div>
+
+<!-- プロジェクト→もや降格モーダル -->
+<div class="modal-backdrop" id="demote-modal">
+  <div class="modal">
+    <h3>プロジェクトをもやに戻す</h3>
+    <p style="font-size:13px;">このプロジェクトを解体して、もやに戻します。GOAL/NEXT/DUE/実行記録は消えます。紐付いた思考ログは残ります。本当に戻しますか?</p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="demote-cancel">キャンセル</button>
+      <button class="btn" id="demote-ok">もやに戻す</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== Supabase 接続設定 =====
+  const SUPABASE_URL = "https://jhsjcepsqftnvvyqftmb.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_t17xdBGDadspxbuo-KP2zA_MGoAQn0A";
+  const SYNC_ROW_ID = "main";  // 個人用なので常に同じIDに保存
+
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const STORAGE_KEY = "ichibou_v3";
+  const DEFAULT_STATE = {
+    projects: [
+      { id: "p1", name: "Construction DX OS", goal: "", next: "", obstacle: "",
+        deadline: "", frozen: false, executions: [] }
+    ],
+    logs: [],
+    moyas: []
+  };
+
+  let state = loadLocalState();  // まずローカルで即座に表示
+  let isSyncing = false;
+  let syncTimer = null;
+  let lastSyncedData = null;  // リモートから受けた最後のデータ(循環防止用)
+
+  function loadLocalState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+      const v2 = localStorage.getItem("ichibou_v2");
+      if (v2) {
+        const old = JSON.parse(v2);
+        return { projects: old.projects || [], logs: old.logs || [], moyas: [] };
+      }
+      const v1 = localStorage.getItem("ichibou_v1");
+      if (v1) {
+        const old = JSON.parse(v1);
+        return {
+          projects: old.projects || DEFAULT_STATE.projects,
+          logs: (old.logs || []).map(l => ({ ...l, projectId: null })),
+          moyas: []
+        };
+      }
+    } catch(e) {}
+    return JSON.parse(JSON.stringify(DEFAULT_STATE));
+  }
+
+  function saveLocal() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  // 保存呼び出し。ローカル即保存 + 少し遅延してクラウド保存
+  function saveState() {
+    saveLocal();
+    // 500ms遅延してクラウドに送信(連続編集時の節約)
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(pushToCloud, 500);
+  }
+
+  // ===== 同期インジケータ =====
+  function setSyncStatus(status, text) {
+    const el = document.getElementById("sync-indicator");
+    if (!el) return;
+    el.className = "sync-indicator " + status;
+    document.getElementById("sync-text").textContent = text;
+  }
+
+  // ===== クラウドに送信 =====
+  async function pushToCloud() {
+    if (!navigator.onLine) {
+      setSyncStatus("offline", "オフライン");
+      return;
+    }
+    setSyncStatus("syncing", "同期中");
+    try {
+      const { error } = await supabase
+        .from("ichibou_state")
+        .upsert({ id: SYNC_ROW_ID, data: state, updated_at: new Date().toISOString() });
+      if (error) throw error;
+      lastSyncedData = JSON.stringify(state);
+      setSyncStatus("synced", "同期済");
+    } catch (e) {
+      console.error("Sync push error:", e);
+      setSyncStatus("error", "同期失敗");
+    }
+  }
+
+  // ===== クラウドから取得 =====
+  async function pullFromCloud() {
+    if (!navigator.onLine) {
+      setSyncStatus("offline", "オフライン");
+      return;
+    }
+    setSyncStatus("syncing", "読込中");
+    try {
+      const { data, error } = await supabase
+        .from("ichibou_state")
+        .select("data, updated_at")
+        .eq("id", SYNC_ROW_ID)
+        .single();
+      if (error) throw error;
+      if (data && data.data) {
+        const remoteStr = JSON.stringify(data.data);
+        const localStr = JSON.stringify(state);
+        // リモートとローカルが違えば、リモートを採用
+        if (remoteStr !== localStr) {
+          state = data.data;
+          // 欠損フィールドを補完
+          if (!state.projects) state.projects = [];
+          if (!state.logs) state.logs = [];
+          if (!state.moyas) state.moyas = [];
+          saveLocal();
+          lastSyncedData = remoteStr;
+          renderAll();
+        }
+      }
+      setSyncStatus("synced", "同期済");
+    } catch (e) {
+      console.error("Sync pull error:", e);
+      setSyncStatus("error", "同期失敗");
+    }
+  }
+
+  // ===== リアルタイム購読: 他端末の変更を即座に反映 =====
+  function subscribeRealtime() {
+    const channel = supabase
+      .channel("ichibou-sync")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "ichibou_state", filter: `id=eq.${SYNC_ROW_ID}` },
+        (payload) => {
+          const newData = payload.new?.data;
+          if (!newData) return;
+          const newStr = JSON.stringify(newData);
+          // 自分が送ったばかりのデータなら無視(循環防止)
+          if (newStr === lastSyncedData) return;
+          // 自分の現在の状態と同じなら無視
+          if (newStr === JSON.stringify(state)) return;
+          state = newData;
+          if (!state.projects) state.projects = [];
+          if (!state.logs) state.logs = [];
+          if (!state.moyas) state.moyas = [];
+          saveLocal();
+          lastSyncedData = newStr;
+          renderAll();
+          setSyncStatus("synced", "他端末から更新");
+          setTimeout(() => setSyncStatus("synced", "同期済"), 2000);
+        }
+      )
+      .subscribe();
+    return channel;
+  }
+
+  // 手動同期(インジケータクリック時)
+  function manualSync() {
+    pullFromCloud();
+  }
+
+  // オンライン/オフライン監視
+  window.addEventListener("online", () => {
+    setSyncStatus("syncing", "再接続中");
+    pullFromCloud().then(() => pushToCloud());
+  });
+  window.addEventListener("offline", () => {
+    setSyncStatus("offline", "オフライン");
+  });
+
+  // インジケータクリックで手動同期
+  setTimeout(() => {
+    const el = document.getElementById("sync-indicator");
+    if (el) el.addEventListener("click", manualSync);
+  }, 100);
+
+  function uid() { return "x" + Math.random().toString(36).slice(2,10); }
+  function todayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+
+  function renderDate() {
+    const d = new Date();
+    const weekdays = ["日","月","火","水","木","金","土"];
+    document.getElementById("today-date").textContent =
+      `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;
+    document.getElementById("today-weekday").textContent = weekdays[d.getDay()] + "曜日";
+  }
+
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById("view-" + tab.dataset.view).classList.add("active");
+      if (tab.dataset.view === "weekly") renderWeekly();
+      if (tab.dataset.view === "takoashi") renderTakoashi();
+      if (tab.dataset.view === "moya") renderMoyas();
+    });
+  });
+
+  // ===== プロジェクト =====
+  function renderProjects() {
+    const grid = document.getElementById("projects-grid");
+    grid.innerHTML = "";
+    const active = state.projects.filter(p => !p.frozen);
+    const frozen = state.projects.filter(p => p.frozen);
+    document.getElementById("count-projects").textContent = active.length;
+
+    [...active, ...frozen].forEach(p => grid.appendChild(projectCard(p)));
+
+    const addCard = document.createElement("div");
+    addCard.className = "project add-project";
+    addCard.textContent = "＋ 新しいプロジェクト";
+    addCard.onclick = addProject;
+    grid.appendChild(addCard);
+  }
+
+  function countInsights(projectId, days) {
+    const cutoff = Date.now() - days * 86400000;
+    return state.logs.filter(l => l.projectId === projectId && l.ts >= cutoff).length;
+  }
+
+  function projectCard(p) {
+    const el = document.createElement("div");
+    el.className = "project" + (p.frozen ? " frozen" : "");
+    const doneToday = (p.executions || []).includes(todayStr());
+    const streak = calcStreak(p.executions || []);
+    const insightsCount = state.logs.filter(l => l.projectId === p.id).length;
+    const recentInsights = countInsights(p.id, 14);
+    const isHot = recentInsights >= 3;
+
+    el.innerHTML = `
+      <div class="project-actions">
+        <button class="icon-btn" title="もやに戻す" data-act="demote">🌫</button>
+        ${p.frozen ? `<button class="icon-btn" title="再開" data-act="freeze">▶</button>` : `<button class="icon-btn" title="凍結" data-act="freeze">❄</button>`}
+        <button class="icon-btn" title="削除" data-act="delete">✕</button>
+      </div>
+      <div class="project-name" contenteditable="true" data-field="name">${escapeHtml(p.name || "無題")}</div>
+      <div class="field">
+        <div class="label">GOAL</div>
+        <div class="value" contenteditable="true" data-field="goal" data-placeholder="納品物を1行で">${escapeHtml(p.goal || "")}</div>
+      </div>
+      <div class="field next">
+        <div class="label">NEXT</div>
+        <div class="value" contenteditable="true" data-field="next" data-placeholder="30秒〜5分で始められる物理行動">${escapeHtml(p.next || "")}</div>
+      </div>
+      <div class="field">
+        <div class="label">BLOCK</div>
+        <div class="value" contenteditable="true" data-field="obstacle" data-placeholder="最大の詰まりを1個だけ">${escapeHtml(p.obstacle || "")}</div>
+      </div>
+      <div class="field">
+        <div class="label">DUE</div>
+        <div class="value" contenteditable="true" data-field="deadline" data-placeholder="未定なら空欄">${escapeHtml(p.deadline || "")}</div>
+      </div>
+      <div>
+        <button class="insights-badge ${isHot ? "hot" : ""}" data-insights>
+          💭 思考ログ ${insightsCount}件 ${recentInsights > 0 ? `(2週: ${recentInsights})` : ""}
+        </button>
+      </div>
+      <div class="project-footer">
+        <div class="streak">
+          <span class="streak-num">${streak}</span><span>日連続</span>
+        </div>
+        <button class="done-today${doneToday ? " done" : ""}">
+          ${doneToday ? "✓ 今日やった" : "今日やった"}
+        </button>
+      </div>
+    `;
+
+    el.querySelectorAll("[data-field]").forEach(node => {
+      node.addEventListener("blur", () => {
+        const field = node.dataset.field;
+        p[field] = node.innerText.trim();
+        saveState();
+        if (field === "name" && !p.name) { node.innerText = "無題"; p.name = "無題"; }
+      });
+      node.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); node.blur(); }
+      });
+    });
+
+    el.querySelector(".done-today").addEventListener("click", () => {
+      const t = todayStr();
+      p.executions = p.executions || [];
+      if (p.executions.includes(t)) p.executions = p.executions.filter(d => d !== t);
+      else p.executions.push(t);
+      saveState(); renderProjects();
+    });
+
+    el.querySelector("[data-insights]").addEventListener("click", () => openInsightsModal(p));
+
+    el.querySelectorAll("[data-act]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const act = btn.dataset.act;
+        if (act === "freeze") {
+          p.frozen = !p.frozen; saveState(); renderProjects();
+        } else if (act === "delete") {
+          confirmAction(
+            "このプロジェクトを削除しますか?",
+            `「${p.name || "無題"}」を完全に削除します。思考ログの紐付けは解除されますが、メモ自体は残ります。`,
+            () => {
+              state.logs.forEach(l => { if (l.projectId === p.id) l.projectId = null; });
+              state.projects = state.projects.filter(x => x.id !== p.id);
+              saveState(); renderProjects();
+            }
+          );
+        } else if (act === "demote") {
+          openDemoteModal(p);
+        }
+      });
+    });
+
+    return el;
+  }
+
+  function addProject() {
+    state.projects.push({
+      id: uid(), name: "", goal: "", next: "", obstacle: "",
+      deadline: "", frozen: false, executions: []
+    });
+    saveState(); renderProjects();
+    setTimeout(() => {
+      const cards = document.querySelectorAll(".project:not(.add-project) .project-name");
+      const last = cards[cards.length - 1];
+      if (last) { last.focus(); document.execCommand("selectAll", false, null); }
+    }, 50);
+  }
+  document.getElementById("add-btn").addEventListener("click", addProject);
+
+  function calcStreak(dates) {
+    if (!dates || dates.length === 0) return 0;
+    const set = new Set(dates);
+    let streak = 0;
+    const d = new Date();
+    if (!set.has(todayStr())) d.setDate(d.getDate() - 1);
+    while (true) {
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      if (set.has(key)) { streak++; d.setDate(d.getDate() - 1); }
+      else break;
+    }
+    return streak;
+  }
+
+  // ===== もや =====
+  function renderMoyas() {
+    const list = document.getElementById("moya-list");
+    list.innerHTML = "";
+    document.getElementById("count-moya").textContent = state.moyas.length;
+
+    if (state.moyas.length === 0) {
+      list.innerHTML = '<div class="empty" style="grid-column:1/-1;">まだもやはない。<br>言葉にならない何かが浮かんだら、ここに置こう。</div>';
+      return;
+    }
+
+    // 新しい順
+    const sorted = [...state.moyas].sort((a,b) => b.ts - a.ts);
+    sorted.forEach(m => {
+      const el = document.createElement("div");
+      el.className = "moya-cloud";
+      const ageDays = Math.floor((Date.now() - m.ts) / 86400000);
+      let ageClass = "fresh", ageLabel = "新しい";
+      if (ageDays >= 14) { ageClass = "old"; ageLabel = `${ageDays}日前`; }
+      else if (ageDays >= 7) { ageClass = "aging"; ageLabel = `${ageDays}日前`; }
+      else if (ageDays >= 1) ageLabel = `${ageDays}日前`;
+      else ageLabel = "今日";
+
+      el.innerHTML = `
+        <div class="moya-text" contenteditable="true" data-id="${m.id}">${escapeHtml(m.text)}</div>
+        <div class="moya-meta">
+          ${formatTs(m.ts)}
+          <span class="moya-age ${ageClass}">${ageLabel}</span>
+        </div>
+        <div class="moya-cloud-actions">
+          <button class="moya-btn promote" data-act="promote">⬆ プロジェクトに昇格</button>
+          <button class="moya-btn delete" data-act="delete">消す</button>
+        </div>
+      `;
+
+      el.querySelector(".moya-text").addEventListener("blur", (e) => {
+        const newText = e.target.innerText.trim();
+        if (!newText) { 
+          state.moyas = state.moyas.filter(x => x.id !== m.id);
+        } else {
+          m.text = newText;
+        }
+        saveState(); renderMoyas();
+      });
+
+      el.querySelectorAll("[data-act]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          if (btn.dataset.act === "promote") openPromoteModal(m);
+          else if (btn.dataset.act === "delete") {
+            state.moyas = state.moyas.filter(x => x.id !== m.id);
+            saveState(); renderMoyas();
+          }
+        });
+      });
+
+      list.appendChild(el);
+    });
+  }
+
+  function saveMoya() {
+    const input = document.getElementById("moya-input");
+    const text = input.value.trim();
+    if (!text) return;
+    state.moyas.push({ id: uid(), ts: Date.now(), text });
+    saveState();
+    input.value = "";
+    renderMoyas();
+  }
+  document.getElementById("moya-save").addEventListener("click", saveMoya);
+  document.getElementById("moya-input").addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); saveMoya(); }
+  });
+
+  // ===== もや→プロジェクト昇格 =====
+  let promoteTargetMoya = null;
+  function openPromoteModal(moya) {
+    promoteTargetMoya = moya;
+    document.getElementById("promote-preview").textContent = `"${moya.text}"`;
+    // モヤの最初の20文字を初期値に
+    document.getElementById("promote-name").value = moya.text.slice(0, 30).replace(/[\n\r]/g, " ");
+    document.getElementById("promote-next").value = "";
+    document.getElementById("promote-modal").classList.add("open");
+    setTimeout(() => document.getElementById("promote-name").focus(), 50);
+  }
+  document.getElementById("promote-cancel").addEventListener("click", () => {
+    document.getElementById("promote-modal").classList.remove("open");
+    promoteTargetMoya = null;
+  });
+  document.getElementById("promote-ok").addEventListener("click", () => {
+    if (!promoteTargetMoya) return;
+    const name = document.getElementById("promote-name").value.trim() || "無題";
+    const next = document.getElementById("promote-next").value.trim();
+    const newProject = {
+      id: uid(),
+      name,
+      goal: "",
+      next,
+      obstacle: "",
+      deadline: "",
+      frozen: false,
+      executions: []
+    };
+    state.projects.push(newProject);
+    // もやを思考ログとしてプロジェクトに紐付けつつ、もやリストから削除
+    state.logs.push({
+      id: uid(),
+      ts: promoteTargetMoya.ts,
+      text: `[もやから昇格] ${promoteTargetMoya.text}`,
+      projectId: newProject.id
+    });
+    state.moyas = state.moyas.filter(x => x.id !== promoteTargetMoya.id);
+    saveState();
+    document.getElementById("promote-modal").classList.remove("open");
+    promoteTargetMoya = null;
+    renderMoyas();
+    renderProjects();
+    // プロジェクトタブに切り替え
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    document.querySelector('.tab[data-view="projects"]').classList.add("active");
+    document.getElementById("view-projects").classList.add("active");
+  });
+
+  // ===== プロジェクト→もや降格 =====
+  let demoteTargetProject = null;
+  function openDemoteModal(project) {
+    demoteTargetProject = project;
+    document.getElementById("demote-modal").classList.add("open");
+  }
+  document.getElementById("demote-cancel").addEventListener("click", () => {
+    document.getElementById("demote-modal").classList.remove("open");
+    demoteTargetProject = null;
+  });
+  document.getElementById("demote-ok").addEventListener("click", () => {
+    if (!demoteTargetProject) return;
+    const p = demoteTargetProject;
+    // プロジェクト情報をもやに戻す
+    const text = [p.name, p.goal, p.next, p.obstacle].filter(Boolean).join(" / ");
+    state.moyas.push({
+      id: uid(),
+      ts: Date.now(),
+      text: text || "(無題だったプロジェクト)"
+    });
+    // 紐付きメモは「未紐付け」にする(メモ自体は残す)
+    state.logs.forEach(l => { if (l.projectId === p.id) l.projectId = null; });
+    state.projects = state.projects.filter(x => x.id !== p.id);
+    saveState();
+    document.getElementById("demote-modal").classList.remove("open");
+    demoteTargetProject = null;
+    renderProjects();
+  });
+
+  // ===== 思考ログモーダル =====
+  function openInsightsModal(project) {
+    const list = state.logs.filter(l => l.projectId === project.id).sort((a,b) => b.ts - a.ts);
+    document.getElementById("insights-title").textContent = `💭 ${project.name || "無題"} の思考ログ`;
+    const listEl = document.getElementById("insights-list");
+    listEl.innerHTML = "";
+    if (list.length === 0) {
+      listEl.innerHTML = '<div class="empty" style="padding:20px;">まだ紐付いたメモはない。</div>';
+    } else {
+      list.forEach(log => {
+        const item = document.createElement("div");
+        item.className = "insight-modal-item";
+        item.innerHTML = `
+          <div class="meta">${formatTs(log.ts)}</div>
+          <div>${escapeHtml(log.text)}</div>
+        `;
+        listEl.appendChild(item);
+      });
+    }
+    document.getElementById("insights-modal").classList.add("open");
+  }
+  document.getElementById("insights-close").addEventListener("click", () => {
+    document.getElementById("insights-modal").classList.remove("open");
+  });
+  document.getElementById("insights-modal").addEventListener("click", (e) => {
+    if (e.target.id === "insights-modal") e.target.classList.remove("open");
+  });
+
+  // ===== 雑メモ =====
+  function renderLogs() {
+    const list = document.getElementById("log-list");
+    list.innerHTML = "";
+    document.getElementById("count-logs").textContent = state.logs.length;
+
+    if (state.logs.length === 0) {
+      list.innerHTML = '<div class="empty">まだ雑メモはない。</div>';
+      return;
+    }
+
+    const byDay = {};
+    state.logs.forEach(log => {
+      const d = new Date(log.ts);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      if (!byDay[key]) byDay[key] = [];
+      byDay[key].push(log);
+    });
+
+    Object.keys(byDay).sort().reverse().forEach(dayKey => {
+      const dayEl = document.createElement("div");
+      dayEl.className = "log-day";
+      dayEl.innerHTML = `<div class="log-day-label">${formatDayLabel(dayKey)}</div>`;
+      byDay[dayKey].sort((a,b) => b.ts - a.ts).forEach(log => {
+        const item = document.createElement("div");
+        item.className = "log-item" + (log.projectId ? " tagged" : "");
+        const t = new Date(log.ts);
+        const timeStr = `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
+        const project = state.projects.find(p => p.id === log.projectId);
+        const tagHtml = project
+          ? `<button class="log-tag" data-retag>📎 ${escapeHtml(project.name || "無題")}<span class="remove">✕</span></button>`
+          : `<button class="log-assign-btn" data-assign>＋ プロジェクトに紐付け</button>`;
+
+        item.innerHTML = `
+          <div class="log-time">${timeStr}</div>
+          <div>${escapeHtml(log.text)}</div>
+          <div class="log-actions">
+            ${tagHtml}
+            <button class="log-delete">削除</button>
+          </div>
+        `;
+        const assignBtn = item.querySelector("[data-assign]");
+        if (assignBtn) assignBtn.addEventListener("click", () => openPickModal(log));
+        const retagBtn = item.querySelector("[data-retag]");
+        if (retagBtn) retagBtn.addEventListener("click", () => openPickModal(log));
+        item.querySelector(".log-delete").addEventListener("click", () => {
+          state.logs = state.logs.filter(l => l.id !== log.id);
+          saveState(); renderLogs();
+        });
+        dayEl.appendChild(item);
+      });
+      list.appendChild(dayEl);
+    });
+  }
+
+  function formatDayLabel(key) {
+    const [y,m,d] = key.split("-");
+    const today = todayStr();
+    const date = new Date(+y, +m-1, +d);
+    const yest = new Date(); yest.setDate(yest.getDate()-1);
+    const yestKey = `${yest.getFullYear()}-${String(yest.getMonth()+1).padStart(2,"0")}-${String(yest.getDate()).padStart(2,"0")}`;
+    const weekdays = ["日","月","火","水","木","金","土"];
+    const wd = weekdays[date.getDay()];
+    if (key === today) return `今日 — ${m}.${d} (${wd})`;
+    if (key === yestKey) return `昨日 — ${m}.${d} (${wd})`;
+    return `${y}.${m}.${d} (${wd})`;
+  }
+
+  function formatTs(ts) {
+    const d = new Date(ts);
+    return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  }
+
+  function saveLog() {
+    const input = document.getElementById("capture-input");
+    const text = input.value.trim();
+    if (!text) return;
+    state.logs.push({ id: uid(), ts: Date.now(), text, projectId: null });
+    saveState();
+    input.value = "";
+    renderLogs();
+  }
+  document.getElementById("capture-save").addEventListener("click", saveLog);
+  document.getElementById("capture-input").addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); saveLog(); }
+  });
+
+  // ===== プロジェクト選択モーダル =====
+  let pickTargetLog = null;
+  function openPickModal(log) {
+    pickTargetLog = log;
+    const list = document.getElementById("pick-list");
+    list.innerHTML = "";
+    const active = state.projects.filter(p => !p.frozen);
+    if (active.length === 0) {
+      list.innerHTML = '<div class="empty" style="padding:20px;">プロジェクトがまだない。</div>';
+    } else {
+      active.forEach(p => {
+        const item = document.createElement("div");
+        item.className = "pick-item";
+        const count = state.logs.filter(l => l.projectId === p.id).length;
+        item.innerHTML = `
+          <span class="pick-name">${escapeHtml(p.name || "無題")}</span>
+          <span class="pick-meta">💭 ${count}</span>
+        `;
+        item.addEventListener("click", () => {
+          log.projectId = p.id;
+          saveState();
+          renderLogs(); renderProjects();
+          closePickModal();
+        });
+        list.appendChild(item);
+      });
+    }
+    document.getElementById("pick-modal").classList.add("open");
+  }
+  function closePickModal() {
+    document.getElementById("pick-modal").classList.remove("open");
+    pickTargetLog = null;
+  }
+  document.getElementById("pick-cancel").addEventListener("click", closePickModal);
+  document.getElementById("pick-none").addEventListener("click", () => {
+    if (pickTargetLog) {
+      pickTargetLog.projectId = null;
+      saveState(); renderLogs(); renderProjects();
+    }
+    closePickModal();
+  });
+  document.getElementById("pick-modal").addEventListener("click", (e) => {
+    if (e.target.id === "pick-modal") closePickModal();
+  });
+
+  // ===== タコ足 =====
+  function renderTakoashi() {
+    const svg = document.getElementById("takoashi-svg");
+    const active = state.projects.filter(p => !p.frozen);
+    const moyaCount = state.moyas.length;
+    const cx = 300, cy = 300;
+
+    svg.innerHTML = "";
+    if (active.length === 0 && moyaCount === 0) {
+      svg.innerHTML = `<text x="300" y="300" text-anchor="middle" fill="#8a857a" font-family="Shippori Mincho" font-size="16">プロジェクトもモヤもまだない</text>`;
+      document.getElementById("takoashi-verdict").innerHTML = '<div class="empty" style="padding:20px;">何か書き始めるとここに診断が出る。</div>';
+      return;
+    }
+
+    const data = active.map(p => ({
+      project: p, count: countInsights(p.id, 14)
+    }));
+    const maxCount = Math.max(1, ...data.map(d => d.count));
+
+    // 中心の頭
+    svg.innerHTML += `
+      <defs>
+        <radialGradient id="headGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#fbf9f3"/>
+          <stop offset="100%" stop-color="#ebe6da"/>
+        </radialGradient>
+      </defs>
+      <circle cx="${cx}" cy="${cy}" r="55" fill="url(#headGrad)" stroke="#cfc8b8" stroke-width="1.5"/>
+      <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-family="Shippori Mincho" font-size="16" fill="#1a1915" font-weight="700">頭</text>
+      <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#8a857a" letter-spacing="2">BRAIN</text>
+    `;
+
+    // もや雲(頭の周りにふわっと)
+    if (moyaCount > 0) {
+      const moyaRadius = 85;
+      for (let i = 0; i < Math.min(moyaCount, 12); i++) {
+        const ang = (i / Math.min(moyaCount, 12)) * Math.PI * 2;
+        const mx = cx + Math.cos(ang) * (moyaRadius + Math.random() * 15);
+        const my = cy + Math.sin(ang) * (moyaRadius + Math.random() * 15);
+        const r = 8 + Math.random() * 6;
+        svg.innerHTML += `<circle cx="${mx}" cy="${my}" r="${r}" fill="#9fa8b8" opacity="0.25"/>`;
+      }
+      svg.innerHTML += `
+        <text x="${cx}" y="${cy - 95}" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#9fa8b8" letter-spacing="2">もや ${moyaCount}</text>
+      `;
+    }
+
+    // 各プロジェクトを足として
+    const n = data.length;
+    data.forEach((d, i) => {
+      const angle = (i / Math.max(n,1)) * Math.PI * 2 - Math.PI / 2;
+      const count = d.count;
+      const baseLen = 140;
+      const bonusLen = (count / maxCount) * 80;
+      const len = baseLen + bonusLen;
+      let thickness = 3, color = "#8b4a3a", label = "干からび";
+      if (count >= 7) { thickness = 20; color = "#c8502e"; label = "過熱"; }
+      else if (count >= 3) { thickness = 12; color = "#b88a2e"; label = "活発"; }
+      else if (count >= 1) { thickness = 6; color = "#4a6b3a"; label = "進行中"; }
+
+      const startR = 55 + (moyaCount > 0 ? 30 : 0);
+      const x1 = cx + Math.cos(angle) * startR;
+      const y1 = cy + Math.sin(angle) * startR;
+      const x2 = cx + Math.cos(angle) * (startR + len);
+      const y2 = cy + Math.sin(angle) * (startR + len);
+      const ctrlOffset = 30;
+      const cx1 = (x1 + x2) / 2 + Math.cos(angle + Math.PI/2) * ctrlOffset * (i % 2 ? 1 : -1);
+      const cy1 = (y1 + y2) / 2 + Math.sin(angle + Math.PI/2) * ctrlOffset * (i % 2 ? 1 : -1);
+
+      svg.innerHTML += `
+        <path d="M ${x1} ${y1} Q ${cx1} ${cy1} ${x2} ${y2}"
+              stroke="${color}" stroke-width="${thickness}"
+              stroke-linecap="round" fill="none" opacity="0.85"/>
+      `;
+      const tipR = Math.max(6, thickness * 0.7);
+      svg.innerHTML += `<circle cx="${x2}" cy="${y2}" r="${tipR}" fill="${color}" opacity="0.9"/>`;
+
+      const labelX = cx + Math.cos(angle) * (startR + len + 30);
+      const labelY = cy + Math.sin(angle) * (startR + len + 30);
+      const anchor = Math.cos(angle) > 0.3 ? "start" : Math.cos(angle) < -0.3 ? "end" : "middle";
+      const name = d.project.name || "無題";
+      const displayName = name.length > 14 ? name.slice(0, 14) + "…" : name;
+
+      svg.innerHTML += `
+        <text x="${labelX}" y="${labelY}" text-anchor="${anchor}" font-family="Shippori Mincho" font-size="13" fill="#1a1915" font-weight="700">${escapeHtml(displayName)}</text>
+        <text x="${labelX}" y="${labelY + 14}" text-anchor="${anchor}" font-family="JetBrains Mono" font-size="10" fill="#8a857a" letter-spacing="1">${count} notes · ${label}</text>
+      `;
+    });
+
+    renderTakoashiVerdict(data, moyaCount);
+  }
+
+  function renderTakoashiVerdict(data, moyaCount) {
+    const el = document.getElementById("takoashi-verdict");
+    const dry = data.filter(d => d.count === 0);
+    const hot = data.filter(d => d.count >= 7);
+    const active = data.filter(d => d.count >= 1 && d.count < 7);
+
+    let html = "";
+
+    if (data.length >= 5) {
+      html += `<div class="insight-row"><div>⚠ タコ足が ${data.length} 本。5本超えると並列処理の効率が落ちる。</div><div class="insight-verdict verdict-warm">注意</div></div>`;
+    }
+
+    if (moyaCount >= 5) {
+      html += `<div class="insight-row"><div>🌫 もやが ${moyaCount} 個溜まってる。週次で見直して、育ったものは昇格、枯れたものは消す。</div><div class="insight-verdict verdict-fog">MOYA</div></div>`;
+    } else if (moyaCount >= 1) {
+      html += `<div class="insight-row"><div>🌫 もや ${moyaCount} 個を抱えてる。言葉にならない何かが頭にある状態。</div><div class="insight-verdict verdict-fog">MOYA</div></div>`;
+    }
+
+    if (hot.length > 0) {
+      html += `<div class="insight-row"><div>🔥 過熱中: <strong>${hot.map(d => d.project.name || "無題").join("、")}</strong><br><span style="font-size:12px;color:var(--ink-mute);">思考が集中している。一気に進めるか、意図的に散らすか判断を。</span></div><div class="insight-verdict verdict-hot">HOT</div></div>`;
+    }
+
+    if (dry.length > 0) {
+      html += `<div class="insight-row"><div>🌵 干からび: <strong>${dry.map(d => d.project.name || "無題").join("、")}</strong><br><span style="font-size:12px;color:var(--ink-mute);">2週間、紐付いた思考がゼロ。凍結候補、もしくはもやに戻す候補。</span></div><div class="insight-verdict verdict-dry">凍結候補</div></div>`;
+    }
+
+    if (active.length > 0 && dry.length === 0 && hot.length === 0 && data.length < 5) {
+      html += `<div class="insight-row"><div>✓ 熱量が分散している。タコ足のバランスは良好。</div><div class="insight-verdict verdict-cold">OK</div></div>`;
+    }
+
+    if (html === "") {
+      html = '<div class="empty" style="padding:20px;">雑メモをプロジェクトに紐付けると診断が出る。</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  // ===== 週次 =====
+  function renderWeekly() {
+    const grid = document.getElementById("streak-grid");
+    grid.innerHTML = "";
+    const days = last7Days();
+    const active = state.projects.filter(p => !p.frozen);
+    if (active.length === 0) {
+      grid.innerHTML = '<div class="empty">プロジェクトがまだない</div>';
+    }
+    active.forEach(p => {
+      const row = document.createElement("div");
+      row.className = "streak-row";
+      const doneSet = new Set(p.executions || []);
+      const dotsHtml = days.map(d => {
+        const filled = doneSet.has(d.key);
+        const isToday = d.key === todayStr();
+        return `<div class="streak-dot${filled ? " filled" : ""}${isToday ? " today" : ""}" title="${d.label}"></div>`;
+      }).join("");
+      const streak = calcStreak(p.executions || []);
+      row.innerHTML = `
+        <div class="streak-name">${escapeHtml(p.name || "無題")}</div>
+        <div class="streak-dots">${dotsHtml}</div>
+        <div class="streak-label">${streak}日連続</div>
+      `;
+      grid.appendChild(row);
+    });
+
+    renderReviewCheck();
+    document.getElementById("prompt-text").textContent = buildPrompt();
+  }
+
+  function last7Days() {
+    const out = [];
+    const weekdays = ["日","月","火","水","木","金","土"];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      out.push({ key, label: `${d.getMonth()+1}/${d.getDate()} (${weekdays[d.getDay()]})` });
+    }
+    return out;
+  }
+
+  function renderReviewCheck() {
+    const el = document.getElementById("review-check");
+    const noNext = state.projects.filter(p => !p.frozen && !p.next);
+    const noDue = state.projects.filter(p => !p.frozen && !p.deadline);
+    const totalActive = state.projects.filter(p => !p.frozen).length;
+    const dry = state.projects.filter(p => !p.frozen && countInsights(p.id, 14) === 0);
+    const oldMoya = state.moyas.filter(m => Date.now() - m.ts >= 14 * 86400000);
+
+    let html = "";
+    html += `<div>✓ 進行中プロジェクト: <strong>${totalActive}件</strong> / 凍結: ${state.projects.filter(p => p.frozen).length}件</div>`;
+    html += `<div>✓ もや: <strong>${state.moyas.length}件</strong>${oldMoya.length > 0 ? ` (14日以上前: ${oldMoya.length}件)` : ""}</div>`;
+    html += `<div>✓ 未紐付けの雑メモ: <strong>${state.logs.filter(l => !l.projectId).length}件</strong></div>`;
+    if (noNext.length > 0) {
+      html += `<div style="color:var(--accent);margin-top:8px;">⚠ 「次の一手」が空: ${noNext.map(p => p.name || "無題").join("、")}</div>`;
+      html += `<div style="font-size:12px;color:var(--ink-mute);margin-left:16px;">→ 書けないならもやに戻すのも選択肢</div>`;
+    }
+    if (dry.length > 0) {
+      html += `<div style="color:#8b4a3a;margin-top:8px;">🌵 2週間思考が紐付いてない: ${dry.map(p => p.name || "無題").join("、")}</div>`;
+    }
+    if (oldMoya.length > 0) {
+      html += `<div style="color:var(--fog);margin-top:8px;">🌫 14日以上育ってないもやが${oldMoya.length}件。昇格するか、消すか。</div>`;
+    }
+    if (noNext.length === 0 && dry.length === 0 && oldMoya.length === 0 && totalActive > 0) {
+      html += `<div style="color:var(--green);margin-top:8px;">✓ 全プロジェクトが健全。</div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  function buildPrompt() {
+    const logs = state.logs.filter(l => Date.now() - l.ts < 7 * 86400000);
+    const projectById = Object.fromEntries(state.projects.map(p => [p.id, p]));
+    const projectSummary = state.projects.filter(p => !p.frozen).map(p => {
+      const recent = countInsights(p.id, 14);
+      return `- ${p.name || "無題"} / NEXT: ${p.next || "(未記入)"} / BLOCK: ${p.obstacle || "(未記入)"} / 思考ログ2週: ${recent}件`;
+    }).join("\n");
+    const logText = logs.map(l => {
+      const d = new Date(l.ts);
+      const tag = l.projectId && projectById[l.projectId] ? `[→${projectById[l.projectId].name}]` : "[未紐付]";
+      return `[${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}] ${tag} ${l.text}`;
+    }).join("\n");
+    const moyaText = state.moyas.map(m => {
+      const ageDays = Math.floor((Date.now() - m.ts) / 86400000);
+      return `- (${ageDays}日前) ${m.text}`;
+    }).join("\n");
+
+    return `「一望」の状態を渡す。以下を出して:
+① 未完了タスク一覧(雑メモから拾えるもの)
+② 繰り返し出てくるテーマTop3
+③ もやの中で、プロジェクト化できそうなものの提案(名前と最初の一手)
+④ 「次の一手」が書けていないプロジェクトへの、具体的な第一歩の提案
+⑤ 未紐付けメモを、どのプロジェクトに紐付けるべきか提案
+
+=== 進行中プロジェクト ===
+${projectSummary || "(なし)"}
+
+=== 抱えているもや ===
+${moyaText || "(なし)"}
+
+=== 今週の雑メモ ===
+${logText || "(なし)"}`;
+  }
+
+  document.getElementById("copy-prompt").addEventListener("click", async (e) => {
+    try {
+      await navigator.clipboard.writeText(buildPrompt());
+      e.target.textContent = "✓ コピーした";
+      e.target.classList.add("copied");
+      setTimeout(() => {
+        e.target.textContent = "プロンプトをコピー";
+        e.target.classList.remove("copied");
+      }, 2000);
+    } catch(err) { alert("コピーに失敗。手動でコピーしてください。"); }
+  });
+
+  // ユーティリティ
+  function escapeHtml(s) {
+    if (s == null) return "";
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function confirmAction(title, msg, onOk) {
+    document.getElementById("confirm-title").textContent = title;
+    document.getElementById("confirm-message").textContent = msg;
+    const modal = document.getElementById("confirm-modal");
+    modal.classList.add("open");
+    const ok = document.getElementById("confirm-ok");
+    const cancel = document.getElementById("confirm-cancel");
+    const close = () => modal.classList.remove("open");
+    ok.onclick = () => { onOk(); close(); };
+    cancel.onclick = close;
+    modal.onclick = (e) => { if (e.target === modal) close(); };
+  }
+
+  // 全再描画(クラウドから新しいデータが来た時に呼ぶ)
+  function renderAll() {
+    renderProjects();
+    renderLogs();
+    renderMoyas();
+    // 現在開いているタブによっては週次やタコ足も更新
+    const activeTab = document.querySelector(".tab.active");
+    if (activeTab) {
+      const view = activeTab.dataset.view;
+      if (view === "weekly") renderWeekly();
+      if (view === "takoashi") renderTakoashi();
+    }
+  }
+
+  // 初期化
+  renderDate();
+  renderProjects();
+  renderLogs();
+  renderMoyas();
+
+  // Supabaseから初回読み込み → リアルタイム購読開始
+  (async function initSync() {
+    if (!navigator.onLine) {
+      setSyncStatus("offline", "オフライン");
+      return;
+    }
+    await pullFromCloud();
+    subscribeRealtime();
+  })();
+
+  // Service Worker登録(PWA化のため)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => {
+        console.log('SW registration failed:', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
