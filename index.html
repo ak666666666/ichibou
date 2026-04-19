@@ -164,6 +164,8 @@ nav.tabs { display: flex; gap: 4px; margin-bottom: 32px; border-bottom: 1px soli
 #takoashi-svg { cursor: grab; touch-action: none; user-select: none; display: block; }
 #takoashi-svg.grabbing { cursor: grabbing; }
 .takoashi-controls { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 4px; z-index: 2; }
+.moya-indicator { position: absolute; top: 8px; left: 8px; z-index: 2; font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--fog); background: rgba(255,255,255,0.85); padding: 5px 11px; border: 1px solid var(--line-soft); display: inline-flex; align-items: center; gap: 6px; }
+.moya-indicator::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fog); opacity: 0.6; }
 .zoom-btn { background: rgba(255,255,255,0.9); border: 1px solid var(--line); width: 34px; height: 34px; font-size: 16px; cursor: pointer; font-family: "JetBrains Mono", monospace; color: var(--ink-soft); display: flex; align-items: center; justify-content: center; transition: all 0.15s; padding: 0; line-height: 1; }
 .zoom-btn:hover { background: var(--bg-2); color: var(--ink); border-color: var(--ink-mute); }
 .zoom-btn:active { transform: scale(0.92); }
@@ -445,6 +447,7 @@ html { zoom: var(--ui-zoom, 1); }
           <svg id="takoashi-svg" viewBox="0 0 720 720" style="max-width:680px;width:100%;">
             <g id="takoashi-viewport" transform="translate(0 0) scale(1)"></g>
           </svg>
+          <div class="moya-indicator" id="moya-indicator" style="display:none;">もや 0</div>
           <div class="takoashi-controls">
             <button class="zoom-btn" id="zoom-in" title="拡大">＋</button>
             <button class="zoom-btn" id="zoom-out" title="縮小">−</button>
@@ -1078,6 +1081,8 @@ function renderTakoashi() {
   if (active.length === 0 && moyaCount === 0) {
     svg.innerHTML = `<text x="${cx}" y="${cy}" text-anchor="middle" fill="#8a857a" font-family="Shippori Mincho" font-size="16">プロジェクトもモヤもまだない</text>`;
     document.getElementById("takoashi-verdict").innerHTML = '<div class="empty" style="padding:20px;">何か書き始めるとここに診断が出る。</div>';
+    const mi = document.getElementById("moya-indicator");
+    if (mi) mi.style.display = "none";
     return;
   }
   const data = active.map(p => ({ project: p, count: countInsights(p.id, 14) }));
@@ -1091,7 +1096,8 @@ function renderTakoashi() {
     <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#8a857a" letter-spacing="2">BRAIN</text>
   `;
 
-  // ===== もや雲 =====
+  // ===== もや雲 (SVG内の煙) + もや数インジケーター (HTML) =====
+  const moyaIndicator = document.getElementById("moya-indicator");
   if (moyaCount > 0) {
     const moyaRadius = 85;
     for (let i = 0; i < Math.min(moyaCount, 12); i++) {
@@ -1101,8 +1107,13 @@ function renderTakoashi() {
       const r = 8 + Math.random() * 6;
       svg.innerHTML += `<circle cx="${mx}" cy="${my}" r="${r}" fill="#9fa8b8" opacity="0.25"/>`;
     }
-    // もやラベル: 頭の右下に固定配置 → 上方向の足とは重ならない
-    svg.innerHTML += `<text x="${cx + 65}" y="${cy + 78}" text-anchor="start" font-family="JetBrains Mono" font-size="11" fill="#9fa8b8" letter-spacing="2" ${TEXT_HALO}>もや ${moyaCount}</text>`;
+    // SVG内のもやラベルは廃止 → HTML側のインジケーターで表示
+    if (moyaIndicator) {
+      moyaIndicator.textContent = `もや ${moyaCount}`;
+      moyaIndicator.style.display = "inline-flex";
+    }
+  } else {
+    if (moyaIndicator) moyaIndicator.style.display = "none";
   }
 
   // ===== 足 =====
