@@ -396,7 +396,7 @@ nav.tabs { display: flex; gap: 4px; margin-bottom: 32px; border-bottom: 1px soli
       <div class="takoashi-title">タコ足マップ</div>
       <div class="takoashi-sub">足の太さ=過去2週間の紐付き思考量。中心の"もや"も合わせて、頭全体の状態が見える。</div>
       <div class="takoashi-canvas-wrap">
-        <svg id="takoashi-svg" viewBox="0 0 600 600" style="max-width:600px;width:100%;"></svg>
+        <svg id="takoashi-svg" viewBox="0 0 720 720" style="max-width:680px;width:100%;"></svg>
         <div class="takoashi-legend">
           <div class="legend-item"><div class="legend-swatch" style="background:var(--accent)"></div>過熱(7件以上)</div>
           <div class="legend-item"><div class="legend-swatch" style="background:var(--amber)"></div>活発(3〜6件)</div>
@@ -1012,21 +1012,31 @@ function renderTakoashi() {
   const svg = document.getElementById("takoashi-svg");
   const active = state.projects.filter(p => !p.frozen);
   const moyaCount = state.moyas.length;
-  const cx = 300, cy = 300;
+  const VB = 720;           // viewBoxサイズ(SVG内部の座標系)
+  const cx = VB/2, cy = VB/2;
+  const MARGIN = 10;        // 端から最低これだけ空ける
+  const MAX_LABEL_CHARS = 8; // 日本語名は8文字で切る(全角は半角2文字分の幅があるため)
+  // ラベルの縁取り(文字が足に被っても読めるように)
+  const TEXT_HALO = `paint-order="stroke fill" stroke="#fbf9f3" stroke-width="3" stroke-linejoin="round"`;
+
   svg.innerHTML = "";
   if (active.length === 0 && moyaCount === 0) {
-    svg.innerHTML = `<text x="300" y="300" text-anchor="middle" fill="#8a857a" font-family="Shippori Mincho" font-size="16">プロジェクトもモヤもまだない</text>`;
+    svg.innerHTML = `<text x="${cx}" y="${cy}" text-anchor="middle" fill="#8a857a" font-family="Shippori Mincho" font-size="16">プロジェクトもモヤもまだない</text>`;
     document.getElementById("takoashi-verdict").innerHTML = '<div class="empty" style="padding:20px;">何か書き始めるとここに診断が出る。</div>';
     return;
   }
   const data = active.map(p => ({ project: p, count: countInsights(p.id, 14) }));
   const maxCount = Math.max(1, ...data.map(d => d.count));
+
+  // ===== 頭 =====
   svg.innerHTML += `
     <defs><radialGradient id="headGrad" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fbf9f3"/><stop offset="100%" stop-color="#ebe6da"/></radialGradient></defs>
     <circle cx="${cx}" cy="${cy}" r="55" fill="url(#headGrad)" stroke="#cfc8b8" stroke-width="1.5"/>
     <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-family="Shippori Mincho" font-size="16" fill="#1a1915" font-weight="700">頭</text>
     <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#8a857a" letter-spacing="2">BRAIN</text>
   `;
+
+  // ===== もや雲 =====
   if (moyaCount > 0) {
     const moyaRadius = 85;
     for (let i = 0; i < Math.min(moyaCount, 12); i++) {
@@ -1036,14 +1046,17 @@ function renderTakoashi() {
       const r = 8 + Math.random() * 6;
       svg.innerHTML += `<circle cx="${mx}" cy="${my}" r="${r}" fill="#9fa8b8" opacity="0.25"/>`;
     }
-    svg.innerHTML += `<text x="${cx}" y="${cy - 95}" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#9fa8b8" letter-spacing="2">もや ${moyaCount}</text>`;
+    // もやラベル: 頭の右下に固定配置 → 上方向の足とは重ならない
+    svg.innerHTML += `<text x="${cx + 65}" y="${cy + 78}" text-anchor="start" font-family="JetBrains Mono" font-size="11" fill="#9fa8b8" letter-spacing="2" ${TEXT_HALO}>もや ${moyaCount}</text>`;
   }
+
+  // ===== 足 =====
   const n = data.length;
   data.forEach((d, i) => {
     const angle = (i / Math.max(n,1)) * Math.PI * 2 - Math.PI / 2;
     const count = d.count;
-    const baseLen = 140;
-    const bonusLen = (count / maxCount) * 80;
+    const baseLen = 130;
+    const bonusLen = (count / maxCount) * 70;
     const len = baseLen + bonusLen;
     let thickness = 3, color = "#8b4a3a", label = "干からび";
     if (count >= 7) { thickness = 20; color = "#c8502e"; label = "過熱"; }
@@ -1060,14 +1073,46 @@ function renderTakoashi() {
     svg.innerHTML += `<path d="M ${x1} ${y1} Q ${cx1} ${cy1} ${x2} ${y2}" stroke="${color}" stroke-width="${thickness}" stroke-linecap="round" fill="none" opacity="0.85"/>`;
     const tipR = Math.max(6, thickness * 0.7);
     svg.innerHTML += `<circle cx="${x2}" cy="${y2}" r="${tipR}" fill="${color}" opacity="0.9"/>`;
-    const labelX = cx + Math.cos(angle) * (startR + len + 30);
-    const labelY = cy + Math.sin(angle) * (startR + len + 30);
-    const anchor = Math.cos(angle) > 0.3 ? "start" : Math.cos(angle) < -0.3 ? "end" : "middle";
+
+    // ===== ラベル位置 =====
+    const c = Math.cos(angle), s = Math.sin(angle);
+    let labelX = cx + c * (startR + len + 20);
+    let labelY = cy + s * (startR + len + 20);
+    const anchor = c > 0.3 ? "start" : c < -0.3 ? "end" : "middle";
+
+    // 日本語名は短め切り詰め。半角・全角混在を意識して実効幅を概算
     const name = d.project.name || "無題";
-    const displayName = name.length > 14 ? name.slice(0, 14) + "…" : name;
+    const approxWidth = Array.from(name).reduce((w, ch) => w + (/[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 14 : 7), 0);
+    const maxWidthPx = 180; // ラベルの目安最大幅
+    let displayName = name;
+    if (name.length > MAX_LABEL_CHARS || approxWidth > maxWidthPx) {
+      displayName = name.slice(0, MAX_LABEL_CHARS) + "…";
+    }
+
+    // 2行の上下位置
+    let line1y = labelY;
+    let line2y = labelY + 15;
+    if (s < -0.4) {
+      // 上側: 1行目が上、2行目がその下だと頭に近づきすぎるので、両方とも外側に押し出す
+      line1y = labelY - 6;
+      line2y = labelY + 9;
+    } else if (s > 0.4) {
+      // 下側: 下にはみ出さないよう微調整
+      line1y = labelY + 4;
+      line2y = labelY + 19;
+    }
+
+    // viewBox内にクランプ(端ちぎれ防止)
+    const clampY = y => Math.max(MARGIN + 10, Math.min(VB - MARGIN - 5, y));
+    line1y = clampY(line1y);
+    line2y = clampY(line2y);
+    // anchor別にX方向もクランプ
+    if (anchor === "start") labelX = Math.min(VB - MARGIN - 90, labelX);
+    else if (anchor === "end") labelX = Math.max(MARGIN + 90, labelX);
+
     svg.innerHTML += `
-      <text x="${labelX}" y="${labelY}" text-anchor="${anchor}" font-family="Shippori Mincho" font-size="13" fill="#1a1915" font-weight="700">${escapeHtml(displayName)}</text>
-      <text x="${labelX}" y="${labelY + 14}" text-anchor="${anchor}" font-family="JetBrains Mono" font-size="10" fill="#8a857a" letter-spacing="1">${count} notes · ${label}</text>
+      <text x="${labelX}" y="${line1y}" text-anchor="${anchor}" font-family="Shippori Mincho" font-size="13" fill="#1a1915" font-weight="700" ${TEXT_HALO}>${escapeHtml(displayName)}</text>
+      <text x="${labelX}" y="${line2y}" text-anchor="${anchor}" font-family="JetBrains Mono" font-size="10" fill="#8a857a" letter-spacing="1" ${TEXT_HALO}>${count} notes · ${label}</text>
     `;
   });
   renderTakoashiVerdict(data, moyaCount);
