@@ -223,6 +223,10 @@ nav.tabs { display: flex; gap: 4px; margin-bottom: 32px; border-bottom: 1px soli
 .pick-item .pick-meta { font-size: 11px; color: var(--ink-mute); font-family: "JetBrains Mono", monospace; }
 .pick-none { padding: 12px 16px; background: transparent; border: 1px dashed var(--line); cursor: pointer; color: var(--ink-mute); text-align: center; }
 .pick-none:hover { border-color: var(--accent); color: var(--accent); }
+.pick-create { display: flex; gap: 8px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px dashed var(--line-soft); }
+.pick-create input { flex: 1; padding: 8px 10px; font-size: 13px; border: 1px solid var(--line); background: #fbf9f3; font-family: "Zen Kaku Gothic New", sans-serif; outline: none; min-width: 0; }
+.pick-create input:focus { border-color: var(--accent); }
+.pick-create .btn { padding: 8px 14px; font-size: 12px; flex-shrink: 0; }
 .insight-modal-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .insight-modal-item { padding: 12px 14px; background: #fbf9f3; border-left: 2px solid var(--blue); font-size: 14px; line-height: 1.7; position: relative; }
 .insight-modal-item .meta { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); margin-bottom: 4px; letter-spacing: 0.1em; }
@@ -231,6 +235,42 @@ nav.tabs { display: flex; gap: 4px; margin-bottom: 32px; border-bottom: 1px soli
 .promote-body input { width: 100%; padding: 8px 10px; font-size: 14px; border: 1px solid var(--line); background: #fbf9f3; font-family: "Zen Kaku Gothic New", sans-serif; outline: none; }
 .promote-body input:focus { border-color: var(--accent); }
 .promote-preview { background: rgba(159,168,184,0.1); padding: 10px 12px; font-size: 13px; color: var(--ink-soft); font-style: italic; margin-bottom: 8px; border-left: 2px solid var(--fog); }
+
+/* ===== 受信箱(Cowork→一望同期) ===== */
+.inbox-wrap { max-width: 820px; margin: 0 auto; }
+.inbox-title-h { font-family: "Shippori Mincho", serif; font-size: 22px; margin-bottom: 8px; letter-spacing: 0.05em; }
+.inbox-sub { color: var(--ink-mute); font-size: 13px; margin-bottom: 16px; }
+.inbox-explain { background: rgba(74,107,58,0.06); border-left: 3px solid var(--green); padding: 12px 16px; margin-bottom: 24px; font-size: 12px; color: var(--ink-soft); line-height: 1.7; }
+.inbox-explain code { font-family: "JetBrains Mono", monospace; font-size: 11px; background: rgba(0,0,0,0.05); padding: 1px 6px; }
+.inbox-list { display: flex; flex-direction: column; gap: 14px; }
+.inbox-item { background: #fbf9f3; border: 1px solid var(--line-soft); padding: 16px 18px; box-shadow: var(--paper-shadow); }
+.inbox-header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.inbox-kind, .inbox-priority, .inbox-due { font-family: "JetBrains Mono", monospace; font-size: 10px; padding: 3px 8px; letter-spacing: 0.1em; }
+.inbox-kind.k-task { background: var(--green); color: white; }
+.inbox-kind.k-moya { background: var(--fog); color: white; }
+.inbox-kind.k-note { background: var(--bg-2); color: var(--ink-soft); }
+.inbox-priority.p-high { background: var(--accent); color: white; }
+.inbox-priority.p-normal { background: var(--bg-2); color: var(--ink-mute); }
+.inbox-priority.p-low { background: transparent; color: var(--ink-mute); border: 1px solid var(--line); }
+.inbox-due.overdue { background: var(--accent); color: white; }
+.inbox-due.soon { background: var(--amber); color: white; }
+.inbox-due.ok { background: var(--bg-2); color: var(--ink-soft); }
+.inbox-hint { font-size: 11px; color: var(--ink-mute); font-style: italic; }
+.inbox-time { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); letter-spacing: 0.1em; }
+.inbox-title-text { font-size: 15px; font-weight: 500; margin-bottom: 6px; line-height: 1.5; }
+.inbox-detail { font-size: 13px; color: var(--ink-soft); white-space: pre-wrap; line-height: 1.7; margin-bottom: 10px; padding: 8px 10px; background: rgba(159,168,184,0.08); border-left: 2px solid var(--line-soft); }
+.inbox-actions { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--line-soft); }
+.inbox-btn { padding: 6px 12px; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-size: 12px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; transition: all 0.15s; }
+.inbox-btn:hover { background: var(--bg-2); color: var(--ink); }
+.inbox-btn.next { border-color: var(--accent); color: var(--accent); }
+.inbox-btn.next:hover { background: var(--accent); color: white; }
+.inbox-btn.note { border-color: var(--blue); color: var(--blue); }
+.inbox-btn.note:hover { background: var(--blue); color: white; }
+.inbox-btn.moya { border-color: var(--fog); color: var(--fog); }
+.inbox-btn.moya:hover { background: var(--fog); color: white; }
+.inbox-btn.discard { margin-left: auto; color: var(--ink-mute); border-color: transparent; }
+.inbox-btn.discard:hover { color: var(--accent); border-color: var(--line); }
+.tab .count.alert { background: var(--accent); color: white; padding: 1px 6px; font-weight: 600; }
 
 /* ===== 同期インジケータ ===== */
 .sync-indicator { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.1em; color: var(--ink-mute); background: var(--bg-2); margin-top: 6px; transition: all 0.3s; cursor: default; }
@@ -380,6 +420,7 @@ html { zoom: var(--ui-zoom, 1); }
 
   <nav class="tabs">
     <button class="tab active" data-view="projects">プロジェクト <span class="count" id="count-projects">0</span></button>
+    <button class="tab" data-view="inbox">受信箱 <span class="count" id="count-inbox">0</span></button>
     <button class="tab" data-view="moya">もや <span class="count" id="count-moya">0</span></button>
     <button class="tab" data-view="capture">雑メモ <span class="count" id="count-logs">0</span></button>
     <button class="tab" data-view="takoashi">タコ足</button>
@@ -394,6 +435,19 @@ html { zoom: var(--ui-zoom, 1); }
       <button class="btn" id="add-btn">＋ 追加</button>
     </div>
     <div class="projects" id="projects-grid"></div>
+  </section>
+
+  <section class="view" id="view-inbox">
+    <div class="inbox-wrap">
+      <div class="inbox-title-h">受信箱</div>
+      <div class="inbox-sub">Coworkの<code>/sync-ichibou</code>から届いたタスク。手動で振り分ける。</div>
+      <div class="inbox-explain">
+        <strong>使い方:</strong> Cowork セッションで「<code>/sync-ichibou</code>」と打つと、直前の会話で出てきたタスクがここに届く。<br>
+        各アイテムを <strong>NEXT(プロジェクトの次の一手に追記)</strong> / <strong>雑メモ</strong> / <strong>もや</strong> / <strong>破棄</strong> のいずれかに振り分けると消える。<br>
+        振り分け先は晃良の手で決める(自動振り分けはしない)。
+      </div>
+      <div class="inbox-list" id="inbox-list"></div>
+    </div>
   </section>
 
   <section class="view" id="view-moya">
@@ -445,6 +499,12 @@ html { zoom: var(--ui-zoom, 1); }
       <div class="takoashi-canvas-wrap">
         <div class="takoashi-svg-wrap">
           <svg id="takoashi-svg" viewBox="0 0 720 720" style="max-width:680px;width:100%;">
+            <defs>
+              <radialGradient id="headGrad" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#fbf9f3"/>
+                <stop offset="100%" stop-color="#ebe6da"/>
+              </radialGradient>
+            </defs>
             <g id="takoashi-viewport" transform="translate(0 0) scale(1)"></g>
           </svg>
           <div class="moya-indicator" id="moya-indicator" style="display:none;">もや 0</div>
@@ -507,6 +567,10 @@ html { zoom: var(--ui-zoom, 1); }
   <div class="modal">
     <h3>どのプロジェクトに紐付ける?</h3>
     <p style="font-size:13px;">紐付けたメモは、そのプロジェクトの「思考ログ」として残ります。</p>
+    <div class="pick-create">
+      <input type="text" id="pick-create-name" placeholder="＋ 新規プロジェクト名を入力して Enter" />
+      <button class="btn" id="pick-create-btn">作る</button>
+    </div>
     <div class="pick-list" id="pick-list"></div>
     <div class="pick-none" id="pick-none">紐付けを解除する</div>
     <div class="modal-actions" style="margin-top:16px;">
@@ -550,6 +614,17 @@ html { zoom: var(--ui-zoom, 1); }
     <div class="modal-actions">
       <button class="btn ghost" id="demote-cancel">キャンセル</button>
       <button class="btn" id="demote-ok">もやに戻す</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="inbox-next-modal">
+  <div class="modal">
+    <h3>どのプロジェクトのNEXTに?</h3>
+    <p style="font-size:13px;">既存のNEXTがあれば「 / 」で連結して追記します。空ならそのまま入れます。</p>
+    <div class="pick-list" id="inbox-next-list"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="inbox-next-cancel">キャンセル</button>
     </div>
   </div>
 </div>
@@ -652,7 +727,7 @@ function subscribeRealtime() {
   ).subscribe();
 }
 
-window.addEventListener("online", () => { setSyncStatus("syncing", "再接続中"); pullFromCloud().then(() => pushToCloud()); });
+window.addEventListener("online", () => { setSyncStatus("syncing", "再接続中"); pullFromCloud().then(() => pushToCloud()).then(() => pullInbox()); });
 window.addEventListener("offline", () => setSyncStatus("offline", "オフライン"));
 setTimeout(() => { const el = document.getElementById("sync-indicator"); if (el) el.addEventListener("click", () => pullFromCloud()); }, 100);
 
@@ -678,6 +753,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     if (tab.dataset.view === "weekly") renderWeekly();
     if (tab.dataset.view === "takoashi") renderTakoashi();
     if (tab.dataset.view === "moya") renderMoyas();
+    if (tab.dataset.view === "inbox") renderInbox();
   });
 });
 
@@ -1036,7 +1112,7 @@ function openPickModal(log) {
   list.innerHTML = "";
   const active = state.projects.filter(p => !p.frozen);
   if (active.length === 0) {
-    list.innerHTML = '<div class="empty" style="padding:20px;">プロジェクトがまだない。</div>';
+    list.innerHTML = '<div class="empty" style="padding:20px;">プロジェクトがまだない。下の入力欄から1つ作って紐付けよう。</div>';
   } else {
     active.forEach(p => {
       const item = document.createElement("div");
@@ -1052,7 +1128,22 @@ function openPickModal(log) {
       list.appendChild(item);
     });
   }
+  // 新規作成欄をリセット。雑メモ本文の冒頭をデフォルト名にしておく(編集して使ってもらう)
+  const createInput = document.getElementById("pick-create-name");
+  createInput.value = log.text.slice(0, 30).replace(/[\n\r]/g, " ").trim();
   document.getElementById("pick-modal").classList.add("open");
+}
+function createAndPickProject() {
+  if (!pickTargetLog) return;
+  const input = document.getElementById("pick-create-name");
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+  const newProject = { id: uid(), name, goal: "", next: "", obstacle: "", deadline: "", frozen: false, executions: [] };
+  state.projects.push(newProject);
+  pickTargetLog.projectId = newProject.id;
+  saveState();
+  renderLogs(); renderProjects();
+  closePickModal();
 }
 function closePickModal() {
   document.getElementById("pick-modal").classList.remove("open");
@@ -1062,6 +1153,10 @@ document.getElementById("pick-cancel").addEventListener("click", closePickModal)
 document.getElementById("pick-none").addEventListener("click", () => {
   if (pickTargetLog) { pickTargetLog.projectId = null; saveState(); renderLogs(); renderProjects(); }
   closePickModal();
+});
+document.getElementById("pick-create-btn").addEventListener("click", createAndPickProject);
+document.getElementById("pick-create-name").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); createAndPickProject(); }
 });
 document.getElementById("pick-modal").addEventListener("click", (e) => { if (e.target.id === "pick-modal") closePickModal(); });
 
@@ -1090,21 +1185,23 @@ function renderTakoashi() {
 
   // ===== 頭 =====
   svg.innerHTML += `
-    <defs><radialGradient id="headGrad" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fbf9f3"/><stop offset="100%" stop-color="#ebe6da"/></radialGradient></defs>
     <circle cx="${cx}" cy="${cy}" r="55" fill="url(#headGrad)" stroke="#cfc8b8" stroke-width="1.5"/>
     <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-family="Shippori Mincho" font-size="16" fill="#1a1915" font-weight="700">頭</text>
     <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#8a857a" letter-spacing="2">BRAIN</text>
   `;
 
   // ===== もや雲 (SVG内の煙) + もや数インジケーター (HTML) =====
+  // 位置はインデックスから決定的に決める。再描画で雲が動かないように。
+  const pseudoRand = (seed) => { const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
   const moyaIndicator = document.getElementById("moya-indicator");
   if (moyaCount > 0) {
     const moyaRadius = 85;
-    for (let i = 0; i < Math.min(moyaCount, 12); i++) {
-      const ang = (i / Math.min(moyaCount, 12)) * Math.PI * 2;
-      const mx = cx + Math.cos(ang) * (moyaRadius + Math.random() * 15);
-      const my = cy + Math.sin(ang) * (moyaRadius + Math.random() * 15);
-      const r = 8 + Math.random() * 6;
+    const moyaShown = Math.min(moyaCount, 12);
+    for (let i = 0; i < moyaShown; i++) {
+      const ang = (i / moyaShown) * Math.PI * 2;
+      const mx = cx + Math.cos(ang) * (moyaRadius + pseudoRand(i * 2) * 15);
+      const my = cy + Math.sin(ang) * (moyaRadius + pseudoRand(i * 2 + 1) * 15);
+      const r = 8 + pseudoRand(i * 3 + 7) * 6;
       svg.innerHTML += `<circle cx="${mx}" cy="${my}" r="${r}" fill="#9fa8b8" opacity="0.25"/>`;
     }
     // SVG内のもやラベルは廃止 → HTML側のインジケーターで表示
@@ -1169,7 +1266,10 @@ function renderTakoashi() {
     }
 
     // viewBox内にクランプ(端ちぎれ防止)
-    const clampY = y => Math.max(MARGIN + 10, Math.min(VB - MARGIN - 5, y));
+    // 上端は moya-indicator(左) / zoom-controls(右) との重なりを避けるため少し広めに取る
+    const TOP_PAD = 50;
+    const BOT_PAD = 20;
+    const clampY = y => Math.max(MARGIN + TOP_PAD, Math.min(VB - MARGIN - BOT_PAD, y));
     line1y = clampY(line1y);
     line2y = clampY(line2y);
     // anchor別にX方向もクランプ(日本語フルワード分の余裕を確保)
@@ -1430,6 +1530,7 @@ function renderAll() {
   renderProjects();
   renderLogs();
   renderMoyas();
+  renderInbox();
   const activeTab = document.querySelector(".tab.active");
   if (activeTab) {
     const view = activeTab.dataset.view;
@@ -1437,6 +1538,200 @@ function renderAll() {
     if (view === "takoashi") renderTakoashi();
   }
 }
+
+// ========================================================================
+// ===== 受信箱(Cowork→一望同期) =====
+// ========================================================================
+let inboxItems = [];
+
+async function pullInbox() {
+  if (!navigator.onLine) return;
+  try {
+    const { data, error } = await sb.from("ichibou_inbox")
+      .select("*")
+      .eq("consumed", false)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    inboxItems = data || [];
+    renderInbox();
+  } catch (e) {
+    console.error("Inbox pull error:", e);
+  }
+}
+
+function subscribeInboxRealtime() {
+  sb.channel("ichibou-inbox-sync").on("postgres_changes",
+    { event: "*", schema: "public", table: "ichibou_inbox" },
+    () => pullInbox()
+  ).subscribe();
+}
+
+function inboxKindLabel(k) { return ({ task: "📋 タスク", moya: "🌫 もや", note: "📝 メモ" })[k] || k; }
+function inboxPriorityLabel(p) { return ({ high: "🔥 高", normal: "中", low: "低" })[p] || p; }
+
+function inboxDueClass(due) {
+  if (!due) return "";
+  const today = todayStr();
+  if (due < today) return "overdue";
+  const dt = new Date(due);
+  const diff = (dt - new Date()) / 86400000;
+  if (diff <= 3) return "soon";
+  return "ok";
+}
+
+function inboxFormatDue(due) {
+  if (!due) return "";
+  const [, m, d] = due.split("-");
+  return `〜${m}.${d}`;
+}
+
+function renderInbox() {
+  const list = document.getElementById("inbox-list");
+  if (!list) return;
+  const countEl = document.getElementById("count-inbox");
+  if (countEl) {
+    countEl.textContent = inboxItems.length;
+    countEl.classList.toggle("alert", inboxItems.length > 0);
+  }
+  list.innerHTML = "";
+  if (inboxItems.length === 0) {
+    list.innerHTML = '<div class="empty">受信箱は空。<br>Coworkで <code>/sync-ichibou</code> と打つと、ここに届く。</div>';
+    return;
+  }
+  inboxItems.forEach(item => {
+    const el = document.createElement("div");
+    el.className = "inbox-item";
+    const dueHtml = item.due ? `<span class="inbox-due ${inboxDueClass(item.due)}">${inboxFormatDue(item.due)}</span>` : "";
+    const priorityHtml = item.priority ? `<span class="inbox-priority p-${item.priority}">${inboxPriorityLabel(item.priority)}</span>` : "";
+    const kindHtml = `<span class="inbox-kind k-${item.kind}">${inboxKindLabel(item.kind)}</span>`;
+    const hintHtml = item.project_hint ? `<span class="inbox-hint">→ ${escapeHtml(item.project_hint)}</span>` : "";
+    const ts = item.created_at ? new Date(item.created_at).getTime() : Date.now();
+    el.innerHTML = `
+      <div class="inbox-header">
+        ${kindHtml}${priorityHtml}${dueHtml}${hintHtml}
+        <span class="inbox-time">${formatTs(ts)}</span>
+      </div>
+      <div class="inbox-title-text">${escapeHtml(item.title || "(無題)")}</div>
+      ${item.detail ? `<div class="inbox-detail">${escapeHtml(item.detail)}</div>` : ""}
+      <div class="inbox-actions">
+        <button class="inbox-btn next" data-act="next">→ NEXT</button>
+        <button class="inbox-btn note" data-act="note">→ 雑メモ</button>
+        <button class="inbox-btn moya" data-act="moya">→ もや</button>
+        <button class="inbox-btn discard" data-act="discard">破棄</button>
+      </div>
+    `;
+    el.querySelectorAll("[data-act]").forEach(btn => {
+      btn.addEventListener("click", () => handleInboxAction(item, btn.dataset.act));
+    });
+    list.appendChild(el);
+  });
+}
+
+function inboxComposeText(item) {
+  let t = item.title || "";
+  if (item.detail) t += "\n" + item.detail;
+  if (item.due) t += `\n(期日: ${item.due})`;
+  return t.trim();
+}
+
+function inboxComposeNext(item) {
+  let t = item.title || "";
+  if (item.due) t += ` (〜${item.due})`;
+  return t;
+}
+
+async function handleInboxAction(item, act) {
+  if (act === "next") {
+    openInboxNextPicker(item);
+  } else if (act === "note") {
+    state.logs.push({ id: uid(), ts: Date.now(), text: `[Cowork] ${inboxComposeText(item)}`, projectId: null });
+    saveState();
+    await consumeInbox(item, "雑メモ");
+  } else if (act === "moya") {
+    state.moyas.push({ id: uid(), ts: Date.now(), text: inboxComposeText(item) });
+    saveState();
+    await consumeInbox(item, "もや");
+  } else if (act === "discard") {
+    await consumeInbox(item, "破棄");
+  }
+}
+
+async function consumeInbox(item, dest) {
+  // 楽観的UI: 先に画面から消す
+  inboxItems = inboxItems.filter(x => x.id !== item.id);
+  renderInbox();
+  renderProjects();
+  renderLogs();
+  renderMoyas();
+  try {
+    const { error } = await sb.from("ichibou_inbox").update({
+      consumed: true,
+      consumed_at: new Date().toISOString(),
+      dest
+    }).eq("id", item.id);
+    if (error) throw error;
+  } catch (e) {
+    console.error("Inbox consume error:", e);
+    alert("受信箱の更新に失敗。再読込を推奨。");
+    pullInbox(); // 状態を取り直す
+  }
+}
+
+// NEXT振り分け: プロジェクト選択モーダル
+let inboxNextTarget = null;
+function openInboxNextPicker(item) {
+  inboxNextTarget = item;
+  const modal = document.getElementById("inbox-next-modal");
+  const list = document.getElementById("inbox-next-list");
+  list.innerHTML = "";
+  const active = state.projects.filter(p => !p.frozen);
+  if (active.length === 0) {
+    list.innerHTML = '<div class="empty" style="padding:20px;">アクティブなプロジェクトがない。先に追加してください。</div>';
+  } else {
+    active.forEach(p => {
+      const el = document.createElement("div");
+      el.className = "pick-item";
+      const nextPreview = p.next ? "NEXT: " + p.next.slice(0, 30) : "(NEXT空)";
+      el.innerHTML = `<span class="pick-name">${escapeHtml(p.name || "無題")}</span><span class="pick-meta">${escapeHtml(nextPreview)}</span>`;
+      el.addEventListener("click", () => commitInboxToNext(p));
+      list.appendChild(el);
+    });
+  }
+  modal.classList.add("open");
+}
+
+async function commitInboxToNext(project) {
+  const item = inboxNextTarget;
+  if (!item) return;
+  const newNext = inboxComposeNext(item);
+  if (project.next && project.next.trim()) {
+    project.next = project.next + " / " + newNext;
+  } else {
+    project.next = newNext;
+  }
+  // 思考ログにも残す
+  state.logs.push({
+    id: uid(),
+    ts: Date.now(),
+    text: `[Cowork→NEXT] ${item.title}${item.detail ? "\n" + item.detail : ""}`,
+    projectId: project.id
+  });
+  saveState();
+  document.getElementById("inbox-next-modal").classList.remove("open");
+  inboxNextTarget = null;
+  await consumeInbox(item, "NEXT");
+}
+
+document.getElementById("inbox-next-cancel").addEventListener("click", () => {
+  document.getElementById("inbox-next-modal").classList.remove("open");
+  inboxNextTarget = null;
+});
+document.getElementById("inbox-next-modal").addEventListener("click", (e) => {
+  if (e.target.id === "inbox-next-modal") {
+    e.target.classList.remove("open");
+    inboxNextTarget = null;
+  }
+});
 
 // ========================================================================
 // ===== 音声入力 (Web Speech API) =====
@@ -1556,11 +1851,14 @@ renderDate();
 renderProjects();
 renderLogs();
 renderMoyas();
+renderInbox();
 
 (async function initSync() {
   if (!navigator.onLine) { setSyncStatus("offline", "オフライン"); return; }
   await pullFromCloud();
+  await pullInbox();
   subscribeRealtime();
+  subscribeInboxRealtime();
 })();
 
 if ('serviceWorker' in navigator) {
