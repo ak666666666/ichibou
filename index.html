@@ -101,7 +101,7 @@ nav.tabs { display: flex; gap: 4px; margin-bottom: 32px; border-bottom: 1px soli
 .moya-explain strong { color: var(--ink); }
 .moya-input-box { background: linear-gradient(135deg, #f7f5ee 0%, #ecebe3 100%); border: 1px solid var(--line-soft); padding: 20px; box-shadow: var(--paper-shadow); margin-bottom: 28px; position: relative; overflow: hidden; }
 .moya-input-box::before { content: ""; position: absolute; top: -40px; right: -40px; width: 120px; height: 120px; background: radial-gradient(circle, rgba(159,168,184,0.15), transparent 70%); pointer-events: none; }
-.moya-input { width: 100%; border: none; background: transparent; font-family: "Zen Kaku Gothic New", sans-serif; font-size: 15px; line-height: 1.8; resize: vertical; min-height: 70px; outline: none; color: var(--ink); position: relative; z-index: 1; }
+.moya-input { width: 100%; border: none; background: transparent; font-family: "Zen Kaku Gothic New", sans-serif; font-size: 15px; line-height: 1.8; resize: vertical; min-height: 130px; outline: none; color: var(--ink); position: relative; z-index: 1; overflow: hidden; }
 .moya-input::placeholder { color: var(--ink-mute); opacity: 0.6; font-style: italic; }
 .moya-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line-soft); position: relative; z-index: 1; gap: 10px; }
 .moya-hint { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); letter-spacing: 0.15em; flex: 1; min-width: 0; }
@@ -110,8 +110,9 @@ nav.tabs { display: flex; gap: 4px; margin-bottom: 32px; border-bottom: 1px soli
 .moya-cloud { background: linear-gradient(135deg, #f7f5ee 0%, #edebe3 100%); border: 1px solid var(--line-soft); padding: 16px 18px 14px; position: relative; transition: all 0.2s; min-height: 120px; display: flex; flex-direction: column; }
 .moya-cloud:hover { border-color: var(--fog); box-shadow: 0 4px 16px rgba(159,168,184,0.15); transform: translateY(-1px); }
 .moya-cloud::before { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(ellipse at top right, rgba(159,168,184,0.1), transparent 60%); pointer-events: none; }
-.moya-text { flex: 1; font-size: 14px; line-height: 1.7; color: var(--ink-soft); white-space: pre-wrap; word-break: break-word; outline: none; margin-bottom: 12px; border-bottom: 1px dashed transparent; padding-bottom: 4px; }
-.moya-text:focus { border-bottom-color: var(--line); color: var(--ink); }
+.moya-text { flex: 1; font-size: 14px; line-height: 1.7; color: var(--ink-soft); white-space: pre-wrap; word-break: break-word; outline: none; margin-bottom: 12px; border-bottom: 1px dashed transparent; padding-bottom: 4px; cursor: text; transition: border-bottom-color 0.15s, color 0.15s; }
+.moya-text:hover { border-bottom-color: var(--line-soft); color: var(--ink); }
+.moya-text:focus { border-bottom-color: var(--line); color: var(--ink); background: rgba(255,255,255,0.5); }
 .moya-meta { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); letter-spacing: 0.1em; margin-bottom: 10px; }
 .moya-cloud-actions { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--line-soft); position: relative; z-index: 1; }
 .moya-btn { padding: 5px 10px; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; transition: all 0.15s; }
@@ -130,7 +131,7 @@ nav.tabs { display: flex; gap: 4px; margin-bottom: 32px; border-bottom: 1px soli
 .capture-title { font-family: "Shippori Mincho", serif; font-size: 22px; margin-bottom: 8px; letter-spacing: 0.05em; }
 .capture-sub { color: var(--ink-mute); font-size: 13px; margin-bottom: 24px; }
 .capture-box { background: #fbf9f3; border: 1px solid var(--line-soft); padding: 20px; box-shadow: var(--paper-shadow); margin-bottom: 24px; }
-.capture-input { width: 100%; border: none; background: transparent; font-family: "Zen Kaku Gothic New", sans-serif; font-size: 15px; line-height: 1.7; resize: vertical; min-height: 80px; outline: none; color: var(--ink); }
+.capture-input { width: 100%; border: none; background: transparent; font-family: "Zen Kaku Gothic New", sans-serif; font-size: 15px; line-height: 1.7; resize: vertical; min-height: 140px; outline: none; color: var(--ink); overflow: hidden; }
 .capture-input::placeholder { color: var(--ink-mute); opacity: 0.6; }
 .capture-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line-soft); gap: 10px; }
 .capture-hint { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); letter-spacing: 0.15em; flex: 1; min-width: 0; }
@@ -143,8 +144,9 @@ nav.tabs { display: flex; gap: 4px; margin-bottom: 32px; border-bottom: 1px soli
 .log-time { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); letter-spacing: 0.1em; margin-bottom: 6px; }
 
 /* ===== 雑メモ後編集 ===== */
-.log-text { outline: none; border-bottom: 1px dashed transparent; padding-bottom: 2px; cursor: text; white-space: pre-wrap; word-break: break-word; min-height: 20px; }
-.log-text:focus { border-bottom-color: var(--line); }
+.log-text { outline: none; border-bottom: 1px dashed transparent; padding-bottom: 2px; cursor: text; white-space: pre-wrap; word-break: break-word; min-height: 20px; transition: border-bottom-color 0.15s; }
+.log-text:hover { border-bottom-color: var(--line-soft); }
+.log-text:focus { border-bottom-color: var(--line); background: rgba(255,255,255,0.5); }
 .log-text:empty::before { content: "(空。フォーカス外で削除)"; color: var(--ink-mute); opacity: 0.5; font-style: italic; }
 
 .log-actions { display: flex; gap: 6px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
@@ -922,11 +924,23 @@ function saveMoya() {
   state.moyas.push({ id: uid(), ts: Date.now(), text });
   saveState();
   input.value = "";
+  input.style.height = "";
   renderMoyas();
 }
 document.getElementById("moya-save").addEventListener("click", saveMoya);
 document.getElementById("moya-input").addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); saveMoya(); }
+});
+
+// 入力に応じてtextareaを自動拡張(min-heightは下限として効く)
+function autoGrow(el) {
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+}
+["moya-input", "capture-input"].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener("input", () => autoGrow(el));
 });
 
 // ===== もや→プロジェクト昇格 =====
@@ -1097,6 +1111,7 @@ function saveLog() {
   state.logs.push({ id: uid(), ts: Date.now(), text, projectId: null });
   saveState();
   input.value = "";
+  input.style.height = "";
   renderLogs();
 }
 document.getElementById("capture-save").addEventListener("click", saveLog);
@@ -1167,8 +1182,8 @@ function renderTakoashi() {
   const moyaCount = state.moyas.length;
   const VB = 720;           // viewBoxサイズ(SVG内部の座標系)
   const cx = VB/2, cy = VB/2;
-  const MARGIN = 10;        // 端から最低これだけ空ける
-  const MAX_LABEL_CHARS = 8; // 日本語名は8文字で切る(全角は半角2文字分の幅があるため)
+  const MARGIN = 14;        // 端から最低これだけ空ける
+  const MAX_LABEL_CHARS = 7; // 日本語名は7文字で切る(全角は半角2文字分の幅があるため)
   // ラベルの縁取り(文字が足に被っても読めるように)
   const TEXT_HALO = `paint-order="stroke fill" stroke="#fbf9f3" stroke-width="3" stroke-linejoin="round"`;
 
@@ -1267,14 +1282,17 @@ function renderTakoashi() {
 
     // viewBox内にクランプ(端ちぎれ防止)
     // 上端は moya-indicator(左) / zoom-controls(右) との重なりを避けるため少し広めに取る
-    const TOP_PAD = 50;
-    const BOT_PAD = 20;
+    // 下端は takoashi-hint との重なりを避ける
+    const TOP_PAD = 60;
+    const BOT_PAD = 28;
     const clampY = y => Math.max(MARGIN + TOP_PAD, Math.min(VB - MARGIN - BOT_PAD, y));
     line1y = clampY(line1y);
     line2y = clampY(line2y);
     // anchor別にX方向もクランプ(日本語フルワード分の余裕を確保)
-    if (anchor === "start") labelX = Math.min(VB - MARGIN - 140, labelX);
-    else if (anchor === "end") labelX = Math.max(MARGIN + 140, labelX);
+    const LABEL_HALF = 130;
+    if (anchor === "start") labelX = Math.min(VB - MARGIN - LABEL_HALF, labelX);
+    else if (anchor === "end") labelX = Math.max(MARGIN + LABEL_HALF, labelX);
+    else labelX = Math.max(MARGIN + LABEL_HALF / 2, Math.min(VB - MARGIN - LABEL_HALF / 2, labelX));
 
     svg.innerHTML += `
       <text x="${labelX}" y="${line1y}" text-anchor="${anchor}" font-family="Shippori Mincho" font-size="13" fill="#1a1915" font-weight="700" ${TEXT_HALO}>${escapeHtml(displayName)}</text>
@@ -1792,6 +1810,8 @@ document.getElementById("inbox-next-modal").addEventListener("click", (e) => {
           else interim += transcript;
         }
         target.value = prefix + finalText + interim;
+        target.style.height = "auto";
+        target.style.height = target.scrollHeight + "px";
         target.scrollTop = target.scrollHeight;
       };
 
