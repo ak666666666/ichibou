@@ -230,6 +230,23 @@ nav.tabs { display: flex; gap: 4px; margin-bottom: 32px; border-bottom: 1px soli
 .insight-modal-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .insight-modal-item { padding: 12px 14px; background: #fbf9f3; border-left: 2px solid var(--blue); font-size: 14px; line-height: 1.7; position: relative; }
 .insight-modal-item .meta { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); margin-bottom: 4px; letter-spacing: 0.1em; }
+.insight-modal-item .body { white-space: pre-wrap; word-break: break-word; }
+.insight-modal-item.done { opacity: 0.55; border-left-color: var(--green); }
+.insight-modal-item.done .body { text-decoration: line-through; }
+.insight-modal-actions { display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+.insight-done-toggle { background: none; border: 1px solid var(--line); padding: 3px 9px; font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; color: var(--ink-soft); letter-spacing: 0.05em; }
+.insight-done-toggle:hover { border-color: var(--green); color: var(--green); }
+.insight-done-toggle.is-done { background: var(--green); color: var(--bg); border-color: var(--green); }
+.insight-delete-btn { margin-left: auto; background: none; border: none; color: var(--ink-mute); cursor: pointer; font-size: 11px; }
+.insight-delete-btn:hover { color: var(--accent); }
+.insights-filter { display: flex; gap: 4px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line-soft); }
+.insights-filter button { background: none; border: 1px solid var(--line); padding: 5px 12px; font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; color: var(--ink-mute); letter-spacing: 0.1em; }
+.insights-filter button.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.log-item.done { opacity: 0.55; border-left-color: var(--green); }
+.log-item.done .log-text { text-decoration: line-through; }
+.log-done-toggle { background: none; border: 1px solid var(--line); padding: 3px 9px; font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; color: var(--ink-soft); letter-spacing: 0.05em; }
+.log-done-toggle:hover { border-color: var(--green); color: var(--green); }
+.log-done-toggle.is-done { background: var(--green); color: var(--bg); border-color: var(--green); }
 .promote-body { margin-bottom: 16px; }
 .promote-body label { display: block; font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); letter-spacing: 0.15em; margin-bottom: 4px; margin-top: 12px; }
 .promote-body input { width: 100%; padding: 8px 10px; font-size: 14px; border: 1px solid var(--line); background: #fbf9f3; font-family: "Zen Kaku Gothic New", sans-serif; outline: none; }
@@ -582,6 +599,11 @@ html { zoom: var(--ui-zoom, 1); }
 <div class="modal-backdrop" id="insights-modal">
   <div class="modal">
     <h3 id="insights-title">思考ログ</h3>
+    <div class="insights-filter" id="insights-filter">
+      <button data-filter="active" class="active">未完了</button>
+      <button data-filter="done">完了</button>
+      <button data-filter="all">すべて</button>
+    </div>
     <div class="insight-modal-list" id="insights-list"></div>
     <div class="modal-actions">
       <button class="btn ghost" id="insights-close">閉じる</button>
@@ -986,23 +1008,76 @@ document.getElementById("demote-ok").addEventListener("click", () => {
 });
 
 // ===== 思考ログモーダル =====
+let insightsCurrentProject = null;
+let insightsFilter = "active";
 function openInsightsModal(project) {
-  const list = state.logs.filter(l => l.projectId === project.id).sort((a,b) => b.ts - a.ts);
-  document.getElementById("insights-title").textContent = `💭 ${project.name || "無題"} の思考ログ`;
+  insightsCurrentProject = project;
+  insightsFilter = "active";
+  document.querySelectorAll("#insights-filter button").forEach(b => {
+    b.classList.toggle("active", b.dataset.filter === insightsFilter);
+  });
+  renderInsightsModal();
+  document.getElementById("insights-modal").classList.add("open");
+}
+function renderInsightsModal() {
+  const project = insightsCurrentProject;
+  if (!project) return;
+  const all = state.logs.filter(l => l.projectId === project.id);
+  const list = all.filter(l => {
+    if (insightsFilter === "active") return !l.done;
+    if (insightsFilter === "done") return !!l.done;
+    return true;
+  }).sort((a,b) => b.ts - a.ts);
+  const activeCount = all.filter(l => !l.done).length;
+  const doneCount = all.length - activeCount;
+  document.getElementById("insights-title").textContent = `💭 ${project.name || "無題"} の思考ログ (未${activeCount}/済${doneCount})`;
   const listEl = document.getElementById("insights-list");
   listEl.innerHTML = "";
   if (list.length === 0) {
-    listEl.innerHTML = '<div class="empty" style="padding:20px;">まだ紐付いたメモはない。</div>';
-  } else {
-    list.forEach(log => {
-      const item = document.createElement("div");
-      item.className = "insight-modal-item";
-      item.innerHTML = `<div class="meta">${formatTs(log.ts)}</div><div>${escapeHtml(log.text)}</div>`;
-      listEl.appendChild(item);
-    });
+    const msg = insightsFilter === "done" ? "まだ完了したログはない。"
+      : insightsFilter === "active" ? "未完了のログはない。"
+      : "まだ紐付いたメモはない。";
+    listEl.innerHTML = `<div class="empty" style="padding:20px;">${msg}</div>`;
+    return;
   }
-  document.getElementById("insights-modal").classList.add("open");
+  list.forEach(log => {
+    const item = document.createElement("div");
+    item.className = "insight-modal-item" + (log.done ? " done" : "");
+    item.innerHTML = `
+      <div class="meta">${formatTs(log.ts)}</div>
+      <div class="body">${escapeHtml(log.text)}</div>
+      <div class="insight-modal-actions">
+        <button class="insight-done-toggle${log.done ? " is-done" : ""}" data-toggle>${log.done ? "✓ 完了済み" : "完了にする"}</button>
+        <button class="insight-delete-btn" data-delete>削除</button>
+      </div>
+    `;
+    item.querySelector("[data-toggle]").addEventListener("click", () => {
+      log.done = !log.done;
+      saveState();
+      renderInsightsModal();
+      renderLogs();
+    });
+    item.querySelector("[data-delete]").addEventListener("click", () => {
+      confirmAction("このログを削除しますか?", "削除すると元に戻せません。", () => {
+        state.logs = state.logs.filter(l => l.id !== log.id);
+        saveState();
+        renderInsightsModal();
+        renderLogs();
+        renderProjects();
+      });
+    });
+    listEl.appendChild(item);
+  });
 }
+document.getElementById("insights-filter").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-filter]");
+  if (!btn) return;
+  insightsFilter = btn.dataset.filter;
+  document.querySelectorAll("#insights-filter button").forEach(b => {
+    b.classList.toggle("active", b.dataset.filter === insightsFilter);
+  });
+  renderInsightsModal();
+});
 document.getElementById("insights-close").addEventListener("click", () => {
   document.getElementById("insights-modal").classList.remove("open");
 });
@@ -1032,7 +1107,7 @@ function renderLogs() {
     dayEl.innerHTML = `<div class="log-day-label">${formatDayLabel(dayKey)}</div>`;
     byDay[dayKey].sort((a,b) => b.ts - a.ts).forEach(log => {
       const item = document.createElement("div");
-      item.className = "log-item" + (log.projectId ? " tagged" : "");
+      item.className = "log-item" + (log.projectId ? " tagged" : "") + (log.done ? " done" : "");
       const t = new Date(log.ts);
       const timeStr = `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
       const project = state.projects.find(p => p.id === log.projectId);
@@ -1042,7 +1117,7 @@ function renderLogs() {
       item.innerHTML = `
         <div class="log-time">${timeStr}</div>
         <div class="log-text" contenteditable="true" data-id="${log.id}">${escapeHtml(log.text)}</div>
-        <div class="log-actions">${tagHtml}<button class="log-delete">削除</button></div>
+        <div class="log-actions">${tagHtml}<button class="log-done-toggle${log.done ? " is-done" : ""}" data-done>${log.done ? "✓ 完了" : "完了"}</button><button class="log-delete">削除</button></div>
       `;
 
       // ===== 雑メモ後編集: blurで保存、空なら削除 =====
@@ -1062,6 +1137,10 @@ function renderLogs() {
       if (assignBtn) assignBtn.addEventListener("click", () => openPickModal(log));
       const retagBtn = item.querySelector("[data-retag]");
       if (retagBtn) retagBtn.addEventListener("click", () => openPickModal(log));
+      item.querySelector("[data-done]").addEventListener("click", () => {
+        log.done = !log.done;
+        saveState(); renderLogs();
+      });
       item.querySelector(".log-delete").addEventListener("click", () => {
         state.logs = state.logs.filter(l => l.id !== log.id);
         saveState(); renderLogs();
