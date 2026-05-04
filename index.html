@@ -1500,21 +1500,65 @@ function buildPrompt() {
     const ageDays = Math.floor((Date.now() - m.ts) / 86400000);
     return `- (${ageDays}日前) ${m.text}`;
   }).join("\n");
+  const stagnation = detectStagnation();
+  const stagnationBlock = stagnation.length > 0
+    ? `\n=== 停滞シグナル(自動検出) ===\n${stagnation.map(s => `- ${s}`).join("\n")}\n`
+    : "";
   return `「一望」の状態を渡す。以下を出して:
 ① 未完了タスク一覧(雑メモから拾えるもの)
 ② 繰り返し出てくるテーマTop3
 ③ もやの中で、プロジェクト化できそうなものの提案(名前と最初の一手)
 ④ 「次の一手」が書けていないプロジェクトへの、具体的な第一歩の提案
 ⑤ 未紐付けメモを、どのプロジェクトに紐付けるべきか提案
+⑥ 【メンター視点】下の「停滞シグナル」を見て、私が無自覚に避けているもの・「やりたい」と「やるべき」を混同しているプロジェクトを容赦なく指摘し、軌道修正/凍結/分解 の選択肢を提案して。励ましは不要、率直に。
 
 === 進行中プロジェクト ===
 ${projectSummary || "(なし)"}
 
 === 抱えているもや ===
 ${moyaText || "(なし)"}
-
+${stagnationBlock}
 === 今週の雑メモ ===
 ${logText || "(なし)"}`;
+}
+
+// 停滞シグナル検出: メンター視点の問いに使う材料
+function detectStagnation() {
+  const out = [];
+  const now = Date.now();
+  const DAY = 86400000;
+  const active = state.projects.filter(p => !p.frozen);
+
+  active.forEach(p => {
+    const projectLogs = state.logs.filter(l => l.projectId === p.id);
+    const lastLog = projectLogs.length > 0 ? Math.max(...projectLogs.map(l => l.ts)) : 0;
+    const daysSinceLog = lastLog > 0 ? Math.floor((now - lastLog) / DAY) : null;
+    const execs = (p.executions || []);
+    const lastExecKey = execs.length > 0 ? execs.sort().slice(-1)[0] : null;
+    const daysSinceExec = lastExecKey ? Math.floor((now - new Date(lastExecKey).getTime()) / DAY) : null;
+    const totalLogs = projectLogs.length;
+    const hasExecs = execs.length > 0;
+    const name = p.name || "無題";
+
+    if (!p.next) out.push(`「${name}」: NEXT が空欄(次の一手が言語化できていない)`);
+    if (daysSinceLog === null || daysSinceLog >= 14) out.push(`「${name}」: 思考ログが14日以上紐付いていない(干からび候補)`);
+    else if (daysSinceLog >= 7) out.push(`「${name}」: 思考ログが${daysSinceLog}日触れられていない`);
+    if (totalLogs >= 3 && !hasExecs) out.push(`「${name}」: 思考ログ${totalLogs}件あるのに「実行」記録がゼロ(考えてばかりで動いていない可能性)`);
+    if (hasExecs && daysSinceExec !== null && daysSinceExec >= 14) out.push(`「${name}」: 最終実行から${daysSinceExec}日(自然消滅しかけ)`);
+  });
+
+  state.moyas.forEach(m => {
+    const ageDays = Math.floor((now - m.ts) / DAY);
+    if (ageDays >= 7) {
+      const preview = m.text.length > 30 ? m.text.slice(0, 30) + "…" : m.text;
+      out.push(`もや(${ageDays}日前): "${preview}" — 言葉にならないまま放置中`);
+    }
+  });
+
+  const unassigned = state.logs.filter(l => !l.projectId && (now - l.ts) >= 7 * DAY);
+  if (unassigned.length >= 5) out.push(`未紐付けの雑メモが${unassigned.length}件、1週間以上滞留(受信箱の詰まり)`);
+
+  return out;
 }
 
 document.getElementById("copy-prompt").addEventListener("click", async (e) => {
