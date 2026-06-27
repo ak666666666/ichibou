@@ -17,6 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="drive-sync.js" defer></script>
 <style>
 :root {
   --bg: #f4f1ea; --bg-2: #ebe6da; --ink: #1a1915;
@@ -487,6 +488,53 @@ html { zoom: var(--ui-zoom, 1); }
   header.top { margin-bottom: 16px; padding-bottom: 12px; }
   .app { padding-top: 16px; }
 }
+/* ===== タスクタブ(Phase D-4 ②: Drive _次やること.md 同期) ===== */
+.tasks-wrap { max-width: 920px; margin: 0 auto; }
+.tasks-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.tasks-title { font-family: "Shippori Mincho", serif; font-size: 24px; font-weight: 700; letter-spacing: 0.08em; }
+.tasks-sub { font-size: 12px; color: var(--ink-mute); margin-top: 4px; }
+.tasks-sub code { font-family: "JetBrains Mono", monospace; font-size: 11px; background: var(--bg-2); padding: 1px 5px; border-radius: 3px; }
+.tasks-toolbar { display: flex; gap: 8px; }
+.tasks-meta { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); margin-bottom: 14px; letter-spacing: 0.05em; }
+.tasks-filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 12px; background: var(--bg-2); border-radius: 6px; margin-bottom: 18px; }
+.tasks-filter-btn { font-family: inherit; font-size: 12px; padding: 5px 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); border-radius: 14px; cursor: pointer; transition: all 0.15s; }
+.tasks-filter-btn:hover { border-color: var(--accent); }
+.tasks-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tasks-filter-sep { color: var(--ink-mute); padding: 0 4px; }
+.tasks-hide-done { font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
+.tasks-list { display: flex; flex-direction: column; gap: 22px; }
+.tasks-category { background: rgba(255,255,255,0.4); border-radius: 8px; padding: 14px 16px; box-shadow: var(--paper-shadow); }
+.tasks-category-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line-soft); }
+.tasks-category-title { font-family: "Shippori Mincho", serif; font-size: 17px; font-weight: 700; letter-spacing: 0.06em; }
+.tasks-category-count { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); }
+.tasks-subgroup { margin-bottom: 12px; }
+.tasks-subgroup:last-child { margin-bottom: 0; }
+.tasks-subgroup-h { font-size: 12px; font-weight: 600; color: var(--ink-soft); margin: 6px 0 6px; letter-spacing: 0.04em; }
+.task-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 6px; border-radius: 4px; transition: background 0.15s; }
+.task-item:hover { background: rgba(0,0,0,0.02); }
+.task-item.completed { opacity: 0.55; }
+.task-item.completed .task-title { text-decoration: line-through; color: var(--ink-mute); }
+.task-check { width: 18px; height: 18px; margin-top: 2px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+.task-body { flex: 1; min-width: 0; }
+.task-title { font-size: 14px; line-height: 1.45; color: var(--ink); font-weight: 500; word-wrap: break-word; }
+.task-meta { font-size: 11px; color: var(--ink-mute); margin-top: 3px; font-family: "JetBrains Mono", monospace; letter-spacing: 0.03em; }
+.task-notes { font-size: 12px; color: var(--ink-soft); margin-top: 4px; line-height: 1.5; }
+.task-ref { font-size: 11px; color: var(--ink-mute); margin-top: 3px; font-family: "JetBrains Mono", monospace; word-break: break-all; }
+.task-ref::before { content: "📎 "; }
+.task-type-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-right: 6px; vertical-align: middle; font-weight: 600; letter-spacing: 0.04em; }
+.task-type-action { background: rgba(200,80,46,0.12); color: var(--accent); }
+.task-type-decision { background: rgba(58,90,122,0.12); color: var(--blue); }
+.tasks-empty { text-align: center; padding: 40px 20px; color: var(--ink-mute); font-size: 13px; }
+.tasks-error { padding: 16px; background: rgba(200,80,46,0.06); border: 1px solid var(--accent); border-radius: 6px; color: var(--ink); font-size: 13px; line-height: 1.6; }
+.tasks-error code { font-family: "JetBrains Mono", monospace; font-size: 11px; background: rgba(0,0,0,0.05); padding: 1px 4px; border-radius: 2px; }
+@media (max-width: 600px) {
+  .tasks-title { font-size: 20px; }
+  .tasks-filter { padding: 8px; gap: 4px; }
+  .tasks-filter-btn { font-size: 11px; padding: 4px 8px; }
+  .tasks-category { padding: 10px 12px; }
+  .tasks-category-title { font-size: 15px; }
+  .task-title { font-size: 13px; }
+}
 </style>
 </head>
 <body>
@@ -517,6 +565,7 @@ html { zoom: var(--ui-zoom, 1); }
     <button class="tab" data-view="moya">もや <span class="count" id="count-moya">0</span></button>
     <button class="tab" data-view="capture">雑メモ <span class="count" id="count-logs">0</span></button>
     <button class="tab" data-view="notes">ノート <span class="count" id="count-notes">0</span></button>
+    <button class="tab" data-view="tasks">タスク <span class="count" id="count-tasks">0</span></button>
     <button class="tab" data-view="takoashi">タコ足</button>
     <button class="tab" data-view="weekly">週次</button>
   </nav>
@@ -604,6 +653,34 @@ html { zoom: var(--ui-zoom, 1); }
       <div class="notes-breadcrumb" id="notes-breadcrumb"></div>
       <div class="notes-folders" id="notes-folders"></div>
       <div class="notes-list" id="notes-list"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-tasks">
+    <div class="tasks-wrap">
+      <div class="tasks-header">
+        <div>
+          <div class="tasks-title">タスク</div>
+          <div class="tasks-sub">Drive 側 SSOT(<code>_次やること.md</code>)から自動同期。時間軸別 + ラベル付き。</div>
+        </div>
+        <div class="tasks-toolbar">
+          <button class="btn ghost" id="tasks-reload" title="tasks.json を再読込">↻ 再読込</button>
+        </div>
+      </div>
+      <div class="tasks-meta" id="tasks-meta">読み込み中…</div>
+      <div class="tasks-filter">
+        <button class="tasks-filter-btn active" data-filter="today">本日のみ</button>
+        <button class="tasks-filter-btn" data-filter="thisWeek">今週まで</button>
+        <button class="tasks-filter-btn" data-filter="all">全部</button>
+        <span class="tasks-filter-sep">|</span>
+        <button class="tasks-filter-btn" data-typefilter="all" id="tf-all">🎯+🤔</button>
+        <button class="tasks-filter-btn" data-typefilter="action" id="tf-action">🎯 自分でやる</button>
+        <button class="tasks-filter-btn" data-typefilter="decision" id="tf-decision">🤔 判断するだけ</button>
+        <span class="tasks-filter-sep">|</span>
+        <label class="tasks-hide-done"><input type="checkbox" id="tasks-hide-done"> 完了は隠す</label>
+      </div>
+      <div class="tasks-list" id="tasks-list"></div>
+      <div class="tasks-empty" id="tasks-empty" style="display:none;">フィルタ条件に該当するタスクはありません。</div>
     </div>
   </section>
 
@@ -928,6 +1005,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     if (tab.dataset.view === "moya") renderMoyas();
     if (tab.dataset.view === "inbox") renderInbox();
     if (tab.dataset.view === "notes") renderNotes();
+    if (tab.dataset.view === "tasks") renderTasks();
   });
 });
 
@@ -2344,13 +2422,200 @@ function renderAll() {
   renderMoyas();
   renderInbox();
   renderNotes();
+  renderTasksCount();
   const activeTab = document.querySelector(".tab.active");
   if (activeTab) {
     const view = activeTab.dataset.view;
     if (view === "weekly") renderWeekly();
     if (view === "takoashi") renderTakoashi();
+    if (view === "tasks") renderTasks();
   }
 }
+
+// ========================================================================
+// ===== タスクタブ(Phase D-4 ②: Drive _次やること.md 同期) =====
+// ========================================================================
+// データソース: public/tasks.json(中継ファイル方式・案B)
+// 完了状態: localStorage `ichibou_tasks_done` に保存(同期はしない・個人運用前提)
+// 仕様: 時間軸別カテゴリ表示 + 🎯/🤔 ラベル + チェックボックス完了 + 優先度フィルタ
+
+let tasksData = null;
+let tasksFilter = "today";        // today / thisWeek / all
+let tasksTypeFilter = "all";       // all / action / decision
+let tasksHideDone = false;
+let tasksDone = (() => {
+  try { return JSON.parse(localStorage.getItem("ichibou_tasks_done") || "{}"); }
+  catch (e) { return {}; }
+})();
+
+function saveTasksDone() {
+  try { localStorage.setItem("ichibou_tasks_done", JSON.stringify(tasksDone)); }
+  catch (e) { console.warn("tasks done save failed:", e); }
+}
+
+async function loadTasksData(force) {
+  if (tasksData && !force) return tasksData;
+  try {
+    const res = await fetch("public/tasks.json?ts=" + Date.now(), { cache: "no-cache" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    tasksData = await res.json();
+    return tasksData;
+  } catch (e) {
+    tasksData = null;
+    throw e;
+  }
+}
+
+function renderTasksCount() {
+  // tasksData がまだ無い時は初回 fetch を仕掛ける(バッジ表示用)
+  if (!tasksData) {
+    loadTasksData(false).then(() => {
+      const totalRemaining = countRemainingTasks();
+      document.getElementById("count-tasks").textContent = totalRemaining;
+    }).catch(() => {
+      document.getElementById("count-tasks").textContent = "!";
+    });
+    return;
+  }
+  document.getElementById("count-tasks").textContent = countRemainingTasks();
+}
+
+function countRemainingTasks() {
+  if (!tasksData || !Array.isArray(tasksData.categories)) return 0;
+  // 「本日のみ」の残件数をバッジに出す(優先度高い順なので妥当)
+  const cat = tasksData.categories.find(c => c.id === "today");
+  if (!cat) return 0;
+  return cat.tasks.filter(t => !tasksDone[t.id]).length;
+}
+
+async function renderTasks() {
+  const listEl = document.getElementById("tasks-list");
+  const metaEl = document.getElementById("tasks-meta");
+  const emptyEl = document.getElementById("tasks-empty");
+  listEl.innerHTML = "";
+  emptyEl.style.display = "none";
+
+  let data;
+  try { data = await loadTasksData(false); }
+  catch (e) {
+    listEl.innerHTML = `<div class="tasks-error">
+      ⚠ <strong>tasks.json を読み込めませんでした。</strong><br>
+      原因: <code>${escapeHtml(e.message || String(e))}</code><br>
+      対処: <code>public/tasks.json</code> が存在するか / GitHub Pages にデプロイ済みか確認してください。<br>
+      ローカル動作確認時は <code>python -m http.server</code> でルート起動が必要(file:// では fetch が失敗します)。
+    </div>`;
+    metaEl.textContent = "読み込みエラー";
+    return;
+  }
+
+  const ts = data.generatedAt ? data.generatedAt.split("T")[0] : "?";
+  const total = (data.summary && data.summary.total) || data.categories.reduce((s, c) => s + c.tasks.length, 0);
+  const remaining = data.categories.reduce((s, c) => s + c.tasks.filter(t => !tasksDone[t.id]).length, 0);
+  metaEl.innerHTML = `📅 source 更新: ${escapeHtml(ts)} · 全 ${total} 件 · 残 <strong>${remaining}</strong> 件完了 ${total - remaining}/${total}`;
+
+  // フィルタ適用順序: 時間軸フィルタ → タイプフィルタ → 完了フィルタ
+  const categoryOrder = ["today", "thisWeek", "thisMonth", "future"];
+  const includeIdx = categoryOrder.indexOf(tasksFilter);
+  const includeCats = tasksFilter === "all" ? categoryOrder
+                    : categoryOrder.slice(0, includeIdx + 1);
+
+  let renderedAny = false;
+  data.categories.forEach(cat => {
+    if (!includeCats.includes(cat.id)) return;
+    const filtered = cat.tasks.filter(t => {
+      if (tasksTypeFilter !== "all" && t.type !== tasksTypeFilter) return false;
+      if (tasksHideDone && tasksDone[t.id]) return false;
+      return true;
+    });
+    if (filtered.length === 0) return;
+
+    const catEl = document.createElement("div");
+    catEl.className = "tasks-category";
+    const remainingInCat = filtered.filter(t => !tasksDone[t.id]).length;
+    catEl.innerHTML = `
+      <div class="tasks-category-h">
+        <div class="tasks-category-title">${cat.icon || ""} ${escapeHtml(cat.label)}</div>
+        <div class="tasks-category-count">${remainingInCat} / ${filtered.length}</div>
+      </div>
+    `;
+
+    // 🎯 と 🤔 のサブグループに分割表示
+    const actions = filtered.filter(t => t.type === "action");
+    const decisions = filtered.filter(t => t.type === "decision");
+    [
+      { items: actions, label: "🎯 自分でやる(行動)" },
+      { items: decisions, label: "🤔 判断するだけ(承認)" },
+    ].forEach(g => {
+      if (g.items.length === 0) return;
+      const sg = document.createElement("div");
+      sg.className = "tasks-subgroup";
+      sg.innerHTML = `<div class="tasks-subgroup-h">${escapeHtml(g.label)} · ${g.items.length}件</div>`;
+      g.items.forEach(t => {
+        const item = document.createElement("div");
+        item.className = "task-item" + (tasksDone[t.id] ? " completed" : "");
+        const badge = t.type === "action"
+          ? `<span class="task-type-badge task-type-action">🎯 行動</span>`
+          : `<span class="task-type-badge task-type-decision">🤔 判断</span>`;
+        item.innerHTML = `
+          <input type="checkbox" class="task-check" ${tasksDone[t.id] ? "checked" : ""}>
+          <div class="task-body">
+            <div class="task-title">${badge}${escapeHtml(t.title || "(無題)")}</div>
+            ${t.meta ? `<div class="task-meta">${escapeHtml(t.meta)}</div>` : ""}
+            ${t.notes ? `<div class="task-notes">${escapeHtml(t.notes)}</div>` : ""}
+            ${t.ref ? `<div class="task-ref">${escapeHtml(t.ref)}</div>` : ""}
+          </div>
+        `;
+        item.querySelector(".task-check").addEventListener("change", (e) => {
+          if (e.target.checked) tasksDone[t.id] = Date.now();
+          else delete tasksDone[t.id];
+          saveTasksDone();
+          item.classList.toggle("completed", !!tasksDone[t.id]);
+          // バッジ・残件数を更新
+          renderTasksCount();
+          // メタ行の残件数も更新
+          const r = data.categories.reduce((s, c) => s + c.tasks.filter(x => !tasksDone[x.id]).length, 0);
+          metaEl.innerHTML = `📅 source 更新: ${escapeHtml(ts)} · 全 ${total} 件 · 残 <strong>${r}</strong> 件完了 ${total - r}/${total}`;
+          // 完了は隠すモードなら再描画
+          if (tasksHideDone) renderTasks();
+        });
+        sg.appendChild(item);
+      });
+      catEl.appendChild(sg);
+    });
+    listEl.appendChild(catEl);
+    renderedAny = true;
+  });
+
+  if (!renderedAny) emptyEl.style.display = "block";
+  renderTasksCount();
+}
+
+// イベントバインド(初回 1 度だけ)
+document.querySelectorAll('.tasks-filter-btn[data-filter]').forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll('.tasks-filter-btn[data-filter]').forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    tasksFilter = btn.dataset.filter;
+    renderTasks();
+  });
+});
+document.querySelectorAll('.tasks-filter-btn[data-typefilter]').forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll('.tasks-filter-btn[data-typefilter]').forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    tasksTypeFilter = btn.dataset.typefilter;
+    renderTasks();
+  });
+});
+document.getElementById("tf-all").classList.add("active");
+document.getElementById("tasks-hide-done").addEventListener("change", (e) => {
+  tasksHideDone = e.target.checked;
+  renderTasks();
+});
+document.getElementById("tasks-reload").addEventListener("click", async () => {
+  tasksData = null;
+  await renderTasks();
+});
 
 // ========================================================================
 // ===== 受信箱(Cowork→一望同期) =====
