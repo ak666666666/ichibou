@@ -591,6 +591,12 @@ html { zoom: var(--ui-zoom, 1); }
   .answer-body { font-size:13px; }
   .answer-actions { gap:6px; }
 }
+/* ===== 受信箱 既読管理(2026-07-14)===== */
+.inbox-toolbar { display:flex; gap:8px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
+.inbox-markall { margin-left:auto; border:none; background:transparent; color:var(--ink-mute); font-size:12px; cursor:pointer; text-decoration:underline; font-family:inherit; }
+.inbox-item.read { opacity:.6; }
+.inbox-dest-label { font-size:11px; color:#4a6b3a; border:1px solid rgba(74,107,58,.3); padding:1px 8px; border-radius:999px; }
+.inbox-btn.read { border-color:var(--ink); font-weight:700; }
 </style>
 </head>
 <body>
@@ -639,11 +645,17 @@ html { zoom: var(--ui-zoom, 1); }
   <section class="view" id="view-inbox">
     <div class="inbox-wrap">
       <div class="inbox-title-h">受信箱</div>
-      <div class="inbox-sub">Coworkの<code>/sync-ichibou</code>から届いたタスク。手動で振り分ける。</div>
+      <div class="inbox-sub">Coworkや定期レポートから届く。振り分けるか、読むだけなら「✓ 既読」で流す。</div>
       <div class="inbox-explain">
         <strong>使い方:</strong> Cowork セッションで「<code>/sync-ichibou</code>」と打つと、直前の会話で出てきたタスクがここに届く。<br>
         各アイテムを <strong>NEXT(プロジェクトの次の一手に追記)</strong> / <strong>雑メモ</strong> / <strong>もや</strong> / <strong>破棄</strong> のいずれかに振り分けると消える。<br>
         振り分け先は晃良の手で決める(自動振り分けはしない)。
+      </div>
+      <!-- 2026-07-14: 受信箱の既読管理(回答タブと同方式) -->
+      <div class="inbox-toolbar">
+        <button class="answers-filter-btn active" data-if="unread">未読のみ</button>
+        <button class="answers-filter-btn" data-if="all">すべて</button>
+        <button class="inbox-markall" id="inbox-markall">✓ 表示中を全部既読にする</button>
       </div>
       <div class="inbox-list" id="inbox-list"></div>
     </div>
@@ -2877,10 +2889,11 @@ let inboxItems = [];
 async function pullInbox() {
   if (!navigator.onLine) return;
   try {
+    // 2026-07-14 既読管理: 既読も含めて取得(未読/すべて切替のため。直近150件)
     const { data, error } = await sb.from("ichibou_inbox")
       .select("*")
-      .eq("consumed", false)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(150);
     if (error) throw error;
     // 2026-07-12 v2: Claude自動回答(cw_id='ans_*')は受信箱ではなく回答タブに出す
     inboxItems = (data || []).filter(it => !((it.cw_id || "").startsWith("ans_")));
@@ -2917,40 +2930,52 @@ function inboxFormatDue(due) {
   return `〜${m}.${d}`;
 }
 
+// 2026-07-14 既読管理: 未読のみ/すべて の表示切替(回答タブと同方式)
+let inboxFilter = "unread"; // 'unread' | 'all'
+
 function renderInbox() {
   const list = document.getElementById("inbox-list");
   if (!list) return;
+  const unreadCount = inboxItems.filter(it => !it.consumed).length;
   const countEl = document.getElementById("count-inbox");
   if (countEl) {
-    countEl.textContent = inboxItems.length;
-    countEl.classList.toggle("alert", inboxItems.length > 0);
+    countEl.textContent = unreadCount;
+    countEl.classList.toggle("alert", unreadCount > 0);
   }
+  const markallBtn = document.getElementById("inbox-markall");
+  if (markallBtn) markallBtn.style.display = (inboxFilter === "unread" && unreadCount > 0) ? "" : "none";
+  const shown = inboxFilter === "unread" ? inboxItems.filter(it => !it.consumed) : inboxItems;
   list.innerHTML = "";
-  if (inboxItems.length === 0) {
-    list.innerHTML = '<div class="empty">受信箱は空。<br>Coworkで <code>/sync-ichibou</code> と打つと、ここに届く。</div>';
+  if (shown.length === 0) {
+    list.innerHTML = inboxFilter === "unread"
+      ? '<div class="empty">未読はゼロ。<br>Coworkや定期レポートから届くと、ここに出る。</div>'
+      : '<div class="empty">受信箱はまだ空。</div>';
     return;
   }
-  inboxItems.forEach(item => {
+  shown.forEach(item => {
     const el = document.createElement("div");
-    el.className = "inbox-item";
+    el.className = "inbox-item" + (item.consumed ? " read" : "");
     const dueHtml = item.due ? `<span class="inbox-due ${inboxDueClass(item.due)}">${inboxFormatDue(item.due)}</span>` : "";
     const priorityHtml = item.priority ? `<span class="inbox-priority p-${item.priority}">${inboxPriorityLabel(item.priority)}</span>` : "";
     const kindHtml = `<span class="inbox-kind k-${item.kind}">${inboxKindLabel(item.kind)}</span>`;
     const hintHtml = item.project_hint ? `<span class="inbox-hint">→ ${escapeHtml(item.project_hint)}</span>` : "";
+    const destHtml = item.consumed && item.dest ? `<span class="inbox-dest-label">✓ ${escapeHtml(item.dest)}</span>` : "";
     const ts = item.created_at ? new Date(item.created_at).getTime() : Date.now();
+    const actionsHtml = item.consumed
+      ? '<button class="inbox-btn" data-act="unread">↩ 未読に戻す</button>'
+      : `<button class="inbox-btn read" data-act="read">✓ 既読</button>
+        <button class="inbox-btn next" data-act="next">→ NEXT</button>
+        <button class="inbox-btn note" data-act="note">→ 雑メモ</button>
+        <button class="inbox-btn moya" data-act="moya">→ もや</button>
+        <button class="inbox-btn discard" data-act="discard">破棄</button>`;
     el.innerHTML = `
       <div class="inbox-header">
-        ${kindHtml}${priorityHtml}${dueHtml}${hintHtml}
+        ${kindHtml}${priorityHtml}${dueHtml}${hintHtml}${destHtml}
         <span class="inbox-time">${formatTs(ts)}</span>
       </div>
       <div class="inbox-title-text">${escapeHtml(item.title || "(無題)")}</div>
       ${item.detail ? `<div class="inbox-detail">${escapeHtml(item.detail)}</div>` : ""}
-      <div class="inbox-actions">
-        <button class="inbox-btn next" data-act="next">→ NEXT</button>
-        <button class="inbox-btn note" data-act="note">→ 雑メモ</button>
-        <button class="inbox-btn moya" data-act="moya">→ もや</button>
-        <button class="inbox-btn discard" data-act="discard">破棄</button>
-      </div>
+      <div class="inbox-actions">${actionsHtml}</div>
     `;
     el.querySelectorAll("[data-act]").forEach(btn => {
       btn.addEventListener("click", () => handleInboxAction(item, btn.dataset.act));
@@ -2985,12 +3010,18 @@ async function handleInboxAction(item, act) {
     await consumeInbox(item, "もや");
   } else if (act === "discard") {
     await consumeInbox(item, "破棄");
+  } else if (act === "read") {
+    // 2026-07-14: 振り分けずに既読化(読むだけの定期レポート用)
+    await consumeInbox(item, "既読");
+  } else if (act === "unread") {
+    await unconsumeInbox(item);
   }
 }
 
 async function consumeInbox(item, dest) {
-  // 楽観的UI: 先に画面から消す
-  inboxItems = inboxItems.filter(x => x.id !== item.id);
+  // 楽観的UI: その場で既読に更新(2026-07-14 既読管理化。以前はリストから即除去)
+  const t = inboxItems.find(x => x.id === item.id);
+  if (t) { t.consumed = true; t.consumed_at = new Date().toISOString(); t.dest = dest; }
   renderInbox();
   renderProjects();
   renderLogs();
@@ -3008,6 +3039,56 @@ async function consumeInbox(item, dest) {
     pullInbox(); // 状態を取り直す
   }
 }
+
+// 2026-07-14: 既読を未読に戻す(回答タブと同方式)
+async function unconsumeInbox(item) {
+  const t = inboxItems.find(x => x.id === item.id);
+  if (t) { t.consumed = false; t.consumed_at = null; t.dest = null; }
+  renderInbox();
+  try {
+    const { error } = await sb.from("ichibou_inbox").update({
+      consumed: false, consumed_at: null, dest: null
+    }).eq("id", item.id);
+    if (error) throw error;
+  } catch (e) {
+    console.error("Inbox unconsume error:", e);
+    alert("受信箱の更新に失敗。再読込を推奨。");
+    pullInbox();
+  }
+}
+
+// 2026-07-14: 受信箱ツールバー(未読のみ/すべて + 全部既読)
+document.querySelectorAll("[data-if]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-if]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    inboxFilter = btn.dataset.if;
+    renderInbox();
+  });
+});
+(function bindInboxMarkAll() {
+  const el = document.getElementById("inbox-markall");
+  if (!el) return;
+  el.addEventListener("click", async () => {
+    const targets = inboxItems.filter(it => !it.consumed);
+    if (targets.length === 0) return;
+    if (!confirm(`未読 ${targets.length} 件をすべて既読にしますか?`)) return;
+    const nowIso = new Date().toISOString();
+    targets.forEach(t => { t.consumed = true; t.consumed_at = nowIso; t.dest = "既読"; });
+    renderInbox();
+    try {
+      const ids = targets.map(t => t.id);
+      const { error } = await sb.from("ichibou_inbox").update({
+        consumed: true, consumed_at: nowIso, dest: "既読"
+      }).in("id", ids);
+      if (error) throw error;
+    } catch (e) {
+      console.error("Inbox mark-all error:", e);
+      alert("一括既読に失敗。再読込を推奨。");
+      pullInbox();
+    }
+  });
+})();
 
 // ========================================================================
 // ===== 回答タブ(機能G v2: Claude自動回答の一覧・既読管理)2026-07-12 =====
