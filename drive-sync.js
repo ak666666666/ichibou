@@ -4,7 +4,9 @@
 // 作成: 2026-06-27(Cowork 自律進行 / 神田晃良 の依頼)
 // 目的: localStorage `ichibou_v3` の変更を Google Drive に自動バックアップ
 // 仕組み: Google Identity Services (GIS) で OAuth → Drive API で JSON 保存
-// 認証: 初回1回だけ・以後はリフレッシュトークンで自動継続
+// 認証: Google仕様によりアクセストークンは約1時間で失効(ブラウザではリフレッシュトークン取得不可)
+//       失効後の再認証は「ユーザーのタップ時のみ」。自動ポップアップは全面禁止(2026-07-02 確定)
+//       理由: GISはサイレント更新でも必ずポップアップを開くため、ブロック警告・入力中断の原因になる
 // ============================================================
 
 (function() {
@@ -17,7 +19,8 @@
     // 保存先 Drive フォルダ ID(_一望_自動バックアップ フォルダ)
     FOLDER_ID: '1ZJKKyk2su11mf_Bcv1AYvkBN0A0AN2Be',
     // 保存頻度の最小間隔(ミリ秒)— 同期の連発を防ぐ
-    MIN_INTERVAL_MS: 5 * 60 * 1000, // 5分
+    // 2026-07-01 修正: 5分 → 1時間(認証チェック頻度を下げて入力中断を防ぐ)
+    MIN_INTERVAL_MS: 60 * 60 * 1000, // 1時間
     // ファイル名の世代管理(日次1ファイルに上書きするか、毎回新規か)
     MODE: 'hourly_snapshot', // 'hourly_snapshot' | 'daily_overwrite' | 'every_save'
     // Drive API スコープ(自分が作ったファイルのみ書き込み = 最小権限)
@@ -35,6 +38,11 @@
     backupInProgress: false,  // バックアップ中フラグ
     queuedBackup: false,      // バックアップを保留中フラグ
   };
+
+  // トークンが有効か(失効5分前を期限として扱う)
+  function tokenValid() {
+    return !!driveState.accessToken && driveState.tokenExpiresAt > Date.now();
+  }
 
   // localStorage キー
   const STORAGE_KEYS = {
@@ -99,6 +107,11 @@
         client_id: DRIVE_CONFIG.CLIENT_ID,
         scope: DRIVE_CONFIG.SCOPE,
         callback: handleTokenResponse,
+        // ポップアップが開けなかった/閉じられた場合(2026-07-02 追加)
+        error_callback: (err) => {
+          console.warn('[DriveSync] auth popup error:', err && err.type);
+          updateUIStatus('disconnected', '☁ 再認証(タップ)');
+        },
       });
     } catch (e) {
       console.error('[DriveSync] setupTokenClient failed:', e);
@@ -107,12 +120,13 @@
 
   function handleTokenResponse(resp) {
     if (resp.error) {
-      console.error('[DriveSync] Token error:', resp.error);
-      updateUIStatus('error', '認証失敗');
+      console.warn('[DriveSync] Token error:', resp.error);
+      updateUIStatus('disconnected', '☁ 再認証(タップ)');
       return;
     }
     driveState.accessToken = resp.access_token;
-    driveState.tokenExpiresAt = Date.now() + (resp.expires_in * 1000) - 60000; // 1分マージン
+    // マージン5分(余裕を持って早めに「要再認証」扱いにする)
+    driveState.tokenExpiresAt = Date.now() + (resp.expires_in * 1000) - 5 * 60 * 1000;
     localStorage.setItem(STORAGE_KEYS.TOKEN, resp.access_token);
     localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRES, String(driveState.tokenExpiresAt));
     updateUIStatus('connected', '接続済');
@@ -120,13 +134,18 @@
     triggerBackup();
   }
 
-  function requestAccessToken(interactive) {
+  // 認証ポップアップを開く。
+  // ⚠ 必ずユーザー操作(クリック/タップ)のハンドラ内から呼ぶこと。
+  //    自動呼び出しは「ポップアップブロック警告」「一瞬のGoogle画面」「入力中断」の
+  //    原因になるため全面禁止(2026-07-02 DECISIONS.md 参照)
+  function requestAccessToken() {
+    if (!driveState.tokenClient) setupTokenClient();
     if (!driveState.tokenClient) {
       console.warn('[DriveSync] Token client not ready');
       return;
     }
-    // interactive=true なら同意画面を出す・false なら silent refresh
-    driveState.tokenClient.requestAccessToken({ prompt: interactive ? '' : 'none' });
+    updateUIStatus('syncing', '☁ 認証中…');
+    driveState.tokenClient.requestAccessToken({ prompt: '' });
   }
 
   // ===== バックアップ機能 =====
@@ -150,17 +169,14 @@
       return;
     }
 
-    // トークン期限チェック
-    if (!driveState.accessToken || driveState.tokenExpiresAt < now + 30000) {
-      // 自動でリフレッシュ試行
-      requestAccessToken(false);
+    // 2026-07-02 方針確定: トークン失効時に自動再認証は一切しない。
+    // GIS はサイレント更新でも必ずポップアップを開くため、勝手に呼ぶと
+    // 「ポップアップブロック警告」「一瞬のGoogle画面」「入力中のフォーカス強奪」が起きる。
+    // 失効中はバックアップを保留し、バッジ「☁ 再認証(タップ)」からの手動再接続を待つ。
+    // 再認証成功時(handleTokenResponse)に保留分が自動で実行される。
+    if (!tokenValid()) {
       driveState.queuedBackup = true;
-      setTimeout(() => {
-        if (driveState.queuedBackup && driveState.accessToken) {
-          driveState.queuedBackup = false;
-          triggerBackup();
-        }
-      }, 3000);
+      updateUIStatus('disconnected', '☁ 再認証(タップ)');
       return;
     }
 
@@ -279,10 +295,10 @@
     targetEl.appendChild(ui);
 
     // 初期表示更新
-    if (driveState.enabled && driveState.accessToken) {
+    if (driveState.enabled && tokenValid()) {
       updateUIStatus('connected', '☁ Drive 接続済');
     } else if (driveState.enabled) {
-      updateUIStatus('disconnected', '☁ Drive 未認証');
+      updateUIStatus('disconnected', '☁ 再認証(タップ)');
     } else {
       updateUIStatus('off', '☁ Drive バックアップ OFF');
     }
@@ -346,10 +362,10 @@
       html += `
         <p style="color:#4a4740;font-size:13px;margin-bottom:16px;line-height:1.7">
           一望のデータを Google Drive に自動バックアップします。<br>
-          有効化すると、5分ごとに最新の状態が Drive に保存されます。
+          有効化すると、変更のあった時に最新の状態が Drive に保存されます(最短1時間間隔)。
         </p>
         <p style="color:#8a857a;font-size:12px;margin-bottom:20px;line-height:1.7">
-          • 認証は初回1回だけ(以後自動)<br>
+          • Google の仕様で認証は約1時間で切れます。切れたら左上の「☁ 再認証(タップ)」を1回タップで再接続(勝手にポップアップは出しません)<br>
           • アクセス権は最小限(自分の作ったファイルのみ)<br>
           • 保存先: 「_一望_自動バックアップ」フォルダ
         </p>
@@ -359,16 +375,18 @@
         </div>
       `;
     } else {
+      const needsReauth = !tokenValid();
       html += `
         <p style="color:#4a4740;font-size:13px;margin-bottom:8px;line-height:1.7">
           ✓ 自動バックアップ <strong>有効</strong>
         </p>
         <p style="color:#8a857a;font-size:12px;margin-bottom:20px;line-height:1.7">
           ${driveState.lastBackupAt > 0 ? '最終バックアップ: ' + formatDateTime(driveState.lastBackupAt) : 'まだバックアップしていません'}<br>
-          認証状態: ${driveState.accessToken && driveState.tokenExpiresAt > Date.now() ? '接続中' : '再認証が必要'}
+          認証状態: ${needsReauth ? '再認証が必要(Google の仕様で約1時間で切れます)' : '接続中'}
         </p>
-        <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
+        <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
           <button id="drive-close-btn" style="padding:8px 16px;border:1px solid #cfc8b8;background:#fbf9f3;cursor:pointer;font-family:inherit">閉じる</button>
+          ${needsReauth ? '<button id="drive-reauth-btn" style="padding:8px 16px;border:none;background:#1a1915;color:#f4f1ea;cursor:pointer;font-family:inherit">再接続する</button>' : ''}
           <button id="drive-backup-now" style="padding:8px 16px;border:1px solid #cfc8b8;background:#fbf9f3;cursor:pointer;font-family:inherit">今すぐバックアップ</button>
           <button id="drive-disable-btn" style="padding:8px 16px;border:1px solid #d9b5af;background:#fbf9f3;color:#a13630;cursor:pointer;font-family:inherit">無効化</button>
         </div>
@@ -400,17 +418,29 @@
       modal.remove();
       // 強制バックアップ(min interval 無視)
       driveState.lastBackupAt = 0;
-      triggerBackup();
+      if (!tokenValid()) {
+        // クリック=ユーザー操作の中なので認証ポップアップOK。
+        // 認証成功後 handleTokenResponse が自動でバックアップを実行する
+        driveState.queuedBackup = true;
+        requestAccessToken();
+      } else {
+        triggerBackup();
+      }
+    };
+
+    // 再接続ボタン(トークン失効時のみ表示)— クリック=ユーザー操作なのでポップアップOK
+    const reauthBtn = document.getElementById('drive-reauth-btn');
+    if (reauthBtn) reauthBtn.onclick = () => {
+      modal.remove();
+      requestAccessToken();
     };
   }
 
   function enableSync() {
     driveState.enabled = true;
     localStorage.setItem(STORAGE_KEYS.ENABLED, 'true');
-    if (!driveState.tokenClient) setupTokenClient();
-    // 即座に認証フローを開始
-    requestAccessToken(true);
-    updateUIStatus('syncing', '☁ 認証中…');
+    // 「有効化する」クリックの流れの中なので認証ポップアップOK
+    requestAccessToken();
   }
 
   function disableSync() {
@@ -446,7 +476,7 @@
 
   // ===== 既存の saveState() にフックする(本体のコードを書き換えずに監視) =====
   // localStorage の ichibou_v3 が更新されたら triggerBackup() を呼ぶ
-  // 連発防止のためデバウンス
+  // 2026-07-01 修正: デバウンスを 30秒→3分に延長(入力中の認証チェック頻度を下げる)
   let saveDebounce = null;
   const originalSetItem = localStorage.setItem.bind(localStorage);
   localStorage.setItem = function(key, value) {
@@ -455,9 +485,21 @@
       if (saveDebounce) clearTimeout(saveDebounce);
       saveDebounce = setTimeout(() => {
         triggerBackup();
-      }, 30000); // 30秒のデバウンス
+      }, 3 * 60 * 1000); // 3分のデバウンス(連続入力をまとめて1回バックアップ)
     }
   };
+
+  // 2026-07-01 追加: タブが非表示になる時にバックアップ実行(タブ閉じる前の保存)
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden && driveState.enabled && driveState.accessToken) {
+      // タブ非表示 = ユーザーが別タブに移動 or 閉じる
+      // 認証必要な処理は飛ばす(アクセストークンが生きてる時だけ即バックアップ)
+      const now = Date.now();
+      if (driveState.tokenExpiresAt > now && now - driveState.lastBackupAt >= 60 * 1000) {
+        triggerBackup();
+      }
+    }
+  });
 
   // DOMContentLoaded で初期化
   if (document.readyState === 'loading') {
