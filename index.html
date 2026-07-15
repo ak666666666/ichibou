@@ -148,6 +148,15 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .capture-input::placeholder { color: var(--ink-mute); opacity: 0.6; }
 .capture-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line-soft); gap: 10px; }
 .capture-hint { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); letter-spacing: 0.15em; flex: 1; min-width: 0; }
+.capture-want-answer { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); cursor: pointer; user-select: none; padding: 4px 8px; border: 1px solid var(--line-soft); border-radius: 4px; background: transparent; transition: all 0.15s; }
+.capture-want-answer:hover { border-color: var(--accent); color: var(--accent); }
+.capture-want-answer input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+.capture-want-answer:has(input:checked) { border-color: var(--accent); background: rgba(200,80,46,0.06); color: var(--accent); font-weight: 500; }
+/* ログアイテムの回答希望インジケータ */
+.log-want-badge { display: inline-block; padding: 2px 6px; font-size: 10px; letter-spacing: 0.1em; background: rgba(200,80,46,0.08); color: var(--accent); border: 1px solid rgba(200,80,46,0.3); border-radius: 3px; margin-left: 6px; font-family: "JetBrains Mono", monospace; }
+.log-urgent-btn { background: none; border: 1px solid var(--line); color: var(--ink-soft); padding: 4px 10px; font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
+.log-urgent-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(200,80,46,0.04); }
+.log-urgent-btn.on { border-color: var(--accent); background: var(--accent); color: white; }
 .log { display: flex; flex-direction: column; gap: 14px; }
 .log-day { margin-top: 24px; }
 .log-day-label { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); letter-spacing: 0.2em; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line-soft); }
@@ -705,6 +714,9 @@ html { zoom: var(--ui-zoom, 1); }
         <textarea class="capture-input" id="capture-input" placeholder="Geminiとの会話の抜粋、本で読んだこと、会議のメモなど。"></textarea>
         <div class="voice-status" id="capture-voice-status">🎙 聞いています… もう一度タップで停止</div>
         <div class="capture-actions">
+          <label class="capture-want-answer" title="チェックで Claude が読んで回答・実行を検討します(次回スキャン時)">
+            <input type="checkbox" id="capture-want-answer" /> ☑ 回答&実行希望
+          </label>
           <span class="capture-hint">⌘/Ctrl + ENTER で保存</span>
           <div class="action-right">
             <button class="mic-btn" id="capture-mic" title="音声入力" aria-label="音声入力">🎙</button>
@@ -965,7 +977,7 @@ let syncTimer = null;
 let lastSyncedData = null;
 
 function normalizeLog(l) {
-  return { completed: false, completedAt: null, tags: [], ...l };
+  return { completed: false, completedAt: null, tags: [], wantAnswer: false, urgentClaude: false, ...l };
 }
 function normalizeNote(n) {
   return {
@@ -973,6 +985,8 @@ function normalizeNote(n) {
     folderId: n.folderId ?? null,
     title: n.title || "",
     body: n.body || "",
+    wantAnswer: n.wantAnswer === true,
+    urgentClaude: n.urgentClaude === true,
     createdAt: n.createdAt || Date.now(),
     updatedAt: n.updatedAt || n.createdAt || Date.now(),
     projectId: n.projectId ?? n.attachedProjectId ?? null,
@@ -1030,6 +1044,45 @@ function saveState() {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(pushToCloud, 500);
 }
+
+// ===== 入力中の再描画抑止(2026-07-15 神田晃良指摘の入力中画面切替バグ対策)=====
+// realtime/pull で他端末の変更を受信した時、ユーザーが textarea/input/contenteditable に
+// フォーカス中(=IME 変換中の可能性大)なら 再描画(renderAll)を保留する。
+// フォーカスを外した瞬間、または一定時間経過後に 保留した再描画をまとめて実行。
+let deferredRender = false;
+let deferredRenderTimer = null;
+function isEditingActive() {
+  const el = document.activeElement;
+  if (!el || el === document.body) return false;
+  const tag = (el.tagName || "").toLowerCase();
+  if (tag === "textarea" || tag === "input") return true;
+  if (el.isContentEditable) return true;
+  return false;
+}
+function safeRenderAll(source) {
+  if (isEditingActive()) {
+    deferredRender = true;
+    // 保険:8秒後にフォーカスが外れてなくても更新を反映(古い表示のまま長く残さない)
+    if (deferredRenderTimer) clearTimeout(deferredRenderTimer);
+    deferredRenderTimer = setTimeout(() => {
+      deferredRender = false;
+      renderAll();
+    }, 8000);
+    return;
+  }
+  renderAll();
+}
+// フォーカスが外れたら 保留分を実行
+document.addEventListener("focusout", () => {
+  // 少し待つ(次の入力要素にフォーカス移動する場合を考慮)
+  setTimeout(() => {
+    if (deferredRender && !isEditingActive()) {
+      deferredRender = false;
+      if (deferredRenderTimer) { clearTimeout(deferredRenderTimer); deferredRenderTimer = null; }
+      renderAll();
+    }
+  }, 200);
+}, true);
 
 function setSyncStatus(status, text) {
   const el = document.getElementById("sync-indicator");
@@ -1091,7 +1144,7 @@ async function pullFromCloud() {
         normalizeState(state);
         saveLocal();
         lastSyncedData = remoteStr;
-        renderAll();
+        safeRenderAll("pullFromCloud");
       }
     }
     setSyncStatus("synced", "同期済");
@@ -1117,7 +1170,7 @@ function subscribeRealtime() {
       normalizeState(state);
       saveLocal();
       lastSyncedData = newStr;
-      renderAll();
+      safeRenderAll("realtime");
       setSyncStatus("synced", "他端末から更新");
       setTimeout(() => setSyncStatus("synced", "同期済"), 2000);
     }
@@ -1771,6 +1824,10 @@ function renderLogs() {
         ? `<button class="log-tag" data-retag>📎 ${escapeHtml(project.name || "無題")}<span class="remove">✕</span></button>`
         : `<button class="log-assign-btn" data-assign>＋ プロジェクトに紐付け</button>`;
       const completeHtml = `<button class="log-complete-btn" data-complete>${log.completed ? "↩ 未完了に戻す" : "✓ 完了"}</button>`;
+      const wantBadge = log.wantAnswer ? `<span class="log-want-badge" title="Claude回答&実行希望">☑ 回答希望</span>` : "";
+      const urgentBtn = log.wantAnswer && !log.completed
+        ? `<button class="log-urgent-btn ${log.urgentClaude ? "on" : ""}" data-urgent>${log.urgentClaude ? "🚀 起動待ち…" : "🚀 今すぐ"}</button>`
+        : "";
       // 完了済みは contenteditable を切る(打ち消し線との編集UX衝突を避ける)
       const editableAttr = log.completed ? "" : "contenteditable=\"true\"";
       // タグ行
@@ -1779,10 +1836,10 @@ function renderLogs() {
       ).join("");
       const tagsRowHtml = `<div class="log-tags-row"><span class="tags-label">TAGS</span>${tagsList}<input class="tag-add-input" type="text" placeholder="+ タグ" list="log-tag-datalist" /></div>`;
       item.innerHTML = `
-        <div class="log-time">${timeStr}${completedLabel}</div>
+        <div class="log-time">${timeStr}${completedLabel}${wantBadge}</div>
         <div class="log-text" ${editableAttr} data-id="${log.id}">${escapeHtml(log.text)}</div>
         ${tagsRowHtml}
-        <div class="log-actions">${tagHtml}${completeHtml}<button class="log-delete">削除</button></div>
+        <div class="log-actions">${tagHtml}${urgentBtn}${completeHtml}<button class="log-delete">削除</button></div>
       `;
 
       // ===== 雑メモ後編集: blurで保存、空なら削除(完了済みは編集不可なので発火しない) =====
@@ -1820,6 +1877,14 @@ function renderLogs() {
         state.logs = state.logs.filter(l => l.id !== log.id);
         saveState(); renderLogs(); renderProjects();
       });
+      const urgentEl = item.querySelector("[data-urgent]");
+      if (urgentEl) {
+        urgentEl.addEventListener("click", () => {
+          log.urgentClaude = !log.urgentClaude;
+          saveState();
+          renderLogs();
+        });
+      }
       // タグチップクリック=フィルタ、✕クリック=このログから外す
       item.querySelectorAll("[data-tag]").forEach(chip => {
         chip.addEventListener("click", (e) => {
@@ -1888,9 +1953,12 @@ function saveLog() {
   const input = document.getElementById("capture-input");
   const text = input.value.trim();
   if (!text) return;
-  state.logs.push(normalizeLog({ id: uid(), ts: Date.now(), text, projectId: null }));
+  const wantAnswerEl = document.getElementById("capture-want-answer");
+  const wantAnswer = !!(wantAnswerEl && wantAnswerEl.checked);
+  state.logs.push(normalizeLog({ id: uid(), ts: Date.now(), text, projectId: null, wantAnswer }));
   saveState();
   input.value = "";
+  if (wantAnswerEl) wantAnswerEl.checked = false; // 記録後はチェックをリセット(次のメモに引きずらない)
   autoGrowCapture(); // 記録後は既定の高さに戻す
   renderLogs();
 }
