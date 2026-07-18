@@ -157,6 +157,10 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .log-urgent-btn { background: none; border: 1px solid var(--line); color: var(--ink-soft); padding: 4px 10px; font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
 .log-urgent-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(200,80,46,0.04); }
 .log-urgent-btn.on { border-color: var(--accent); background: var(--accent); color: white; }
+/* 記載後に切替可能な回答希望トグル */
+.log-want-toggle { background: none; border: 1px solid var(--line); color: var(--ink-mute); padding: 4px 10px; font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
+.log-want-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.log-want-toggle.on { border-color: var(--accent); background: rgba(200,80,46,0.08); color: var(--accent); font-weight: 500; }
 .log { display: flex; flex-direction: column; gap: 14px; }
 .log-day { margin-top: 24px; }
 .log-day-label { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); letter-spacing: 0.2em; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line-soft); }
@@ -591,7 +595,10 @@ html { zoom: var(--ui-zoom, 1); }
 .answer-dot { width:8px; height:8px; border-radius:50%; background:#c8502e; flex:none; }
 .answer-title { font-weight:700; font-size:14px; flex:1; line-height:1.5; }
 .answer-time { color:var(--ink-mute); font-size:11px; font-family:"JetBrains Mono",monospace; flex:none; }
-.answer-quote { color:var(--ink-mute); font-size:12px; line-height:1.7; border-left:2px solid var(--line); padding-left:10px; margin-bottom:10px; white-space:pre-wrap; word-break:break-word; }
+.answer-quote { color:var(--ink-mute); font-size:12px; line-height:1.7; border-left:2px solid var(--line); padding-left:10px; margin-bottom:10px; white-space:pre-wrap; word-break:break-word; cursor:pointer; position:relative; }
+.answer-quote.collapsed { max-height: 4.5em; overflow: hidden; }
+.answer-quote.collapsed::after { content: "…（タップで全文）"; position: absolute; bottom: 0; right: 0; background: linear-gradient(to right, transparent, #fbf9f3 30%); padding: 0 6px 0 24px; color: var(--accent); font-size: 11px; font-weight: 500; }
+.answer-quote.expanded::after { content: "▲ 閉じる"; display: block; text-align: right; color: var(--accent); font-size: 11px; margin-top: 4px; font-weight: 500; }
 .answer-body { font-size:13.5px; line-height:1.9; white-space:pre-wrap; word-break:break-word; }
 .answer-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
 .answer-btn { border:1px solid var(--line); background:transparent; padding:6px 12px; font-size:12px; cursor:pointer; font-family:inherit; color:var(--ink-soft); }
@@ -1824,7 +1831,9 @@ function renderLogs() {
         ? `<button class="log-tag" data-retag>📎 ${escapeHtml(project.name || "無題")}<span class="remove">✕</span></button>`
         : `<button class="log-assign-btn" data-assign>＋ プロジェクトに紐付け</button>`;
       const completeHtml = `<button class="log-complete-btn" data-complete>${log.completed ? "↩ 未完了に戻す" : "✓ 完了"}</button>`;
-      const wantBadge = log.wantAnswer ? `<span class="log-want-badge" title="Claude回答&実行希望">☑ 回答希望</span>` : "";
+      const wantBtn = !log.completed
+        ? `<button class="log-want-toggle ${log.wantAnswer ? "on" : ""}" data-wantanswer title="タップでClaude回答&実行の希望を切替">${log.wantAnswer ? "☑ 回答希望" : "☐ 回答希望"}</button>`
+        : (log.wantAnswer ? `<span class="log-want-badge">☑ 回答希望済</span>` : "");
       const urgentBtn = log.wantAnswer && !log.completed
         ? `<button class="log-urgent-btn ${log.urgentClaude ? "on" : ""}" data-urgent>${log.urgentClaude ? "🚀 起動待ち…" : "🚀 今すぐ"}</button>`
         : "";
@@ -1836,10 +1845,10 @@ function renderLogs() {
       ).join("");
       const tagsRowHtml = `<div class="log-tags-row"><span class="tags-label">TAGS</span>${tagsList}<input class="tag-add-input" type="text" placeholder="+ タグ" list="log-tag-datalist" /></div>`;
       item.innerHTML = `
-        <div class="log-time">${timeStr}${completedLabel}${wantBadge}</div>
+        <div class="log-time">${timeStr}${completedLabel}</div>
         <div class="log-text" ${editableAttr} data-id="${log.id}">${escapeHtml(log.text)}</div>
         ${tagsRowHtml}
-        <div class="log-actions">${tagHtml}${urgentBtn}${completeHtml}<button class="log-delete">削除</button></div>
+        <div class="log-actions">${tagHtml}${wantBtn}${urgentBtn}${completeHtml}<button class="log-delete">削除</button></div>
       `;
 
       // ===== 雑メモ後編集: blurで保存、空なら削除(完了済みは編集不可なので発火しない) =====
@@ -1881,6 +1890,15 @@ function renderLogs() {
       if (urgentEl) {
         urgentEl.addEventListener("click", () => {
           log.urgentClaude = !log.urgentClaude;
+          saveState();
+          renderLogs();
+        });
+      }
+      const wantEl = item.querySelector("[data-wantanswer]");
+      if (wantEl) {
+        wantEl.addEventListener("click", () => {
+          log.wantAnswer = !log.wantAnswer;
+          if (!log.wantAnswer) log.urgentClaude = false; // 希望OFFなら急ぎもOFF
           saveState();
           renderLogs();
         });
@@ -3216,7 +3234,7 @@ function renderAnswers() {
         <span class="answer-title">${escapeHtml((a.title || "").replace(/^💬 回答: /, ""))}</span>
         <span class="answer-time">${formatTs(ts)}</span>
       </div>
-      ${parts.quote ? `<div class="answer-quote">${escapeHtml(parts.quote)}</div>` : ""}
+      ${parts.quote ? `<div class="answer-quote collapsed" title="タップで元メモを全文表示" data-quote-toggle>${escapeHtml(parts.quote)}</div>` : ""}
       <div class="answer-body">${escapeHtml(parts.body)}</div>
       <div class="answer-actions">
         ${a.consumed
@@ -3228,6 +3246,19 @@ function renderAnswers() {
     el.querySelectorAll("[data-aact]").forEach(btn => {
       btn.addEventListener("click", () => handleAnswerAction(a, btn.dataset.aact));
     });
+    // 元メモ引用のタップで全文/折りたたみ切替
+    const quoteEl = el.querySelector("[data-quote-toggle]");
+    if (quoteEl) {
+      quoteEl.addEventListener("click", () => {
+        if (quoteEl.classList.contains("collapsed")) {
+          quoteEl.classList.remove("collapsed");
+          quoteEl.classList.add("expanded");
+        } else {
+          quoteEl.classList.remove("expanded");
+          quoteEl.classList.add("collapsed");
+        }
+      });
+    }
     list.appendChild(el);
   });
 }
