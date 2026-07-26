@@ -613,6 +613,21 @@ html { zoom: var(--ui-zoom, 1); }
 .inbox-item.read { opacity:.6; }
 .inbox-dest-label { font-size:11px; color:#4a6b3a; border:1px solid rgba(74,107,58,.3); padding:1px 8px; border-radius:999px; }
 .inbox-btn.read { border-color:var(--ink); font-weight:700; }
+/* ===== リンク添付(機能H① 2026-07-23)===== */
+.attach-section { margin: 8px 0; }
+.attach-row { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
+.attach-chip { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--line); background:#fbf9f3; padding:3px 8px; border-radius:999px; font-size:12px; max-width:100%; }
+.attach-chip a { color:#3a5a8a; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:260px; }
+.attach-chip a:hover { text-decoration:underline; }
+.attach-del { border:none; background:transparent; color:var(--ink-mute); cursor:pointer; font-size:11px; padding:0 2px; }
+.attach-add { border:1px dashed var(--line); background:transparent; color:var(--ink-mute); font-size:11px; padding:3px 10px; border-radius:999px; cursor:pointer; font-family:inherit; }
+.attach-add:hover { color:var(--ink-soft); border-color:var(--ink-mute); }
+.log-attach-btn { border:1px solid var(--line); background:transparent; cursor:pointer; font-size:12px; padding:2px 8px; }
+@media (max-width: 600px) { .attach-chip a { max-width:180px; } }
+/* ===== 再回答申請(2026-07-26)===== */
+.answer-reply-row { display:flex; gap:6px; margin-top:10px; }
+.answer-reply-input { flex:1; min-width:0; border:1px solid var(--line); background:#fbf9f3; padding:6px 10px; font-size:12px; font-family:inherit; }
+.answer-reply-input:disabled { opacity:.5; }
 </style>
 </head>
 <body>
@@ -704,6 +719,7 @@ html { zoom: var(--ui-zoom, 1); }
         <div class="moya-actions">
           <span class="moya-hint">⌘/Ctrl + ENTER で保存</span>
           <div class="action-right">
+            <label class="capture-want-answer" title="チェックで Claude が読んで回答・実行を検討します"><input type="checkbox" id="moya-want-answer" /> ☑ 回答&実行希望</label>
             <button class="mic-btn" id="moya-mic" title="音声入力" aria-label="音声入力">🎙</button>
             <button class="btn" id="moya-save">もやを置く</button>
           </div>
@@ -947,7 +963,17 @@ html { zoom: var(--ui-zoom, 1); }
       <span>📎 プロジェクト:</span>
       <select id="note-edit-project"></select>
     </div>
+    <div class="note-edit-folder-row" id="note-edit-attach-row" style="flex-wrap:wrap;">
+      <span>🔗 リンク:</span>
+      <span id="note-edit-attach-chips" style="display:flex;flex-wrap:wrap;gap:6px;flex:1;"></span>
+      <button class="attach-add" id="note-edit-attach-add">＋追加</button>
+    </div>
     <input type="text" class="note-edit-title" id="note-edit-title" placeholder="タイトル">
+    <div class="note-edit-folder-row" style="justify-content:flex-start;gap:14px;flex-wrap:wrap;">
+      <label class="capture-want-answer" title="チェックで Claude が読んで回答・実行を検討します(次回スキャン時)"><input type="checkbox" id="note-edit-want-answer" /> ☑ 回答&実行希望</label>
+      <label class="capture-want-answer" id="note-edit-urgent-wrap" style="display:none;" title="チェックで15分以内の起動を希望"><input type="checkbox" id="note-edit-urgent" /> 🚀 今すぐ</label>
+      <label class="capture-want-answer" id="note-edit-always-wrap" title="チェック中はこのノートが更新されるたび、次のスキャンで読み直して回答します(日記向け・1日1回まで)"><input type="checkbox" id="note-edit-always" /> ♻ 常時(日記など)</label>
+    </div>
     <textarea class="note-edit-body" id="note-edit-body" placeholder="本文(改行・空白自由。長文OK。マークダウン記法の表示対応は段階的に拡充予定)"></textarea>
   </div>
 </div>
@@ -994,11 +1020,64 @@ function normalizeNote(n) {
     body: n.body || "",
     wantAnswer: n.wantAnswer === true,
     urgentClaude: n.urgentClaude === true,
+    alwaysAnswer: n.alwaysAnswer === true, // ♻常時モード(2026-07-26 日記向け・晃良承認)
     createdAt: n.createdAt || Date.now(),
     updatedAt: n.updatedAt || n.createdAt || Date.now(),
     projectId: n.projectId ?? n.attachedProjectId ?? null,
-    tags: Array.isArray(n.tags) ? n.tags : []
+    tags: Array.isArray(n.tags) ? n.tags : [],
+    attachments: Array.isArray(n.attachments) ? n.attachments : [] // 機能H① リンク添付(2026-07-23)
   };
+}
+
+// ===== リンク添付(機能H① 2026-07-23)=====
+// projects / notes / logs 共通。obj.attachments = [{id, title, url, addedAt}]
+// v1はURLリンクのみ(実ファイルアップロードは機能H③として別途設計)
+function normalizeAttachUrl(u) {
+  u = (u || "").trim();
+  if (!u) return null;
+  if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+  return u;
+}
+function promptAddAttachment(obj, onDone) {
+  const url = normalizeAttachUrl(prompt("添付するURL(GoogleドキュメントやDriveの共有リンクなど)"));
+  if (!url) return;
+  let title = (prompt("表示名(空ならURLの先頭を使う)") || "").trim();
+  if (!title) title = url.replace(/^https?:\/\//, "").slice(0, 40);
+  if (!Array.isArray(obj.attachments)) obj.attachments = [];
+  obj.attachments.push({ id: uid(), title: title, url: url, addedAt: Date.now() });
+  saveState();
+  if (onDone) onDone();
+}
+function attachmentChipsEl(obj, onChange) {
+  // 添付チップ列のDOMを返す(0件なら null)
+  const arr = Array.isArray(obj.attachments) ? obj.attachments : [];
+  if (arr.length === 0) return null;
+  const wrap = document.createElement("div");
+  wrap.className = "attach-row";
+  arr.forEach(a => {
+    const chip = document.createElement("span");
+    chip.className = "attach-chip";
+    const link = document.createElement("a");
+    link.href = a.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "📎 " + (a.title || a.url);
+    const del = document.createElement("button");
+    del.className = "attach-del";
+    del.textContent = "✕";
+    del.title = "添付を外す(リンク先は消えません)";
+    del.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!confirm(`添付「${a.title}」を外しますか?(リンク先のファイルは消えません)`)) return;
+      obj.attachments = obj.attachments.filter(x => x.id !== a.id);
+      saveState();
+      if (onChange) onChange();
+    });
+    chip.appendChild(link);
+    chip.appendChild(del);
+    wrap.appendChild(chip);
+  });
+  return wrap;
 }
 function normalizeNoteFolder(f) {
   return {
@@ -1018,6 +1097,8 @@ function normalizeTask(t) {
     note: t.note || "",
     completed: !!t.completed,
     completedAt: t.completedAt || null,
+    wantAnswer: t.wantAnswer === true,
+    urgentClaude: t.urgentClaude === true,
     createdAt: t.createdAt || Date.now(),
     updatedAt: t.updatedAt || t.createdAt || Date.now()
   };
@@ -1333,6 +1414,18 @@ function projectCard(p) {
 
   el.querySelector("[data-insights]").addEventListener("click", () => openInsightsModal(p));
 
+  // 📎 リンク添付(機能H① 2026-07-23): 債務整理ドキュメント等をワンタップで開く
+  const attachSection = document.createElement("div");
+  attachSection.className = "attach-section";
+  const projChips = attachmentChipsEl(p, () => renderProjects());
+  if (projChips) attachSection.appendChild(projChips);
+  const attachAddBtn = document.createElement("button");
+  attachAddBtn.className = "attach-add";
+  attachAddBtn.textContent = "📎 リンク追加";
+  attachAddBtn.addEventListener("click", () => promptAddAttachment(p, () => renderProjects()));
+  attachSection.appendChild(attachAddBtn);
+  el.insertBefore(attachSection, el.querySelector(".project-footer"));
+
   el.querySelectorAll("[data-act]").forEach(btn => {
     btn.addEventListener("click", () => {
       const act = btn.dataset.act;
@@ -1398,10 +1491,18 @@ function renderMoyas() {
     else if (ageDays >= 7) { ageClass = "aging"; ageLabel = `${ageDays}日前`; }
     else if (ageDays >= 1) ageLabel = `${ageDays}日前`;
     else ageLabel = "今日";
+    const wantBadge = m.wantAnswer
+      ? `<button class="log-want-toggle on" data-act="wantoff" title="タップで回答希望を解除">${m.urgentClaude ? "🚀 今すぐ" : "☑ 回答希望"}</button>`
+      : `<button class="log-want-toggle" data-act="wanton" title="タップでClaude回答&実行の希望を追加">☐ 回答希望</button>`;
+    const urgentBtn = m.wantAnswer
+      ? `<button class="log-urgent-btn ${m.urgentClaude ? "on" : ""}" data-act="urgent">${m.urgentClaude ? "🚀 起動待ち…" : "🚀 今すぐ"}</button>`
+      : "";
     el.innerHTML = `
       <div class="moya-text" contenteditable="true" data-id="${m.id}">${escapeHtml(m.text)}</div>
       <div class="moya-meta">${formatTs(m.ts)}<span class="moya-age ${ageClass}">${ageLabel}</span></div>
       <div class="moya-cloud-actions">
+        ${wantBadge}
+        ${urgentBtn}
         <button class="moya-btn promote" data-act="promote">⬆ プロジェクトに昇格</button>
         <button class="moya-btn delete" data-act="delete">消す</button>
       </div>
@@ -1419,6 +1520,19 @@ function renderMoyas() {
           state.moyas = state.moyas.filter(x => x.id !== m.id);
           saveState(); renderMoyas();
         }
+        else if (btn.dataset.act === "wanton") {
+          m.wantAnswer = true;
+          saveState(); renderMoyas();
+        }
+        else if (btn.dataset.act === "wantoff") {
+          m.wantAnswer = false;
+          m.urgentClaude = false;
+          saveState(); renderMoyas();
+        }
+        else if (btn.dataset.act === "urgent") {
+          m.urgentClaude = !m.urgentClaude;
+          saveState(); renderMoyas();
+        }
       });
     });
     list.appendChild(el);
@@ -1429,9 +1543,12 @@ function saveMoya() {
   const input = document.getElementById("moya-input");
   const text = input.value.trim();
   if (!text) return;
-  state.moyas.push({ id: uid(), ts: Date.now(), text });
+  const wantEl = document.getElementById("moya-want-answer");
+  const wantAnswer = !!(wantEl && wantEl.checked);
+  state.moyas.push({ id: uid(), ts: Date.now(), text, wantAnswer, urgentClaude: false });
   saveState();
   input.value = "";
+  if (wantEl) wantEl.checked = false;
   renderMoyas();
 }
 document.getElementById("moya-save").addEventListener("click", saveMoya);
@@ -1848,8 +1965,14 @@ function renderLogs() {
         <div class="log-time">${timeStr}${completedLabel}</div>
         <div class="log-text" ${editableAttr} data-id="${log.id}">${escapeHtml(log.text)}</div>
         ${tagsRowHtml}
-        <div class="log-actions">${tagHtml}${wantBtn}${urgentBtn}${completeHtml}<button class="log-delete">削除</button></div>
+        <div class="log-actions">${tagHtml}${wantBtn}${urgentBtn}${completeHtml}<button class="log-attach-btn" data-attach title="URLリンクを添付">📎</button><button class="log-delete">削除</button></div>
       `;
+
+      // 📎 リンク添付(機能H① 2026-07-23)
+      const logChips = attachmentChipsEl(log, () => renderLogs());
+      if (logChips) item.insertBefore(logChips, item.querySelector(".log-actions"));
+      const attachBtn = item.querySelector("[data-attach]");
+      if (attachBtn) attachBtn.addEventListener("click", () => promptAddAttachment(log, () => renderLogs()));
 
       // ===== 雑メモ後編集: blurで保存、空なら削除(完了済みは編集不可なので発火しない) =====
       const textEl = item.querySelector(".log-text");
@@ -2511,6 +2634,7 @@ function renderNotes() {
       const folderName = n.folderId ? (state.noteFolders.find(f => f.id === n.folderId)?.name || '') : '';
       const projName = n.projectId ? (state.projects.find(p => p.id === n.projectId)?.name || '') : '';
       const titleClass = n.title ? '' : ' empty';
+      const wantBadge = n.wantAnswer ? `<span class="log-want-badge">${n.urgentClaude ? "🚀 今すぐ" : "☑ 回答希望"}</span>` : '';
       card.innerHTML = `
         <div class="note-card-title${titleClass}">${escapeHtml(n.title || '(無題)')}</div>
         ${bodyPreview ? `<div class="note-card-body">${escapeHtml(bodyPreview)}</div>` : ''}
@@ -2518,6 +2642,7 @@ function renderNotes() {
           <span>${dateStr}</span>
           ${folderName ? `<span>📂 ${escapeHtml(folderName)}</span>` : ''}
           ${projName ? `<span>📎 ${escapeHtml(projName)}</span>` : ''}
+          ${wantBadge}
         </div>
       `;
       card.onclick = () => openNoteEdit(n.id);
@@ -2588,12 +2713,38 @@ function deleteNoteFolder(folderId) {
   renderNotes();
 }
 
+// 📎 ノートのリンク添付行(機能H① 2026-07-23)
+function renderNoteAttachRow(note) {
+  const chipsWrap = document.getElementById("note-edit-attach-chips");
+  if (!chipsWrap) return;
+  chipsWrap.innerHTML = "";
+  const chips = attachmentChipsEl(note, () => { renderNoteAttachRow(note); renderNotes(); });
+  if (chips) chipsWrap.appendChild(chips);
+}
+(function bindNoteAttachAdd() {
+  const btn = document.getElementById("note-edit-attach-add");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const note = state.notes.find(n => n.id === editingNoteId);
+    if (!note) return;
+    promptAddAttachment(note, () => { renderNoteAttachRow(note); renderNotes(); });
+  });
+})();
+
 function openNoteEdit(id) {
   const note = state.notes.find(n => n.id === id);
   if (!note) return;
   editingNoteId = id;
   document.getElementById("note-edit-title").value = note.title || "";
   document.getElementById("note-edit-body").value = note.body || "";
+  const wantEl = document.getElementById("note-edit-want-answer");
+  const urgentEl = document.getElementById("note-edit-urgent");
+  const urgentWrap = document.getElementById("note-edit-urgent-wrap");
+  if (wantEl) wantEl.checked = !!note.wantAnswer;
+  if (urgentEl) urgentEl.checked = !!note.urgentClaude;
+  if (urgentWrap) urgentWrap.style.display = note.wantAnswer ? "inline-flex" : "none";
+  const alwaysEl = document.getElementById("note-edit-always");
+  if (alwaysEl) alwaysEl.checked = !!note.alwaysAnswer; // ♻常時(2026-07-26)
 
   // フォルダプルダウン(ルート→サブのフラット表示)
   const folderSelect = document.getElementById("note-edit-folder");
@@ -2638,6 +2789,9 @@ function openNoteEdit(id) {
   }
   projectSelect.value = note.projectId || "";
 
+  // 🔗 リンク添付行(機能H①)
+  renderNoteAttachRow(note);
+
   const date = new Date(note.updatedAt || note.createdAt);
   const ds = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
   document.getElementById("note-edit-meta").textContent = `更新 ${ds}`;
@@ -2657,11 +2811,20 @@ function saveNoteEditNow() {
   const newBody = document.getElementById("note-edit-body").value;
   const newFolderId = document.getElementById("note-edit-folder").value || null;
   const newProjectId = document.getElementById("note-edit-project").value || null;
-  if (note.title === newTitle && note.body === newBody && note.folderId === newFolderId && note.projectId === newProjectId) return;
+  const wantEl = document.getElementById("note-edit-want-answer");
+  const urgentEl = document.getElementById("note-edit-urgent");
+  const alwaysEl2 = document.getElementById("note-edit-always");
+  const newWantAnswer = !!(wantEl && wantEl.checked);
+  const newUrgent = newWantAnswer && !!(urgentEl && urgentEl.checked);
+  const newAlways = !!(alwaysEl2 && alwaysEl2.checked); // ♻常時(2026-07-26)
+  if (note.title === newTitle && note.body === newBody && note.folderId === newFolderId && note.projectId === newProjectId && note.wantAnswer === newWantAnswer && note.urgentClaude === newUrgent && note.alwaysAnswer === newAlways) return;
   note.title = newTitle;
   note.body = newBody;
   note.folderId = newFolderId;
   note.projectId = newProjectId;
+  note.wantAnswer = newWantAnswer;
+  note.urgentClaude = newUrgent;
+  note.alwaysAnswer = newAlways;
   note.updatedAt = Date.now();
   saveState();
 }
@@ -2698,6 +2861,17 @@ document.getElementById("note-edit-delete").onclick = deleteCurrentNote;
 document.getElementById("note-edit-title").addEventListener("input", saveNoteEditDebounced);
 document.getElementById("note-edit-body").addEventListener("input", saveNoteEditDebounced);
 document.getElementById("note-edit-folder").addEventListener("change", () => { saveNoteEditNow(); renderNotes(); });
+document.getElementById("note-edit-want-answer").addEventListener("change", () => {
+  const wantEl = document.getElementById("note-edit-want-answer");
+  const urgentEl = document.getElementById("note-edit-urgent");
+  const urgentWrap = document.getElementById("note-edit-urgent-wrap");
+  if (urgentWrap) urgentWrap.style.display = wantEl.checked ? "inline-flex" : "none";
+  if (!wantEl.checked && urgentEl) urgentEl.checked = false;
+  saveNoteEditNow();
+  renderNotes();
+});
+document.getElementById("note-edit-urgent").addEventListener("change", () => { saveNoteEditNow(); renderNotes(); });
+document.getElementById("note-edit-always").addEventListener("change", () => { saveNoteEditNow(); renderNotes(); }); // ♻常時(2026-07-26)
 document.getElementById("note-edit-project").addEventListener("change", () => { saveNoteEditNow(); renderNotes(); renderProjects(); });
 document.getElementById("notes-search").addEventListener("input", renderNotes);
 document.getElementById("note-edit-modal").addEventListener("click", (e) => {
@@ -2867,6 +3041,8 @@ function taskItemEl(t) {
         <button class="task-chip" data-act="bucket" title="タップで 本日→今週→今月→先 と切替">${bm.icon} ${escapeHtml(bm.label)}</button>
         <button class="task-chip" data-act="type" title="タップで 🎯/🤔 を切替">${t.type === "action" ? "🎯 行動" : "🤔 判断"}</button>
         <button class="task-chip" data-act="note">${hasNote ? "📝 メモ" : "＋ メモ"}</button>
+        <button class="log-want-toggle ${t.wantAnswer ? 'on' : ''}" data-act="want" title="タップでClaude回答&実行希望を切替">${t.wantAnswer ? '☑ 回答希望' : '☐ 回答希望'}</button>
+        ${t.wantAnswer ? `<button class="log-urgent-btn ${t.urgentClaude ? 'on' : ''}" data-act="urgent">${t.urgentClaude ? '🚀 起動待ち…' : '🚀 今すぐ'}</button>` : ''}
         <button class="task-del" data-act="del">🗑 削除</button>
       </div>
       <textarea class="task-note-input" placeholder="メモ(任意)" style="display:${hasNote ? "block" : "none"};">${escapeHtml(t.note || "")}</textarea>
@@ -2910,6 +3086,13 @@ function taskItemEl(t) {
         const show = ta.style.display === "none";
         ta.style.display = show ? "block" : "none";
         if (show) ta.focus();
+      } else if (act === "want") {
+        const nextWant = !t.wantAnswer;
+        updateTask(t.id, { wantAnswer: nextWant, urgentClaude: nextWant ? t.urgentClaude : false });
+        renderTasks();
+      } else if (act === "urgent") {
+        updateTask(t.id, { urgentClaude: !t.urgentClaude });
+        renderTasks();
       } else if (act === "del") {
         if (confirm(`このタスクを削除します。復元できません。\n\n「${t.title}」`)) deleteTask(t.id);
       }
@@ -3246,6 +3429,30 @@ function renderAnswers() {
     el.querySelectorAll("[data-aact]").forEach(btn => {
       btn.addEventListener("click", () => handleAnswerAction(a, btn.dataset.aact));
     });
+
+    // 🔁 再回答申請(インライン返信)2026-07-26: 晃良承認済み提案の実装。
+    // 一言+ボタン1タップで「▶続き」メモ(☑回答希望付き)を自動生成 → 次回巡回が拾って回答する
+    const replyRow = document.createElement("div");
+    replyRow.className = "answer-reply-row";
+    replyRow.innerHTML = `<input class="answer-reply-input" type="text" placeholder="一言・続きの依頼(空でもOK)"><button class="answer-btn" data-reask>🔁 再回答を申請</button>`;
+    el.appendChild(replyRow);
+    const reaskBtn = replyRow.querySelector("[data-reask]");
+    reaskBtn.addEventListener("click", () => {
+      const word = replyRow.querySelector(".answer-reply-input").value.trim();
+      const p2 = answerSplit(a.detail);
+      state.logs.push(normalizeLog({
+        id: uid(), ts: Date.now(),
+        text: `▶続き:「${(a.title || "").replace(/^💬 回答: /, "")}」\n${word || "(続き・深掘りを希望)"}\n\n> 元回答(抜粋): ${(p2.body || "").slice(0, 120)}…`,
+        projectId: null,
+        wantAnswer: true
+      }));
+      saveState();
+      renderLogs();
+      reaskBtn.textContent = "✓ 申請済(次回巡回で回答)";
+      reaskBtn.disabled = true;
+      replyRow.querySelector(".answer-reply-input").disabled = true;
+    });
+
     // 元メモ引用のタップで全文/折りたたみ切替
     const quoteEl = el.querySelector("[data-quote-toggle]");
     if (quoteEl) {
