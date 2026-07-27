@@ -696,7 +696,7 @@ html { zoom: var(--ui-zoom, 1); }
   <section class="view" id="view-answers">
     <div class="answers-wrap">
       <div class="answers-title-h">回答</div>
-      <div class="answers-sub">雑メモの質問にClaudeが用意した回答。朝7時・夜19時の巡回で届く。「?」を付けると必ず拾う。</div>
+      <div class="answers-sub">☑回答希望を付けたメモへのClaudeの回答。カード下の「➤ 送信」で続き・承認を返すと数分で次の回答が届く。</div>
       <div class="answers-toolbar">
         <button class="answers-filter-btn active" data-af="unread">未読のみ</button>
         <button class="answers-filter-btn" data-af="all">すべて</button>
@@ -3434,21 +3434,24 @@ function renderAnswers() {
     // 一言+ボタン1タップで「▶続き」メモ(☑回答希望付き)を自動生成 → 次回巡回が拾って回答する
     const replyRow = document.createElement("div");
     replyRow.className = "answer-reply-row";
-    replyRow.innerHTML = `<input class="answer-reply-input" type="text" placeholder="一言・続きの依頼(空でもOK)"><button class="answer-btn" data-reask>🔁 再回答を申請</button>`;
+    replyRow.innerHTML = `<input class="answer-reply-input" type="text" placeholder="一言・続きの依頼(空でもOK)"><button class="answer-btn primary" data-reask>➤ 送信</button>`;
     el.appendChild(replyRow);
     const reaskBtn = replyRow.querySelector("[data-reask]");
     reaskBtn.addEventListener("click", () => {
       const word = replyRow.querySelector(".answer-reply-input").value.trim();
       const p2 = answerSplit(a.detail);
+      // 2026-07-27: 送信=即応答化(晃良指示)。urgentClaude=true で最優先レーンに載せる。
+      // 巡回が拾う仕組み上、完全な瞬時ではなく「数分以内」が物理限界(巡回は5分間隔)
       state.logs.push(normalizeLog({
         id: uid(), ts: Date.now(),
         text: `▶続き:「${(a.title || "").replace(/^💬 回答: /, "")}」\n${word || "(続き・深掘りを希望)"}\n\n> 元回答(抜粋): ${(p2.body || "").slice(0, 120)}…`,
         projectId: null,
-        wantAnswer: true
+        wantAnswer: true,
+        urgentClaude: true
       }));
       saveState();
       renderLogs();
-      reaskBtn.textContent = "✓ 申請済(次回巡回で回答)";
+      reaskBtn.textContent = "✓ 送信済み(数分以内に回答が届く)";
       reaskBtn.disabled = true;
       replyRow.querySelector(".answer-reply-input").disabled = true;
     });
