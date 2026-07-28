@@ -542,7 +542,7 @@ html { zoom: var(--ui-zoom, 1); }
 .task-item.completed .task-title { text-decoration: line-through; color: var(--ink-mute); }
 .task-check { width: 18px; height: 18px; margin-top: 2px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
 .task-body { flex: 1; min-width: 0; }
-.task-title { font-size: 14px; line-height: 1.45; color: var(--ink); font-weight: 500; word-wrap: break-word; }
+.task-title { font-size: 14px; line-height: 1.45; color: var(--ink); font-weight: 500; word-wrap: break-word; white-space: pre-wrap; }
 .task-meta { font-size: 11px; color: var(--ink-mute); margin-top: 3px; font-family: "JetBrains Mono", monospace; letter-spacing: 0.03em; }
 .task-notes { font-size: 12px; color: var(--ink-soft); margin-top: 4px; line-height: 1.5; }
 .task-ref { font-size: 11px; color: var(--ink-mute); margin-top: 3px; font-family: "JetBrains Mono", monospace; word-break: break-all; }
@@ -560,7 +560,7 @@ html { zoom: var(--ui-zoom, 1); }
 .tasks-input-add:hover { opacity: 0.88; }
 .task-title-row { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
 .task-title { flex: 1 1 auto; min-width: 140px; }
-.task-title[contenteditable="true"] { outline: none; border-radius: 3px; padding: 1px 3px; }
+.task-title[contenteditable="true"] { outline: none; border-radius: 3px; padding: 1px 3px; white-space: pre-wrap; }
 .task-title[contenteditable="true"]:hover { background: rgba(255,255,255,0.75); }
 .task-title[contenteditable="true"]:focus { background: #fff; box-shadow: inset 0 0 0 1px var(--accent); }
 .task-actions { display: flex; gap: 6px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
@@ -594,6 +594,11 @@ html { zoom: var(--ui-zoom, 1); }
 .answer-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
 .answer-dot { width:8px; height:8px; border-radius:50%; background:#c8502e; flex:none; }
 .answer-title { font-weight:700; font-size:14px; flex:1; line-height:1.5; }
+/* 2026-07-28: 往復回数バッジ(何回目のやり取りか)＋決着表示 */
+.answer-turn { font-size:10.5px; font-family:"JetBrains Mono",monospace; color:var(--bg); background:var(--ink-soft); padding:2px 8px; border-radius:999px; flex:none; letter-spacing:.02em; }
+.answer-turn.latest { background:#b88a2e; }
+.answer-turn.settled { background:#3f7d5a; }
+.answer-threadline { font-size:11px; color:var(--ink-mute); margin:-2px 0 8px; padding-left:2px; }
 .answer-time { color:var(--ink-mute); font-size:11px; font-family:"JetBrains Mono",monospace; flex:none; }
 .answer-quote { color:var(--ink-mute); font-size:12px; line-height:1.7; border-left:2px solid var(--line); padding-left:10px; margin-bottom:10px; white-space:pre-wrap; word-break:break-word; cursor:pointer; position:relative; }
 .answer-quote.collapsed { max-height: 4.5em; overflow: hidden; }
@@ -3062,12 +3067,14 @@ function taskItemEl(t) {
   const titleEl = item.querySelector(".task-title");
   if (!t.completed) {
     titleEl.addEventListener("blur", () => {
-      const v = titleEl.textContent.trim();
+      // innerText = 改行を保持して読む(textContent だと Enter の改行が消えるため / 2026-07-27)
+      const v = (titleEl.innerText != null ? titleEl.innerText : titleEl.textContent).replace(/ /g, " ").trim();
       if (!v) { titleEl.textContent = t.title; return; }  // 空入力は元に戻す
       if (v !== t.title) updateTask(t.id, { title: v });   // ここで再描画しない(直後のボタン click を殺さないため)
     });
+    // Enter = 改行(長文タスクを書けるように / 2026-07-27)。確定は Ctrl(⌘)+Enter か 欄外タップ。
     titleEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); titleEl.blur(); }
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); titleEl.blur(); }
     });
   }
 
@@ -3364,19 +3371,95 @@ document.querySelectorAll("[data-if]").forEach(btn => {
 // ========================================================================
 let answersItems = [];          // ans_ 行(未読+既読、最新100件)
 let answersFilter = "unread";   // 'unread' | 'all'
+let answersAutoBusy = false;    // 自動既読の多重実行ガード
 
 async function loadAnswers() {
   if (!navigator.onLine) return;
   try {
     const { data, error } = await sb.from("ichibou_inbox")
-      .select("id, title, detail, created_at, consumed, consumed_at, cw_id")
+      .select("id, title, detail, created_at, consumed, consumed_at, cw_id, dest")
       .like("cw_id", "ans_%")
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) throw error;
     answersItems = data || [];
+    buildAnswerThreads();
+    await autoConsumeAnswers();   // 続き到着・決着で用済みになった回答を自動既読
     renderAnswers();
   } catch (e) { console.error("Answers pull error:", e); }
+}
+
+// ========== スレッド推定(2026-07-28) ==========
+// 「今どこの段階か(2回目/3回目)」を出すため、回答をスレッドに束ねる。
+// ▶続き メモには [TH:<key>] を埋めているので、回答の「> 元メモ」引用から辿れる。
+// 旧データ(マーカー無し)は「▶続き:「タイトル」」の表記から復元する。
+function answerCleanTitle(t) {
+  return (t || "").replace(/^💬 回答: /, "").replace(/^▶続き:\s*/, "").replace(/^[「『]|[」』]$/g, "").trim();
+}
+function answerThreadKey(a) {
+  const q = answerSplit(a.detail).quote || "";
+  const m = q.match(/\[TH:([^\]]{1,80})\]/);
+  if (m) return m[1];
+  const m2 = q.match(/▶続き\s*:\s*[「『](.+?)[」』]/);
+  if (m2) return "t:" + m2[1].trim();
+  return "t:" + answerCleanTitle(a.title);
+}
+// 決着マーカー: 巡回タスク側が本文に【決着】を入れる / 晃良が手動で決着ボタンを押すと dest に残る
+function answerIsSettled(a) {
+  if (a.dest === "answer_settled") return true;
+  return /【決着】|\[決着\]/.test(answerSplit(a.detail).body || "");
+}
+// answersItems の各行に _thread/_turn/_turns/_settled/_latest を付与し、スレッドMapを返す
+function buildAnswerThreads() {
+  const groups = new Map();
+  answersItems.forEach(a => {
+    const k = answerThreadKey(a);
+    a._thread = k;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(a);
+  });
+  groups.forEach(items => {
+    // answersItems は新しい順。往復番号は古い順に 1,2,3…
+    items.sort((x, y) => new Date(x.created_at) - new Date(y.created_at));
+    const settledIdx = items.findIndex(answerIsSettled);
+    items.forEach((a, i) => {
+      a._turn = i + 1;
+      a._turns = items.length;
+      a._latest = (i === items.length - 1);
+      a._settled = (settledIdx !== -1 && i === settledIdx);
+      a._threadSettled = (settledIdx !== -1);
+    });
+  });
+  return groups;
+}
+
+// ========== 自動既読(2026-07-28) ==========
+// ルール: スレッド内で「残すべき1件」以外の未読を自動既読にする。
+//   ・決着回答があるスレッド → 決着回答だけ残す(他は用済み)
+//   ・無いスレッド → 最新の回答だけ残す(前の往復は続きが来た時点で用済み)
+// 単発(1往復)スレッドは対象外なので、読んでいない回答が勝手に消えることはない。
+async function autoConsumeAnswers() {
+  if (answersAutoBusy || !navigator.onLine) return;
+  const targets = answersItems.filter(a => {
+    if (a.consumed) return false;
+    if (!a._turns || a._turns < 2) return false;
+    return a._threadSettled ? !a._settled : !a._latest;
+  });
+  if (targets.length === 0) return;
+  answersAutoBusy = true;
+  const nowIso = new Date().toISOString();
+  try {
+    const { error } = await sb.from("ichibou_inbox")
+      .update({ consumed: true, consumed_at: nowIso, dest: "auto_superseded" })
+      .in("id", targets.map(a => a.id));
+    if (error) throw error;
+    targets.forEach(a => { a.consumed = true; a.consumed_at = nowIso; a.dest = "auto_superseded"; });
+    console.log("[回答タブ] 自動既読:", targets.length, "件");
+  } catch (e) {
+    console.error("Answer auto-consume error:", e);
+  } finally {
+    answersAutoBusy = false;
+  }
 }
 
 function renderAnswersCount() {
@@ -3395,6 +3478,7 @@ function answerSplit(detail) {
 }
 
 function renderAnswers() {
+  buildAnswerThreads();
   renderAnswersCount();
   const list = document.getElementById("answers-list");
   if (!list) return;
@@ -3411,19 +3495,32 @@ function renderAnswers() {
     const el = document.createElement("div");
     el.className = "answer-item" + (a.consumed ? " read" : "");
     const ts = a.created_at ? new Date(a.created_at).getTime() : Date.now();
+    // 往復回数バッジ(2026-07-28)。1往復しかないスレッドには出さない=ノイズ回避
+    const multi = (a._turns || 1) >= 2;
+    const turnBadge = multi
+      ? `<span class="answer-turn ${a._settled ? "settled" : (a._latest ? "latest" : "")}">${a._settled ? "決着" : a._turn + "回目/全" + a._turns + "回"}</span>`
+      : "";
+    const threadLine = multi
+      ? `<div class="answer-threadline">${a._latest
+          ? (a._threadSettled && a._settled ? "この話はここで決着。前の回では自動で既読にした。" : "この話の最新の回答。前の回は自動で既読にした。")
+          : "この後に続きの回答あり(全" + a._turns + "回)"}</div>`
+      : "";
     el.innerHTML = `
       <div class="answer-head">
         ${a.consumed ? "" : '<span class="answer-dot"></span>'}
+        ${turnBadge}
         <span class="answer-title">${escapeHtml((a.title || "").replace(/^💬 回答: /, ""))}</span>
         <span class="answer-time">${formatTs(ts)}</span>
       </div>
-      ${parts.quote ? `<div class="answer-quote collapsed" title="タップで元メモを全文表示" data-quote-toggle>${escapeHtml(parts.quote)}</div>` : ""}
+      ${threadLine}
+      ${parts.quote ? `<div class="answer-quote collapsed" title="タップで元メモを全文表示" data-quote-toggle>${escapeHtml(parts.quote.replace(/[ \t]*\[TH:[^\]]{1,80}\][ \t]*/g, " ").trim())}</div>` : ""}
       <div class="answer-body">${escapeHtml(parts.body)}</div>
       <div class="answer-actions">
         ${a.consumed
           ? '<button class="answer-btn" data-aact="unread">↩ 未読に戻す</button>'
           : '<button class="answer-btn primary" data-aact="read">✓ 既読にする</button>'}
         <button class="answer-btn" data-aact="tonote">→ 雑メモに控えを残す</button>
+        ${multi ? '<button class="answer-btn" data-aact="settle">✓✓ この話は決着(まとめて既読)</button>' : ""}
       </div>
     `;
     el.querySelectorAll("[data-aact]").forEach(btn => {
@@ -3442,16 +3539,20 @@ function renderAnswers() {
       const p2 = answerSplit(a.detail);
       // 2026-07-27: 送信=即応答化(晃良指示)。urgentClaude=true で最優先レーンに載せる。
       // 巡回が拾う仕組み上、完全な瞬時ではなく「数分以内」が物理限界(巡回は5分間隔)
+      // 2026-07-28: [TH:<key>] を埋めてスレッドを確定させる(次の回答の「> 元メモ」引用から辿れる)。
+      // これで「2回目/3回目」の往復番号がタイトル揺れに関係なく続く。
+      const thKey = a._thread || answerThreadKey(a);
+      const nextTurn = (a._turns || 1) + 1;
       state.logs.push(normalizeLog({
         id: uid(), ts: Date.now(),
-        text: `▶続き:「${(a.title || "").replace(/^💬 回答: /, "")}」\n${word || "(続き・深掘りを希望)"}\n\n> 元回答(抜粋): ${(p2.body || "").slice(0, 120)}…`,
+        text: `▶続き:「${(a.title || "").replace(/^💬 回答: /, "")}」[TH:${thKey}] (${nextTurn}回目)\n${word || "(続き・深掘りを希望)"}\n\n> 元回答(抜粋): ${(p2.body || "").slice(0, 120)}…`,
         projectId: null,
         wantAnswer: true,
         urgentClaude: true
       }));
       saveState();
       renderLogs();
-      reaskBtn.textContent = "✓ 送信済み(数分以内に回答が届く)";
+      reaskBtn.textContent = `✓ 送信済み(${nextTurn}回目・数分以内に回答が届く)`;
       reaskBtn.disabled = true;
       replyRow.querySelector(".answer-reply-input").disabled = true;
     });
@@ -3497,6 +3598,24 @@ async function handleAnswerAction(a, act) {
     await setAnswerConsumed(a, true, "answer_read");
   } else if (act === "unread") {
     await setAnswerConsumed(a, false, null);
+  } else if (act === "settle") {
+    // 2026-07-28: この話は終わり → スレッド内の全回答をまとめて既読にする
+    const mates = answersItems.filter(x => x._thread === a._thread);
+    const unread = mates.filter(x => !x.consumed);
+    const nowIso = new Date().toISOString();
+    unread.forEach(x => { x.consumed = true; x.consumed_at = nowIso; x.dest = "answer_settled"; });
+    a.dest = "answer_settled";
+    renderAnswers();
+    try {
+      const { error } = await sb.from("ichibou_inbox")
+        .update({ consumed: true, consumed_at: nowIso, dest: "answer_settled" })
+        .in("id", mates.map(x => x.id));
+      if (error) throw error;
+    } catch (e) {
+      console.error("Answer settle error:", e);
+      alert("スレッド一括既読に失敗。再読込を推奨。");
+      loadAnswers();
+    }
   } else if (act === "tonote") {
     // 回答を雑メモ側に控えとして残す(同時に既読化)
     const parts = answerSplit(a.detail);
@@ -3511,9 +3630,11 @@ async function handleAnswerAction(a, act) {
   }
 }
 
-document.querySelectorAll(".answers-filter-btn").forEach(btn => {
+// 2026-07-28 修正: 受信箱側([data-if])も .answers-filter-btn を共用しているため
+// セレクタを [data-af] に限定(以前は受信箱のフィルタ操作が回答タブの状態を壊していた)
+document.querySelectorAll(".answers-filter-btn[data-af]").forEach(btn => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".answers-filter-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".answers-filter-btn[data-af]").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     answersFilter = btn.dataset.af;
     renderAnswers();
