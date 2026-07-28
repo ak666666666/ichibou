@@ -316,9 +316,15 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .note-folder:hover { transform: translateY(-1px); box-shadow: var(--paper-shadow); border-color: var(--line); }
 .note-folder-name { font-weight: 500; font-size: 14px; }
 .note-folder-count { font-size: 11px; color: var(--ink-mute); margin-top: 6px; font-family: "JetBrains Mono", monospace; letter-spacing: 0.05em; }
-.note-folder-del { position: absolute; top: 6px; right: 8px; background: none; border: none; color: var(--ink-mute); cursor: pointer; font-size: 14px; opacity: 0; transition: opacity 0.15s, color 0.15s; padding: 2px 6px; }
-.note-folder:hover .note-folder-del { opacity: 1; }
+/* フォルダ操作ボタン(✎名前変更 / ×削除)
+   2026-07-28: 旧実装は opacity:0 + :hover 表示だったため、hover の無いスマホでは
+   永久に押せなかった(=「フォルダの編集ができない」の直接原因)。常時表示に変更。 */
+.note-folder-acts { position: absolute; top: 4px; right: 4px; display: flex; gap: 2px; }
+.note-folder-act-btn { background: none; border: none; color: var(--ink-mute); cursor: pointer; font-size: 14px; opacity: 0.5; transition: opacity 0.15s, color 0.15s; padding: 4px 7px; line-height: 1; }
+.note-folder:hover .note-folder-act-btn { opacity: 1; }
+.note-folder-edit:hover { color: var(--accent); }
 .note-folder-del:hover { color: #a13630; }
+@media (hover: none) { .note-folder-act-btn { opacity: 0.75; padding: 6px 9px; } }
 .notes-list { display: flex; flex-direction: column; gap: 8px; }
 .note-card { padding: 14px 16px; border: 1px solid var(--line-soft); background: #fbf9f3; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
 .note-card:hover { transform: translateY(-1px); box-shadow: var(--paper-shadow); border-color: var(--line); }
@@ -1177,6 +1183,29 @@ document.addEventListener("focusout", () => {
   }, 200);
 }, true);
 
+// ===== 編集中ノートの保護(2026-07-28 新設)=====
+// pull / realtime は state をリモート版で丸ごと差し替える。ノート編集モーダルを開いたまま
+// これが起きると、①新規作成直後のノートはリモートに存在しないため state から消滅し、
+// 以降の saveNoteEditNow() が「対象なし」で無言 return → 打った内容が全部消える。
+// ②既存ノートでも、まだ push されていないローカル編集がリモート版で巻き戻る。
+// 対策: 差し替えの直前に編集中ノートを退避し、差し替え後に「消えていたら復元 /
+// ローカルの方が新しければローカル優先」でマージする。
+function captureEditingNote() {
+  if (!editingNoteId || !Array.isArray(state.notes)) return null;
+  const n = state.notes.find(x => x.id === editingNoteId);
+  return n ? JSON.parse(JSON.stringify(n)) : null;
+}
+function restoreEditingNote(snapshot) {
+  if (!snapshot) return;
+  if (!Array.isArray(state.notes)) state.notes = [];
+  const idx = state.notes.findIndex(n => n.id === snapshot.id);
+  if (idx === -1) {
+    state.notes.push(snapshot);                       // リモートに無かった=新規作成中
+  } else if ((snapshot.updatedAt || 0) >= (state.notes[idx].updatedAt || 0)) {
+    state.notes[idx] = snapshot;                      // ローカル編集の方が新しい
+  }
+}
+
 function setSyncStatus(status, text) {
   const el = document.getElementById("sync-indicator");
   if (!el) return;
@@ -1227,6 +1256,7 @@ async function pullFromCloud() {
       const remoteStr = JSON.stringify(data.data);
       const localStr = JSON.stringify(state);
       if (remoteStr !== localStr) {
+        const editingSnap = captureEditingNote();
         state = data.data;
         if (!state.projects) state.projects = [];
         if (!state.logs) state.logs = [];
@@ -1235,6 +1265,7 @@ async function pullFromCloud() {
         if (!state.noteFolders) state.noteFolders = [];
         if (!state.tasks) state.tasks = [];
         normalizeState(state);
+        restoreEditingNote(editingSnap);
         saveLocal();
         lastSyncedData = remoteStr;
         safeRenderAll("pullFromCloud");
@@ -1253,6 +1284,7 @@ function subscribeRealtime() {
       const newStr = JSON.stringify(newData);
       if (newStr === lastSyncedData) return;
       if (newStr === JSON.stringify(state)) return;
+      const editingSnap = captureEditingNote();
       state = newData;
       if (!state.projects) state.projects = [];
       if (!state.logs) state.logs = [];
@@ -1261,6 +1293,7 @@ function subscribeRealtime() {
       if (!state.noteFolders) state.noteFolders = [];
       if (!state.tasks) state.tasks = [];
       normalizeState(state);
+      restoreEditingNote(editingSnap);
       saveLocal();
       lastSyncedData = newStr;
       safeRenderAll("realtime");
@@ -2567,7 +2600,7 @@ function renderNotes() {
           const parent = state.noteFolders.find(x => x.id === f.parentId);
           if (parent) html += ` › <a data-fid="${parent.id}">${escapeHtml(parent.name)}</a>`;
         }
-        html += ` › <strong>${escapeHtml(f.name)}</strong>`;
+        html += ` › <strong>${escapeHtml(f.name)}</strong> <a data-rename="${f.id}" title="フォルダ名を変更">✎</a>`;
       } else {
         currentFolderId = null;
       }
@@ -2576,6 +2609,8 @@ function renderNotes() {
     breadcrumb.querySelectorAll('a[data-fid]').forEach(a => {
       a.onclick = () => { currentFolderId = a.dataset.fid || null; renderNotes(); };
     });
+    const renameLink = breadcrumb.querySelector('a[data-rename]');
+    if (renameLink) renameLink.onclick = () => renameNoteFolder(renameLink.dataset.rename);
   }
 
   // 子フォルダ(検索中は非表示)
@@ -2593,15 +2628,20 @@ function renderNotes() {
       }).length;
       const totalNote = directNotes + subFolderNotes;
       card.innerHTML = `
-        <button class="note-folder-del" title="フォルダを削除">×</button>
+        <div class="note-folder-acts">
+          <button class="note-folder-act-btn note-folder-edit" title="フォルダ名を変更">✎</button>
+          <button class="note-folder-act-btn note-folder-del" title="フォルダを削除">×</button>
+        </div>
         <div class="note-folder-name">📂 ${escapeHtml(f.name)}</div>
         <div class="note-folder-count">${childCount > 0 ? `📁 ${childCount}  ` : ''}📝 ${totalNote}</div>
       `;
       card.onclick = (e) => {
-        if (e.target.classList.contains('note-folder-del')) return;
+        if (e.target.closest('.note-folder-acts')) return;
         currentFolderId = f.id;
         renderNotes();
       };
+      const editBtn = card.querySelector('.note-folder-edit');
+      editBtn.onclick = (e) => { e.stopPropagation(); renameNoteFolder(f.id); };
       const delBtn = card.querySelector('.note-folder-del');
       delBtn.onclick = (e) => { e.stopPropagation(); deleteNoteFolder(f.id); };
       folderEl.appendChild(card);
@@ -2688,6 +2728,19 @@ function createNoteFolder() {
     createdAt: Date.now()
   });
   state.noteFolders.push(folder);
+  saveState();
+  renderNotes();
+}
+
+// フォルダ名の変更(2026-07-28 新設。作成後に名前を直す手段が一切無かった)
+function renameNoteFolder(folderId) {
+  const folder = state.noteFolders.find(f => f.id === folderId);
+  if (!folder) return;
+  const name = prompt("フォルダ名を変更", folder.name || "");
+  if (name === null) return;              // キャンセル
+  if (!name.trim()) return;               // 空名は無視(誤消去防止)
+  if (name.trim() === folder.name) return;
+  folder.name = name.trim();
   saveState();
   renderNotes();
 }
