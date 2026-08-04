@@ -663,6 +663,15 @@ html { zoom: var(--ui-zoom, 1); }
 .answer-turn { font-size:10.5px; font-family:"JetBrains Mono",monospace; color:var(--bg); background:var(--ink-soft); padding:2px 8px; border-radius:999px; flex:none; letter-spacing:.02em; }
 .answer-turn.latest { background:#b88a2e; }
 .answer-turn.settled { background:#3f7d5a; }
+/* 2026-08-04: 「終わった話 / まだ終わってない話」を一目で分ける状態バッジ */
+.answer-state { font-size:10.5px; padding:2px 9px; border-radius:999px; flex:none; font-weight:700; letter-spacing:.02em; }
+.answer-state.settled { background:#3f7d5a; color:#fff; }
+.answer-state.open    { background:#f4e3bd; color:#7a5a12; border:1px solid #d9bd7c; }
+.answer-state.unknown { background:transparent; color:var(--ink-mute); border:1px solid var(--line); }
+.answer-stateline { font-size:11.5px; margin:-2px 0 8px; padding-left:2px; }
+.answer-stateline.settled { color:#2f6349; }
+.answer-stateline.open    { color:#8a6620; }
+.answer-stateline.unknown { color:var(--ink-mute); }
 .answer-threadline { font-size:11px; color:var(--ink-mute); margin:-2px 0 8px; padding-left:2px; }
 .answer-time { color:var(--ink-mute); font-size:11px; font-family:"JetBrains Mono",monospace; flex:none; }
 .answer-quote { color:var(--ink-mute); font-size:12px; line-height:1.7; border-left:2px solid var(--line); padding-left:10px; margin-bottom:10px; white-space:pre-wrap; word-break:break-word; cursor:pointer; position:relative; }
@@ -3880,9 +3889,28 @@ function answerThreadKey(a) {
   return "t:" + answerCleanTitle(a.title);
 }
 // 決着マーカー: 巡回タスク側が本文に【決着】を入れる / 晃良が手動で決着ボタンを押すと dest に残る
+// 回答本文の末尾マーカーで「この話が終わったか」を判定する(2026-08-04)。
+//   【決着】= もう返さなくてよい / 【継続】= まだ終わっていない(晃良の返事や続きが要る)
+// マーカーを書くのは回答を生成する側(watcher_prompt.md / 巡回タスク)。
+// 印が無い古い回答は「未判定」として、勝手に終わった扱いにはしない。
+const ANSWER_MARK_SETTLED = /【決着】|\[決着\]/;
+const ANSWER_MARK_OPEN    = /【継続】|\[継続\]/;
+
 function answerIsSettled(a) {
   if (a.dest === "answer_settled") return true;
-  return /【決着】|\[決着\]/.test(answerSplit(a.detail).body || "");
+  return ANSWER_MARK_SETTLED.test(answerSplit(a.detail).body || "");
+}
+// 'settled' | 'open' | 'unknown'
+function answerState(a) {
+  if (answerIsSettled(a)) return "settled";
+  if (ANSWER_MARK_OPEN.test(answerSplit(a.detail).body || "")) return "open";
+  return "unknown";
+}
+// 本文からマーカーを取り除いて表示する(生の【決着】が読者に見えないように)
+function answerStripMarks(body) {
+  return (body || "").replace(/^[ \t]*(?:【(?:決着|継続)】|\[(?:決着|継続)\])[ \t]*$/gm, "")
+                     .replace(/(?:【(?:決着|継続)】|\[(?:決着|継続)\])/g, "")
+                     .replace(/\n{3,}/g, "\n\n").trim();
 }
 // answersItems の各行に _thread/_turn/_turns/_settled/_latest を付与し、スレッドMapを返す
 function buildAnswerThreads() {
@@ -3902,6 +3930,7 @@ function buildAnswerThreads() {
       a._turns = items.length;
       a._latest = (i === items.length - 1);
       a._settled = (settledIdx !== -1 && i === settledIdx);
+      a._state = answerState(a);
       a._threadSettled = (settledIdx !== -1);
     });
   });
@@ -3981,29 +4010,40 @@ function renderAnswers() {
     // 往復回数バッジ(2026-07-28)。1往復しかないスレッドには出さない=ノイズ回避
     const multi = (a._turns || 1) >= 2;
     const turnBadge = multi
-      ? `<span class="answer-turn ${a._settled ? "settled" : (a._latest ? "latest" : "")}">${a._settled ? "決着" : a._turn + "回目/全" + a._turns + "回"}</span>`
+      ? `<span class="answer-turn ${a._latest ? "latest" : ""}">${a._turn}回目/全${a._turns}回</span>`
       : "";
-    const threadLine = multi
-      ? `<div class="answer-threadline">${a._latest
-          ? (a._threadSettled && a._settled ? "この話はここで決着(テーマ自体が終わり)。前の回は自動で隠した。" : "この話の最新の回答。まだ続けられる。前の回は自動で隠した。")
-          : "この後に続きの回答あり(全" + a._turns + "回)"}</div>`
-      : "";
+
+    // 2026-08-04: 「終わった話か / まだ終わってない話か」を最優先で見せる。
+    // 判定するのは回答を書いた側(マーカー)。晃良が読み取って自分で閉じるのは別の操作(下のボタン)。
+    const STATE_LABEL = { settled: "✓ 決着", open: "⏳ 継続中", unknown: "− 未判定" };
+    const stateBadge = `<span class="answer-state ${a._state}">${STATE_LABEL[a._state]}</span>`;
+    let stateText;
+    if (a._state === "settled") {
+      stateText = "この話は決着。もう返さなくてOK。";
+    } else if (a._state === "open") {
+      stateText = "まだ終わっていない。続きが要るなら下の ➤ 送信で返せる。";
+    } else {
+      stateText = "終わったかどうかは未判定(判定前の古い回答)。読んで自分で決めてOK。";
+    }
+    if (multi && !a._latest) stateText = `この後に続きの回答あり(全${a._turns}回)。`;
+    const stateLine = `<div class="answer-stateline ${a._state}">${escapeHtml(stateText)}</div>`;
     el.innerHTML = `
       <div class="answer-head">
         ${a.consumed ? "" : '<span class="answer-dot"></span>'}
+        ${stateBadge}
         ${turnBadge}
         <span class="answer-title">${escapeHtml((a.title || "").replace(/^💬 回答: /, ""))}</span>
         <span class="answer-time">${formatTs(ts)}</span>
       </div>
-      ${threadLine}
+      ${stateLine}
       ${parts.quote ? `<div class="answer-quote collapsed" title="タップで元メモを全文表示" data-quote-toggle>${escapeHtml(parts.quote.replace(/[ \t]*\[TH:[^\]]{1,80}\][ \t]*/g, " ").trim())}</div>` : ""}
-      <div class="answer-body">${escapeHtml(parts.body)}</div>
+      <div class="answer-body">${escapeHtml(answerStripMarks(parts.body))}</div>
       <div class="answer-actions">
         ${a.consumed
           ? '<button class="answer-btn" data-aact="unread">↩ 未読に戻す</button>'
           : '<button class="answer-btn primary" data-aact="read" title="この回答カードを一覧から隠すだけ。話が終わるわけではないので、あとで ➤ 送信で続けられる">✓ 読んだ(この回答を隠す)</button>'}
         <button class="answer-btn" data-aact="tonote">${answerSourceNote(a) ? "→ 元のノートに控えを残す" : "→ 雑メモに控えを残す"}</button>
-        ${multi ? '<button class="answer-btn" data-aact="settle" title="このテーマ自体を終わりにする。スレッドの全回答を隠す">✓✓ この話は終わり(まとめて隠す)</button>' : ""}
+        ${multi ? '<button class="answer-btn" data-aact="settle" title="上の状態表示に関係なく、晃良の判断でこのテーマを閉じる操作。スレッドの全回答を隠す">✓✓ このテーマを閉じる(自分で判断)</button>' : ""}
       </div>
     `;
     el.querySelectorAll("[data-aact]").forEach(btn => {
