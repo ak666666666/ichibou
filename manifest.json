@@ -5,10 +5,10 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "any",
   "background_color": "#f4f1ea",
   "theme_color": "#f4f1ea",
   "lang": "ja",
+  "orientation": "natural",
   "categories": ["productivity", "utilities"],
   "icons": [
     {

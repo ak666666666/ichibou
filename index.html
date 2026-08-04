@@ -572,6 +572,65 @@ html { zoom: var(--ui-zoom, 1); }
 .task-actions { display: flex; gap: 6px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
 .task-chip { font-family: inherit; font-size: 10px; padding: 2px 7px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); cursor: pointer; font-weight: 600; letter-spacing: 0.04em; }
 .task-chip:hover { border-color: var(--accent); color: var(--accent); }
+/* 期限チップ(dueAt)/ 期限ピッカー(2026-07-29 タスク期限の後編集) */
+.task-chip.task-due-chip { border-color: var(--line); }
+.task-chip.task-due-chip.overdue { background: #a13630; border-color: #a13630; color: #fff; }
+.task-chip.task-due-chip.soon { background: var(--amber, #c98a2b); border-color: var(--amber, #c98a2b); color: #fff; }
+.task-due-menu { margin-top: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2, #fff); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.task-due-opt { font-family: inherit; font-size: 11px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); cursor: pointer; font-weight: 600; }
+.task-due-opt:hover { border-color: var(--accent); color: var(--accent); }
+.task-due-opt.cur { border-color: var(--accent); color: var(--accent); background: rgba(0,0,0,0.03); }
+.task-due-date { font-size: 11px; color: var(--ink-soft); display: flex; align-items: center; gap: 5px; font-weight: 600; }
+.task-due-date input { font-family: inherit; font-size: 11px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink-soft); }
+.task-due-menu .task-due-close { margin-left: auto; }
+@media (hover: none) { .task-due-opt { padding: 8px 12px; font-size: 12px; } }
+/* ===== 月グリッドカレンダー(2026-07-31 / A案承認 x2s3a827x・雑メモ xn5txvm86)===== */
+.tasks-viewmode { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; }
+.tasks-viewmode-btn { font-family: inherit; font-size: 12px; padding: 5px 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); border-radius: 14px; cursor: pointer; font-weight: 600; }
+.tasks-viewmode-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cal-wrap { background: rgba(255,255,255,0.4); border-radius: 8px; padding: 12px; box-shadow: var(--paper-shadow); }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.cal-month { font-family: "Shippori Mincho", serif; font-size: 17px; font-weight: 700; letter-spacing: 0.06em; }
+.cal-nav { display: flex; gap: 6px; }
+.cal-nav-btn { font-family: inherit; font-size: 12px; padding: 4px 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); border-radius: 8px; cursor: pointer; font-weight: 600; }
+.cal-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-dow { text-align: center; font-size: 10px; color: var(--ink-mute); font-weight: 700; padding: 3px 0; }
+.cal-dow.sun { color: #a13630; }
+.cal-dow.sat { color: #2f5d8c; }
+.cal-cell { position: relative; min-height: 52px; border: 1px solid var(--line-soft); border-radius: 5px; background: var(--bg); padding: 3px 4px; cursor: pointer; text-align: left; font-family: inherit; overflow: hidden; }
+.cal-cell:hover { border-color: var(--accent); }
+.cal-cell.other { opacity: 0.35; }
+.cal-cell.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cal-cell.sel { background: rgba(0,0,0,0.05); border-color: var(--accent); }
+.cal-daynum { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-soft); font-weight: 700; }
+.cal-cell.sun .cal-daynum { color: #a13630; }
+.cal-cell.sat .cal-daynum { color: #2f5d8c; }
+.cal-dots { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
+.cal-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.cal-dot.task { background: #a13630; }
+.cal-dot.log { background: #2f5d8c; }
+.cal-dot.moya { background: var(--amber, #c98a2b); }
+.cal-dot.done { opacity: 0.35; }
+.cal-badge { position: absolute; right: 3px; bottom: 2px; font-family: "JetBrains Mono", monospace; font-size: 9px; color: var(--ink-mute); }
+.cal-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; font-size: 10px; color: var(--ink-mute); align-items: center; }
+.cal-legend span { display: flex; align-items: center; gap: 4px; }
+.cal-day { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.cal-day-h { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+.cal-day-empty { font-size: 12px; color: var(--ink-mute); }
+.cal-day-row { display: flex; gap: 7px; align-items: flex-start; padding: 5px 2px; border-bottom: 1px solid var(--line-soft); font-size: 12px; line-height: 1.5; }
+.cal-day-row:last-child { border-bottom: none; }
+.cal-day-kind { flex-shrink: 0; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 8px; color: #fff; }
+.cal-day-kind.task { background: #a13630; }
+.cal-day-kind.log { background: #2f5d8c; }
+.cal-day-kind.moya { background: var(--amber, #c98a2b); }
+.cal-day-text { flex: 1; min-width: 0; color: var(--ink-soft); word-wrap: break-word; white-space: pre-wrap; }
+.cal-day-row.done .cal-day-text { text-decoration: line-through; opacity: 0.6; }
+@media (max-width: 600px) {
+  .cal-cell { min-height: 44px; padding: 2px 3px; }
+  .cal-daynum { font-size: 10px; }
+  .cal-dot { width: 5px; height: 5px; }
+}
 .task-del { font-family: inherit; font-size: 10px; padding: 2px 7px; border-radius: 8px; border: 1px solid rgba(161,54,48,0.4); background: transparent; color: #a13630; cursor: pointer; font-weight: 600; }
 .task-del:hover { background: #a13630; color: #fff; }
 .task-note-input { width: 100%; margin-top: 5px; font-family: inherit; font-size: 12px; line-height: 1.5; padding: 6px 8px; border: 1px solid var(--line-soft); border-radius: 3px; background: transparent; color: var(--ink-soft); resize: vertical; min-height: 32px; box-sizing: border-box; }
@@ -637,6 +696,14 @@ html { zoom: var(--ui-zoom, 1); }
 @media (max-width: 600px) { .attach-chip a { max-width:180px; } }
 /* ===== 再回答申請(2026-07-26)===== */
 .answer-reply-row { display:flex; gap:6px; margin-top:10px; }
+/* 2026-08-04: ➤送信の即時フィードバック(生成中インジケータ)と 🚀デプロイボタン */
+.answer-wait { display:flex; align-items:center; gap:8px; border:1px solid #b88a2e; background:#fdf8ec; padding:10px 14px; margin-bottom:12px; font-size:12.5px; color:#8a6620; }
+.answer-wait.done { border-color:#3f7d5a; background:#eef6f1; color:#2f6349; }
+.answer-wait.fail { border-color:#c8502e; background:#fbeeea; color:#a03c1f; }
+.answer-wait .spin { width:11px; height:11px; border:2px solid #e6d9bb; border-top-color:#b88a2e; border-radius:50%; animation:ansspin .8s linear infinite; flex:none; }
+@keyframes ansspin { to { transform:rotate(360deg); } }
+.deploy-btn { border:1px solid #b88a2e; background:transparent; color:#8a6620; padding:6px 14px; font-size:12px; cursor:pointer; font-family:inherit; border-radius:999px; margin-left:auto; flex:none; }
+.deploy-btn:disabled { opacity:.5; cursor:default; }
 .answer-reply-input { flex:1; min-width:0; border:1px solid var(--line); background:#fbf9f3; padding:6px 10px; font-size:12px; font-family:inherit; }
 .answer-reply-input:disabled { opacity:.5; }
 </style>
@@ -655,6 +722,10 @@ html { zoom: var(--ui-zoom, 1); }
         <span class="sync-dot"></span>
         <span id="sync-text">起動中</span>
       </div>
+      <div class="sync-indicator" id="backup-indicator" title="PCウォッチャーによるGoogleドライブ世代バックアップの状況">
+        <span class="sync-dot"></span>
+        <span id="backup-text">🗄 確認中</span>
+      </div>
       <div class="fontsize-toggle" id="fontsize-toggle" title="文字サイズ">
         <button class="fs-btn" data-size="small">小</button>
         <button class="fs-btn active" data-size="medium">中</button>
@@ -664,17 +735,18 @@ html { zoom: var(--ui-zoom, 1); }
   </header>
 
   <nav class="tabs">
-    <button class="tab active" data-view="projects">プロジェクト <span class="count" id="count-projects">0</span></button>
+    <!-- 2026-08-01: プロジェクトタブを撤去し、その位置(先頭)にタスクを移動(もやタブ撤去と同方式・データとview-projectsのDOMは温存) -->
+    <button class="tab active" data-view="tasks">タスク <span class="count" id="count-tasks">0</span></button>
     <button class="tab" data-view="inbox">受信箱 <span class="count" id="count-inbox">0</span></button>
     <button class="tab" data-view="answers">回答 <span class="count" id="count-answers">0</span></button>
     <button class="tab" data-view="capture">雑メモ <span class="count" id="count-logs">0</span></button>
     <button class="tab" data-view="notes">ノート <span class="count" id="count-notes">0</span></button>
-    <button class="tab" data-view="tasks">タスク <span class="count" id="count-tasks">0</span></button>
     <button class="tab" data-view="takoashi">タコ足</button>
     <button class="tab" data-view="weekly">週次</button>
   </nav>
 
-  <section class="view active" id="view-projects">
+  <!-- 2026-08-01: タブ撤去により到達不能(DOM・データ・renderProjects は温存) -->
+  <section class="view" id="view-projects">
     <div class="ichibou-header">
       <div class="ichibou-title">
         進行中<span class="sub">次の一手が書いてあるプロジェクトだけが、脳から降ろせる</span>
@@ -711,7 +783,9 @@ html { zoom: var(--ui-zoom, 1); }
       <div class="answers-toolbar">
         <button class="answers-filter-btn active" data-af="unread">未読のみ</button>
         <button class="answers-filter-btn" data-af="all">すべて</button>
+        <button class="deploy-btn" id="btn-deploy" title="PCの常駐ウォッチャーが本番へ反映します(PC操作は不要)">🚀 本番へ反映</button>
       </div>
+      <div id="answers-waiting"></div>
       <div class="answers-list" id="answers-list"></div>
     </div>
   </section>
@@ -783,7 +857,7 @@ html { zoom: var(--ui-zoom, 1); }
     </div>
   </section>
 
-  <section class="view" id="view-tasks">
+  <section class="view active" id="view-tasks">
     <div class="tasks-wrap">
       <div class="tasks-header">
         <div>
@@ -806,6 +880,11 @@ html { zoom: var(--ui-zoom, 1); }
         <button class="tasks-input-add" id="task-input-add">＋ 追加</button>
       </div>
       <div class="tasks-meta" id="tasks-meta"></div>
+      <div class="tasks-viewmode">
+        <button class="tasks-viewmode-btn active" data-tvm="list" title="時間軸(本日/今週/今月/先)ごとの一覧">📋 リスト</button>
+        <button class="tasks-viewmode-btn" data-tvm="calendar" title="月グリッドで日別に一望する">🗓 カレンダー</button>
+      </div>
+      <div class="tasks-calendar" id="tasks-calendar" style="display:none;"></div>
       <div class="tasks-filter">
         <button class="tasks-filter-btn active" data-filter="today">本日のみ</button>
         <button class="tasks-filter-btn" data-filter="thisWeek">今週まで</button>
@@ -1106,6 +1185,8 @@ function normalizeTask(t) {
     bucket: TASK_BUCKETS.includes(t.bucket) ? t.bucket : "today",
     type: TASK_TYPES.includes(t.type) ? t.type : "action",
     note: t.note || "",
+    // dueAt = 具体的な期限(epoch ms / 未設定は null)。bucket(ざっくり時間軸)と併用 / 2026-07-29
+    dueAt: typeof t.dueAt === "number" ? t.dueAt : null,
     completed: !!t.completed,
     completedAt: t.completedAt || null,
     wantAnswer: t.wantAnswer === true,
@@ -1380,10 +1461,12 @@ document.querySelectorAll(".tab").forEach(tab => {
 // ===== プロジェクト =====
 function renderProjects() {
   const grid = document.getElementById("projects-grid");
+  if (!grid) return; // 2026-08-01: プロジェクトタブ撤去後の安全弁
   grid.innerHTML = "";
   const active = state.projects.filter(p => !p.frozen);
   const frozen = state.projects.filter(p => p.frozen);
-  document.getElementById("count-projects").textContent = active.length;
+  const cntEl = document.getElementById("count-projects");
+  if (cntEl) cntEl.textContent = active.length; // タブ撤去でカウンタが無くなっても落ちないように
   [...active, ...frozen].forEach(p => grid.appendChild(projectCard(p)));
   const addCard = document.createElement("div");
   addCard.className = "project add-project";
@@ -1621,10 +1704,14 @@ document.getElementById("promote-ok").addEventListener("click", () => {
   promoteTargetMoya = null;
   renderMoyas();
   renderProjects();
-  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-  document.querySelector('.tab[data-view="projects"]').classList.add("active");
-  document.getElementById("view-projects").classList.add("active");
+  // 2026-08-01: プロジェクトタブ撤去後は昇格先タブが無いので、タブ移動はタブが存在する時だけ行う
+  const projTab = document.querySelector('.tab[data-view="projects"]');
+  if (projTab) {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    projTab.classList.add("active");
+    document.getElementById("view-projects").classList.add("active");
+  }
 });
 
 // ===== プロジェクト→もや降格 =====
@@ -2963,6 +3050,10 @@ function renderAll() {
 let tasksFilter = "today";        // today / thisWeek / all(時間軸フィルタ)
 let tasksTypeFilter = "all";       // all / action / decision
 let tasksHideDone = false;
+// 月グリッドカレンダー(2026-07-31)。タブ数は8で上限のため新規タブは作らず、タスクタブ内の表示切替として実装
+let tasksViewMode = "list";        // list / calendar
+let calAnchor = null;              // 表示中の月(その月の1日 / null = 今月)
+let calSelectedYmd = null;         // 日別詳細で開いている日 "YYYY-MM-DD"
 
 function tasksArr() {
   if (!Array.isArray(state.tasks)) state.tasks = [];
@@ -3036,6 +3127,27 @@ function renderTasks() {
   listEl.innerHTML = "";
   emptyEl.style.display = "none";
 
+  // 表示モード(リスト / カレンダー)。カレンダー時はリスト側UIを丸ごと隠す
+  const calEl = document.getElementById("tasks-calendar");
+  const filterEl = document.querySelector("#view-tasks .tasks-filter");
+  const isCal = tasksViewMode === "calendar";
+  if (calEl) calEl.style.display = isCal ? "block" : "none";
+  if (filterEl) filterEl.style.display = isCal ? "none" : "flex";
+  listEl.style.display = isCal ? "none" : "flex";
+  document.querySelectorAll("#view-tasks .tasks-viewmode-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.tvm === tasksViewMode);
+  });
+  if (isCal) {
+    const all0 = tasksArr();
+    const rem0 = all0.filter(t => !t.completed).length;
+    metaEl.innerHTML = all0.length === 0
+      ? "まだタスクがありません。上の欄から追加してください。"
+      : `全 ${all0.length} 件 · 残 <strong>${rem0}</strong> 件 · 完了 ${all0.length - rem0}/${all0.length}`;
+    renderTaskCalendar();
+    renderTasksCount();
+    return;
+  }
+
   const all = tasksArr();
   const total = all.length;
   const remaining = all.filter(t => !t.completed).length;
@@ -3079,6 +3191,186 @@ function renderTasks() {
   renderTasksCount();
 }
 
+// ===== 月グリッドカレンダー(2026-07-31 / A案承認 x2s3a827x / 雑メモ xn5txvm86)=====
+// 承認済みの初期スコープ3点だけを入れる: ①日別ドット ②件数バッジ ③期日つきタスクの位置表示。
+// 色は既存の取り決めを踏襲 = タスク:赤 / 雑メモ:青 / もや:黄。
+function calYmd(ts) {
+  const d = new Date(ts);
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+// その月に出す「日 → 出来事」の索引を1回で作る(セルごとに全件走査しない)
+function calBuildIndex() {
+  const idx = {};
+  const put = (ymd, kind, obj) => {
+    if (!ymd) return;
+    (idx[ymd] || (idx[ymd] = [])).push({ kind, obj });
+  };
+  tasksArr().forEach(t => { if (t.dueAt) put(calYmd(t.dueAt), "task", t); });
+  (Array.isArray(state.logs) ? state.logs : []).forEach(l => { if (l.ts) put(calYmd(l.ts), "log", l); });
+  (Array.isArray(state.moyas) ? state.moyas : []).forEach(m => { if (m.ts) put(calYmd(m.ts), "moya", m); });
+  return idx;
+}
+function calItemText(it) {
+  const o = it.obj || {};
+  return String(o.title || o.text || "").trim() || "(無題)";
+}
+function renderTaskCalendar() {
+  const wrap = document.getElementById("tasks-calendar");
+  if (!wrap) return;
+  const now = new Date();
+  const anchor = calAnchor ? new Date(calAnchor) : new Date(now.getFullYear(), now.getMonth(), 1);
+  const y = anchor.getFullYear(), m = anchor.getMonth();
+  const first = new Date(y, m, 1);
+  const start = new Date(y, m, 1 - first.getDay());     // 週の頭(日曜)まで戻す
+  const todayYmd = calYmd(now.getTime());
+  const idx = calBuildIndex();
+
+  const dows = ["日", "月", "火", "水", "木", "金", "土"];
+  let cells = dows.map((d, i) => `<div class="cal-dow${i === 0 ? " sun" : i === 6 ? " sat" : ""}">${d}</div>`).join("");
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const ymd = calYmd(d.getTime());
+    const items = idx[ymd] || [];
+    const cls = [
+      "cal-cell",
+      d.getMonth() !== m ? "other" : "",
+      ymd === todayYmd ? "today" : "",
+      ymd === calSelectedYmd ? "sel" : "",
+      d.getDay() === 0 ? "sun" : d.getDay() === 6 ? "sat" : ""
+    ].filter(Boolean).join(" ");
+    // ドットは最大6個まで(それ以上は件数バッジ側で表現)
+    const dots = items.slice(0, 6).map(it =>
+      `<i class="cal-dot ${it.kind}${it.kind === "task" && it.obj.completed ? " done" : ""}"></i>`
+    ).join("");
+    const badge = items.length > 6 ? `<span class="cal-badge">${items.length}</span>` : "";
+    cells += `<button type="button" class="${cls}" data-ymd="${ymd}">`
+      + `<span class="cal-daynum">${d.getDate()}</span>`
+      + `<span class="cal-dots">${dots}</span>${badge}</button>`;
+  }
+
+  wrap.innerHTML = `
+    <div class="cal-wrap">
+      <div class="cal-head">
+        <div class="cal-month">${y}年 ${m + 1}月</div>
+        <div class="cal-nav">
+          <button class="cal-nav-btn" data-cal="prev">‹ 前月</button>
+          <button class="cal-nav-btn" data-cal="today">今月</button>
+          <button class="cal-nav-btn" data-cal="next">翌月 ›</button>
+        </div>
+      </div>
+      <div class="cal-grid">${cells}</div>
+      <div class="cal-legend">
+        <span><i class="cal-dot task"></i>タスク期日</span>
+        <span><i class="cal-dot log"></i>雑メモ</span>
+        <span><i class="cal-dot moya"></i>もや</span>
+        <span>薄いドット=完了済 / 数字=その日の件数</span>
+      </div>
+      <div class="cal-day" id="cal-day"></div>
+    </div>`;
+
+  // 日別詳細(セルをタップした日の中身)
+  const dayEl = wrap.querySelector("#cal-day");
+  if (calSelectedYmd) {
+    const items = idx[calSelectedYmd] || [];
+    const label = { task: "タスク", log: "雑メモ", moya: "もや" };
+    dayEl.innerHTML = `<div class="cal-day-h">${calSelectedYmd.replace(/-/g, "/")} の予定・記録(${items.length}件)</div>`
+      + (items.length === 0
+        ? `<div class="cal-day-empty">この日に紐づくものはありません。</div>`
+        : items.map(it =>
+            `<div class="cal-day-row${it.kind === "task" && it.obj.completed ? " done" : ""}">`
+            + `<span class="cal-day-kind ${it.kind}">${label[it.kind]}</span>`
+            + `<span class="cal-day-text">${escapeHtml(calItemText(it))}</span></div>`
+          ).join(""));
+  } else {
+    dayEl.innerHTML = `<div class="cal-day-empty">日付をタップすると、その日のタスク期日・雑メモ・もやが出ます。</div>`;
+  }
+
+  wrap.querySelectorAll("[data-cal]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const k = btn.dataset.cal;
+      if (k === "prev") calAnchor = new Date(y, m - 1, 1).getTime();
+      else if (k === "next") calAnchor = new Date(y, m + 1, 1).getTime();
+      else { calAnchor = null; calSelectedYmd = null; }
+      renderTaskCalendar();
+    });
+  });
+  wrap.querySelectorAll(".cal-cell").forEach(cell => {
+    cell.addEventListener("click", () => {
+      const ymd = cell.dataset.ymd;
+      calSelectedYmd = (calSelectedYmd === ymd) ? null : ymd;   // 同じ日を再タップで閉じる
+      renderTaskCalendar();
+    });
+  });
+}
+
+// ===== タスク期限(2026-07-29 / 雑メモ xl2yqh6c5・xvmgxw1lk / 案A 承認済 xwczhdpv1)=====
+// 従来はチップをタップするたび 本日→今週→今月→先 と1つずつ回る方式で、
+// 「今月を今週に戻す」に3タップ必要=「後から自由に変えられない」体感になっていた。
+// → タップで選択メニューを開き、どれにでも1タップで飛べる形にする。日付指定(dueAt)も同じメニューから。
+function taskDueYmd(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function taskDueLabel(ts) {
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+function taskDueState(ts) {
+  if (!ts) return "";
+  const now = Date.now();
+  if (ts < now) return "overdue";
+  if (ts - now < 2 * 86400000) return "soon";
+  return "";
+}
+function closeTaskDueMenus(except) {
+  document.querySelectorAll(".task-due-menu").forEach(el => { if (el !== except) el.remove(); });
+}
+// 期限メニューを該当タスクの操作行の下に開く(モバイルでも位置ズレしないブロック表示)
+function openTaskDueMenu(t, itemEl) {
+  const exist = itemEl.querySelector(".task-due-menu");
+  closeTaskDueMenus();
+  if (exist) return;                      // 開いていたら閉じるだけ(トグル)
+  const menu = document.createElement("div");
+  menu.className = "task-due-menu";
+  const opts = TASK_BUCKETS.map(b => {
+    const m = TASK_BUCKET_META[b];
+    const cur = b === t.bucket ? " cur" : "";
+    return `<button class="task-due-opt${cur}" data-b="${b}">${m.icon} ${escapeHtml(m.label)}${cur ? " ✓" : ""}</button>`;
+  }).join("");
+  menu.innerHTML = opts
+    + `<label class="task-due-date">📌 日付<input type="date" class="task-due-input" value="${taskDueYmd(t.dueAt)}"></label>`
+    + (t.dueAt ? `<button class="task-due-opt" data-clear="1">✕ 日付を外す</button>` : "")
+    + `<button class="task-due-opt task-due-close" data-close="1">閉じる</button>`;
+  const acts = itemEl.querySelector(".task-actions");
+  acts.parentNode.insertBefore(menu, acts.nextSibling);
+  menu.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    if (btn.dataset.close) { menu.remove(); return; }
+    if (btn.dataset.clear) { updateTask(t.id, { dueAt: null }); closeTaskDueMenus(); renderTasks(); return; }
+    if (btn.dataset.b) { updateTask(t.id, { bucket: btn.dataset.b }); closeTaskDueMenus(); renderTasks(); }
+  });
+  menu.querySelector(".task-due-input").addEventListener("change", (e) => {
+    const v = e.target.value;
+    // 期限は「その日の終わりまで」= 23:59 締め(2026-07-22 合意の締め方に合わせる)
+    const ts = v ? new Date(`${v}T23:59:59`).getTime() : null;
+    updateTask(t.id, { dueAt: Number.isFinite(ts) ? ts : null });
+    closeTaskDueMenus();
+    renderTasks();
+  });
+}
+// メニュー外タップで閉じる(1回だけ登録)
+if (!window.__taskDueMenuBound) {
+  window.__taskDueMenuBound = true;
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".task-due-menu") || e.target.closest('[data-act="bucket"]') || e.target.closest('[data-act="due"]')) return;
+    closeTaskDueMenus();
+  });
+}
+
 // 1タスク分の DOM(完了 / タイトル編集 / 時間軸・タイプ変更 / メモ / 削除)
 function taskItemEl(t) {
   const item = document.createElement("div");
@@ -3096,7 +3388,8 @@ function taskItemEl(t) {
         <div class="task-title"${t.completed ? "" : ' contenteditable="true"'}>${escapeHtml(t.title || "(無題)")}</div>
       </div>
       <div class="task-actions">
-        <button class="task-chip" data-act="bucket" title="タップで 本日→今週→今月→先 と切替">${bm.icon} ${escapeHtml(bm.label)}</button>
+        <button class="task-chip" data-act="bucket" title="タップで期限を選び直す(本日/今週/今月/先・日付指定)">${bm.icon} ${escapeHtml(bm.label)} ▾</button>
+        ${t.dueAt ? `<button class="task-chip task-due-chip ${taskDueState(t.dueAt)}" data-act="due" title="タップで期限を変更">📌 ${taskDueLabel(t.dueAt)}</button>` : ""}
         <button class="task-chip" data-act="type" title="タップで 🎯/🤔 を切替">${t.type === "action" ? "🎯 行動" : "🤔 判断"}</button>
         <button class="task-chip" data-act="note">${hasNote ? "📝 メモ" : "＋ メモ"}</button>
         <button class="log-want-toggle ${t.wantAnswer ? 'on' : ''}" data-act="want" title="タップでClaude回答&実行希望を切替">${t.wantAnswer ? '☑ 回答希望' : '☐ 回答希望'}</button>
@@ -3135,9 +3428,9 @@ function taskItemEl(t) {
   item.querySelectorAll("[data-act]").forEach(btn => {
     btn.addEventListener("click", () => {
       const act = btn.dataset.act;
-      if (act === "bucket") {
-        updateTask(t.id, { bucket: cycleBucket(t.bucket) });
-        renderTasks();
+      if (act === "bucket" || act === "due") {
+        // 2026-07-29: 1つずつ回る cycleBucket をやめ、選択メニュー方式へ(どこへでも1タップ)
+        openTaskDueMenu(t, item);
       } else if (act === "type") {
         updateTask(t.id, { type: t.type === "action" ? "decision" : "action" });
         renderTasks();
@@ -3190,6 +3483,13 @@ document.querySelectorAll('.tasks-filter-btn[data-typefilter]').forEach(btn => {
   });
 });
 document.getElementById("tf-all").classList.add("active");
+// リスト / カレンダー 切替(2026-07-31)
+document.querySelectorAll('#view-tasks .tasks-viewmode-btn').forEach(btn => {
+  btn.addEventListener("click", () => {
+    tasksViewMode = btn.dataset.tvm === "calendar" ? "calendar" : "list";
+    renderTasks();
+  });
+});
 document.getElementById("tasks-hide-done").addEventListener("change", (e) => {
   tasksHideDone = e.target.checked;
   renderTasks();
@@ -3224,8 +3524,14 @@ async function pullInbox() {
       .order("created_at", { ascending: false })
       .limit(150);
     if (error) throw error;
+    // 2026-07-29: PCウォッチャーのバックアップ通知(cw_id='sys_backup_*')をヘッダのバッジに反映
+    updateBackupStatus(data || []);
     // 2026-07-12 v2: Claude自動回答(cw_id='ans_*')は受信箱ではなく回答タブに出す
-    inboxItems = (data || []).filter(it => !((it.cw_id || "").startsWith("ans_")));
+    // 2026-07-29: sys_* のシステム通知も受信箱カードには出さない
+    inboxItems = (data || []).filter(it => {
+      const c = it.cw_id || "";
+      return !c.startsWith("ans_") && !c.startsWith("sys_");
+    });
     renderInbox();
     loadAnswers(); // 受信箱の更新経路(初期化/realtime/復帰時)に相乗りして回答も更新
   } catch (e) {
@@ -3238,6 +3544,35 @@ function subscribeInboxRealtime() {
     { event: "*", schema: "public", table: "ichibou_inbox" },
     () => pullInbox()
   ).subscribe();
+}
+
+// ===== バックアップ状況バッジ(2026-07-29 新設)=====
+// PC常駐ウォッチャーが6時間おきに ichibou_state を G:(Drive同期フォルダ)へ世代保存し、
+// その都度 ichibou_inbox に cw_id='sys_backup_*' の既読行を1件積む。ここではその最新行を拾って表示する。
+// (2026-07-27 に Drive直結の「☁ バックアップ済」バッジは廃止 → 代替の可視化がこれ)
+function updateBackupStatus(rows) {
+  const el = document.getElementById("backup-indicator");
+  const txt = document.getElementById("backup-text");
+  if (!el || !txt) return;
+  const latest = (rows || [])
+    .filter(it => (it.cw_id || "").startsWith("sys_backup"))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+  if (!latest) {
+    el.className = "sync-indicator";
+    txt.textContent = "🗄 バックアップ未確認";
+    el.title = "PCウォッチャーからのバックアップ通知がまだ届いていません(PC未起動の可能性)";
+    return;
+  }
+  const t = new Date(latest.created_at);
+  const hours = (Date.now() - t.getTime()) / 3600000;
+  let rel;
+  if (hours < 1) rel = "さっき";
+  else if (hours < 24) rel = Math.floor(hours) + "時間前";
+  else rel = Math.floor(hours / 24) + "日前";
+  // 6時間間隔なので 12h 以内=正常 / 36h 以内=注意 / それ以上=要確認(PC未起動が続いている)
+  el.className = "sync-indicator " + (hours < 12 ? "synced" : hours < 36 ? "syncing" : "error");
+  txt.textContent = "🗄 バックアップ " + rel;
+  el.title = "最終バックアップ: " + t.toLocaleString("ja-JP") + "\n保存先: Googleドライブ(_一望_自動バックアップ)\nPCのウォッチャーが6時間おきに自動実行(認証不要)";
 }
 
 function inboxKindLabel(k) { return ({ task: "📋 タスク", moya: "🌫 もや", note: "📝 メモ" })[k] || k; }
@@ -3426,6 +3761,93 @@ let answersItems = [];          // ans_ 行(未読+既読、最新100件)
 let answersFilter = "unread";   // 'unread' | 'all'
 let answersAutoBusy = false;    // 自動既読の多重実行ガード
 
+// ============================================================
+// ➤送信 / 🚀デプロイ の「いま動いてる」表示(2026-08-04)
+// ------------------------------------------------------------
+// PC常駐ウォッチャーが10秒おきに旗を見ているので、送信から10〜20秒で生成が始まる。
+// その間ユーザーが放置されないよう、経過秒つきのバナーを出し、
+// 6秒おきに回答テーブルを見張って「新しい行が増えた瞬間」に完了表示へ切り替える。
+// ============================================================
+let answerWait = null;
+
+function renderAnswerWait() {
+  const box = document.getElementById("answers-waiting");
+  if (!box) return;
+  if (!answerWait) { box.innerHTML = ""; return; }
+  if (answerWait.state === "done") {
+    box.innerHTML = `<div class="answer-wait done">✓ ${escapeHtml(answerWait.doneLabel || "届きました")}</div>`;
+    return;
+  }
+  if (answerWait.state === "fail") {
+    box.innerHTML = `<div class="answer-wait fail">⚠ ${escapeHtml(answerWait.doneLabel || "時間内に届きませんでした")}</div>`;
+    return;
+  }
+  const sec = Math.floor((Date.now() - answerWait.since) / 1000);
+  const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+  const ss = String(sec % 60).padStart(2, "0");
+  box.innerHTML = `<div class="answer-wait"><span class="spin"></span><span>${escapeHtml(answerWait.label)} — 経過 ${mm}:${ss}</span></div>`;
+}
+
+function stopAnswerWait(state, doneLabel) {
+  if (!answerWait) return;
+  clearInterval(answerWait.tick);
+  clearInterval(answerWait.poll);
+  answerWait.state = state;
+  answerWait.doneLabel = doneLabel;
+  renderAnswerWait();
+  if (state) {
+    setTimeout(() => { answerWait = null; renderAnswerWait(); }, 8000);
+  } else {
+    answerWait = null;
+    renderAnswerWait();
+  }
+}
+
+function startAnswerWait(label, timeoutMin) {
+  if (answerWait) stopAnswerWait(null);
+  answerWait = {
+    since: Date.now(),
+    label: label,
+    state: null,
+    baseline: new Set(answersItems.map(a => a.id)),
+    limit: (timeoutMin || 10) * 60 * 1000
+  };
+  renderAnswerWait();
+  answerWait.tick = setInterval(renderAnswerWait, 1000);
+  answerWait.poll = setInterval(async () => {
+    if (!answerWait) return;
+    const baseline = answerWait.baseline;
+    await loadAnswers();
+    if (!answerWait) return;
+    const fresh = answersItems.find(a => !baseline.has(a.id));
+    if (fresh) {
+      stopAnswerWait("done", (fresh.title || "").replace(/^💬 回答: /, "") + " が届きました");
+    } else if (Date.now() - answerWait.since > answerWait.limit) {
+      stopAnswerWait("fail", "時間内に届きませんでした。PCが起動しているか確認してください(常駐ウォッチャーはPC稼働中のみ動きます)");
+    }
+  }, 6000);
+}
+
+// ============================================================
+// 🚀 デプロイ要求(2026-08-04)
+// ------------------------------------------------------------
+// Cowork のサンドボックスからは GitHub へ push できない(プロキシ遮断)。
+// が、PC常駐ウォッチャーはPCネイティブ実行なので push できる。
+// ここで ichibou_inbox に「要求の行」を1本置くと、ウォッチャーが10秒以内に拾って
+// deploy_headless.bat を実行し、結果を回答カードとして返す。= 晃良のPC操作は不要。
+// ============================================================
+async function requestDeploy(note) {
+  const { error } = await sb.from("ichibou_inbox").insert({
+    kind: "note",
+    cw_id: "sys_deploy_req_" + Date.now(),
+    title: "🚀 デプロイ要求",
+    detail: note || "(一望アプリの「🚀 本番へ反映」から)",
+    priority: "high",
+    consumed: false
+  });
+  if (error) throw error;
+}
+
 async function loadAnswers() {
   if (!navigator.onLine) return;
   try {
@@ -3523,6 +3945,14 @@ function renderAnswersCount() {
   el.classList.toggle("alert", unread > 0);
 }
 
+// 2026-07-29: 回答の出どころがノートなら、そのノート実体を返す。
+// cw_id は 'ans_<元メモid>'(♻常時ノートは 'ans_<noteId>_dYYYYMMDD')。
+function answerSourceNote(a) {
+  const raw = (a && a.cw_id || "").replace(/^ans_/, "").replace(/_d\d{8}$/, "");
+  if (!raw || !Array.isArray(state.notes)) return null;
+  return state.notes.find(n => n.id === raw) || null;
+}
+
 // 回答detailを本文と「> 元メモ」引用に分離(――区切り行)
 function answerSplit(detail) {
   const idx = (detail || "").indexOf("\n――\n");
@@ -3539,7 +3969,7 @@ function renderAnswers() {
   list.innerHTML = "";
   if (items.length === 0) {
     list.innerHTML = `<div class="empty">${answersFilter === "unread"
-      ? "未読の回答はない。<br>雑メモに「?」付きで書くと、朝7時・夜19時の巡回でここに回答が届く。"
+      ? "未読の回答はない。<br>雑メモに ☑回答希望 を付けると、5分おきの巡回でここに回答が届く。"
       : "まだ回答は届いていない。"}</div>`;
     return;
   }
@@ -3555,7 +3985,7 @@ function renderAnswers() {
       : "";
     const threadLine = multi
       ? `<div class="answer-threadline">${a._latest
-          ? (a._threadSettled && a._settled ? "この話はここで決着。前の回では自動で既読にした。" : "この話の最新の回答。前の回は自動で既読にした。")
+          ? (a._threadSettled && a._settled ? "この話はここで決着(テーマ自体が終わり)。前の回は自動で隠した。" : "この話の最新の回答。まだ続けられる。前の回は自動で隠した。")
           : "この後に続きの回答あり(全" + a._turns + "回)"}</div>`
       : "";
     el.innerHTML = `
@@ -3571,9 +4001,9 @@ function renderAnswers() {
       <div class="answer-actions">
         ${a.consumed
           ? '<button class="answer-btn" data-aact="unread">↩ 未読に戻す</button>'
-          : '<button class="answer-btn primary" data-aact="read">✓ 既読にする</button>'}
-        <button class="answer-btn" data-aact="tonote">→ 雑メモに控えを残す</button>
-        ${multi ? '<button class="answer-btn" data-aact="settle">✓✓ この話は決着(まとめて既読)</button>' : ""}
+          : '<button class="answer-btn primary" data-aact="read" title="この回答カードを一覧から隠すだけ。話が終わるわけではないので、あとで ➤ 送信で続けられる">✓ 読んだ(この回答を隠す)</button>'}
+        <button class="answer-btn" data-aact="tonote">${answerSourceNote(a) ? "→ 元のノートに控えを残す" : "→ 雑メモに控えを残す"}</button>
+        ${multi ? '<button class="answer-btn" data-aact="settle" title="このテーマ自体を終わりにする。スレッドの全回答を隠す">✓✓ この話は終わり(まとめて隠す)</button>' : ""}
       </div>
     `;
     el.querySelectorAll("[data-aact]").forEach(btn => {
@@ -3605,9 +4035,11 @@ function renderAnswers() {
       }));
       saveState();
       renderLogs();
-      reaskBtn.textContent = `✓ 送信済み(${nextTurn}回目・数分以内に回答が届く)`;
+      reaskBtn.textContent = `✓ 送信(${nextTurn}回目)`;
       reaskBtn.disabled = true;
       replyRow.querySelector(".answer-reply-input").disabled = true;
+      // 2026-08-04: 送信したその場で「動き出した」ことが見えるようにする(Coworkの➤と同じ感覚)
+      startAnswerWait(`${nextTurn}回目を送信。PCで回答を生成しています…`, 10);
     });
 
     // 元メモ引用のタップで全文/折りたたみ切替
@@ -3670,11 +4102,30 @@ async function handleAnswerAction(a, act) {
       loadAnswers();
     }
   } else if (act === "tonote") {
-    // 回答を雑メモ側に控えとして残す(同時に既読化)
+    // 回答を控えとして残す(同時に既読化)
+    // 2026-07-29: 元がノートの回答は「元のノート」に追記する(晃良要望 xr90ckxk4)。
+    // 元が雑メモ/もや/タスクの場合は従来どおり雑メモに新規カードを作る。
     const parts = answerSplit(a.detail);
+    const cleanTitle = (a.title || "").replace(/^💬 回答: /, "");
+    const srcNote = answerSourceNote(a);
+    if (srcNote) {
+      if (editingNoteId === srcNote.id) {
+        alert("そのノートを編集中です。閉じてからもう一度押してください。");
+        return;
+      }
+      const stamp = formatTs(a.created_at ? new Date(a.created_at).getTime() : Date.now());
+      const block = `[回答控え ${stamp}] ${cleanTitle}\n${parts.body}`;
+      srcNote.body = ((srcNote.body || "").replace(/\s+$/, "") + "\n\n──────────\n" + block).trim();
+      srcNote.updatedAt = Date.now();
+      saveState();
+      renderNotes();
+      await setAnswerConsumed(a, true, "answer_to_srcnote");
+      alert(`ノート「${srcNote.title || "無題"}」の末尾に控えを追記した。`);
+      return;
+    }
     state.logs.push(normalizeLog({
       id: uid(), ts: Date.now(),
-      text: `[回答控え] ${(a.title || "").replace(/^💬 回答: /, "")}\n${parts.body}`,
+      text: `[回答控え] ${cleanTitle}\n${parts.body}`,
       projectId: null
     }));
     saveState();
@@ -3685,6 +4136,30 @@ async function handleAnswerAction(a, act) {
 
 // 2026-07-28 修正: 受信箱側([data-if])も .answers-filter-btn を共用しているため
 // セレクタを [data-af] に限定(以前は受信箱のフィルタ操作が回答タブの状態を壊していた)
+// 🚀 本番へ反映ボタン(2026-08-04)
+(function () {
+  const btn = document.getElementById("btn-deploy");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    if (!navigator.onLine) { alert("オフラインです。通信できる状態で押してください。"); return; }
+    if (!confirm("いまのコードを本番(GitHub Pages)へ反映します。\nPCの常駐ウォッチャーが実行します(PC操作は不要)。よろしいですか?")) return;
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = "🚀 要求を送信中…";
+    try {
+      await requestDeploy();
+      btn.textContent = "🚀 反映を要求した";
+      startAnswerWait("本番へ反映しています(PCのウォッチャーが実行中)…", 8);
+    } catch (e) {
+      console.error("deploy request error:", e);
+      alert("デプロイ要求の送信に失敗しました。もう一度お試しください。");
+      btn.textContent = label;
+      btn.disabled = false;
+    }
+    setTimeout(() => { btn.disabled = false; btn.textContent = "🚀 本番へ反映"; }, 120000);
+  });
+})();
+
 document.querySelectorAll(".answers-filter-btn[data-af]").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".answers-filter-btn[data-af]").forEach(b => b.classList.remove("active"));
@@ -3871,6 +4346,7 @@ renderProjects();
 renderLogs();
 renderMoyas();
 renderInbox();
+renderTasks(); // 2026-08-01: 起動時の初期表示がタスクタブになったため
 
 (async function initSync() {
   if (!navigator.onLine) { setSyncStatus("offline", "オフライン"); return; }

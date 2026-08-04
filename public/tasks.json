@@ -1,0 +1,414 @@
+{
+  "generatedAt": "2026-06-07T00:00:00+09:00",
+  "source": {
+    "path": "G:\\マイドライブ\\Claude\\_次やること.md",
+    "driveFileId": "1UYJ79E7SK2McZDGhFv2Nj_qwSUMRP7iz",
+    "lastUpdatedAt": "2026-06-05",
+    "viewUrl": "https://drive.google.com/file/d/1UYJ79E7SK2McZDGhFv2Nj_qwSUMRP7iz/view"
+  },
+  "summary": {
+    "today": 14,
+    "thisWeek": 9,
+    "thisMonth": 14,
+    "future": 9,
+    "total": 46
+  },
+  "categories": [
+    {
+      "id": "today",
+      "label": "今すぐ(本日中)",
+      "icon": "🔴",
+      "tasks": [
+        {
+          "id": "today-a-1",
+          "type": "action",
+          "title": "🚨 弁護士相談 REV2 予約電話",
+          "meta": "期限 5/31 超過・最優先",
+          "notes": "グリーンリーフ法律事務所・江本指名・台本通り読む。所要5分。完了後 Claude に「予約OK・次回○○」と伝える。",
+          "ref": "会社経営/02_債務整理/_弁護士予約電話_REV2回目相談用_2026-05-29.md"
+        },
+        {
+          "id": "today-a-2",
+          "type": "action",
+          "title": "🚨 公正証書写真6枚 再アップロード",
+          "meta": "REV2相談前必須",
+          "notes": "スマホで撮影 → Cowork にアップロード。所要10分。Claude が逐条原文版に更新。",
+          "ref": ""
+        },
+        {
+          "id": "today-j-1",
+          "type": "decision",
+          "title": "#1 デスクワーク優先強制ルール採用",
+          "meta": "推奨: レベル1(穏やか)で採用",
+          "notes": "",
+          "ref": "_ルール追加提案_デスク優先強制_2026-06-05.md"
+        },
+        {
+          "id": "today-j-2",
+          "type": "decision",
+          "title": "#2 STUDIO を CMS として採用するか",
+          "meta": "推奨: STUDIO(月額2,480円)",
+          "notes": "",
+          "ref": "Webサイト運営/_設計/_CMS比較_2026-06-05.md"
+        },
+        {
+          "id": "today-j-3",
+          "type": "decision",
+          "title": "#3 ドメインを `lbc-construction.co.jp` で取得するか",
+          "meta": "推奨3候補から1つ選ぶ",
+          "notes": "",
+          "ref": "Webサイト運営/_設計/_ドメイン候補_2026-06-05.md"
+        },
+        {
+          "id": "today-j-4",
+          "type": "decision",
+          "title": "#4 工程AI 5/29 Q3 実施順序の確定",
+          "meta": "内容: v0.1.1〜v0.1.4 の実装順序",
+          "notes": "",
+          "ref": "工程表&見積もりAI/_PROGRESS.md"
+        },
+        {
+          "id": "today-j-5",
+          "type": "decision",
+          "title": "#5 カレンダー機能 着手 or 凍結",
+          "meta": "着手→本線遅延 / 凍結→v0.2 後送り",
+          "notes": "",
+          "ref": "工程表&見積もりAI/_ROADMAP.md v0.1.x"
+        },
+        {
+          "id": "today-j-6",
+          "type": "decision",
+          "title": "#6 G:側 工程AI CLAUDE.md 草案 採用",
+          "meta": "",
+          "notes": "",
+          "ref": "_G側CLAUDE_md_草案_2026-06-05.md"
+        },
+        {
+          "id": "today-j-7",
+          "type": "decision",
+          "title": "#7 LBC公式サイト HTMLモック 方向性OKか",
+          "meta": "ブラウザで開いて見る",
+          "notes": "",
+          "ref": "Webサイト運営/_モックアップ/v0.1/index.html"
+        },
+        {
+          "id": "today-j-8",
+          "type": "decision",
+          "title": "#8 一望に タスクタブ追加 実装(本日依頼済・実装結果待ち)",
+          "meta": "Claude 側で実装中(本セッション末に結果出る)",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "today-j-9",
+          "type": "decision",
+          "title": "#9 メタCLAUDE.md ルール反映(承認は本日済・実装次回 G:\\マウント子タスクで)",
+          "meta": "",
+          "notes": "",
+          "ref": "_メタCLAUDE_追加ルール_2026-06-05_自律進行精度向上.md"
+        },
+        {
+          "id": "today-j-10",
+          "type": "decision",
+          "title": "#10 メモリ層 reference 更新済を確認",
+          "meta": "自動完了済・確認のみ",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "today-j-11",
+          "type": "decision",
+          "title": "#11 帰宅時 操作ガイドを読む",
+          "meta": "所要 2〜10分",
+          "notes": "",
+          "ref": "_帰宅時_最初に開くべきファイル順_2026-06-05.md"
+        },
+        {
+          "id": "today-j-12",
+          "type": "decision",
+          "title": "#12 本日サマリを読む(振り返り)",
+          "meta": "",
+          "notes": "",
+          "ref": "_本日の自律進行サマリ_2026-06-05.md"
+        }
+      ]
+    },
+    {
+      "id": "thisWeek",
+      "label": "今週中(2026-06-06〜2026-06-11)",
+      "icon": "🟡",
+      "tasks": [
+        {
+          "id": "week-a-1",
+          "type": "action",
+          "title": "母向け LINE 第1便(直近2年分の確定申告書)送信",
+          "meta": "所要5分",
+          "notes": "",
+          "ref": "会社経営/02_債務整理/_母へのお願いLINE文案_2026-05-25.md"
+        },
+        {
+          "id": "week-a-2",
+          "type": "action",
+          "title": "母向け LINE 第2〜3便(固定資産税納税通知書 / 住宅ローン残高通知)",
+          "meta": "第1便返信後・順次",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "week-a-3",
+          "type": "action",
+          "title": "父宅訪問 1回目(リメックス更新書類 / 通帳 / 年金通知書)",
+          "meta": "所要 60〜90分・日程調整要",
+          "notes": "",
+          "ref": "会社経営/02_債務整理/_父との対面持参依頼リスト_2026-05-25.md"
+        },
+        {
+          "id": "week-a-4",
+          "type": "action",
+          "title": "LBC アカウント直接ログイン → Webサイト運営フォルダ目視確認",
+          "meta": "個人アカでは API スコープで子要素ゼロ・所要5分",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "week-a-5",
+          "type": "action",
+          "title": "次回 REV2 弁護士相談 本番(予約電話で日程確定後)",
+          "meta": "持参: クリアファイル①〜④・所要 60〜90分",
+          "notes": "",
+          "ref": "会社経営/02_債務整理/_次回弁護士相談コックピット_REV2_2026-05-29.md + _REV2想定シナリオ予想Q&A_2026-06-05.md"
+        },
+        {
+          "id": "week-a-6",
+          "type": "action",
+          "title": "STUDIO Free プラン 開設(採用判断 Yes の場合)",
+          "meta": "所要15分・試作 1〜2 ページから",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "week-j-1",
+          "type": "decision",
+          "title": "LBC_website_draft 内容レビュー → draft→reviewed に昇格",
+          "meta": "修正要望を Claude に伝える",
+          "notes": "",
+          "ref": "会社経営/01_ビジョン/LBC_website_draft_2026-05-28.md"
+        },
+        {
+          "id": "week-j-2",
+          "type": "decision",
+          "title": "SEO 第1キーワード「川越 外構」採用判断",
+          "meta": "LBC の事業比率(外構/リフォーム/内装)で戦略変更要",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "week-j-3",
+          "type": "decision",
+          "title": "施工事例同意書 弁護士確認に出すか判断",
+          "meta": "REV2 弁護士に同時依頼可能",
+          "notes": "",
+          "ref": ""
+        }
+      ]
+    },
+    {
+      "id": "thisMonth",
+      "label": "今月中(2026-06-12〜2026-07-05)",
+      "icon": "🟢",
+      "tasks": [
+        {
+          "id": "month-a-1",
+          "type": "action",
+          "title": "REV2 相談結果を最終戦略レポート rev3 に反映",
+          "meta": "REV2 後",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-a-2",
+          "type": "action",
+          "title": "シナリオ1 vs シナリオH 最終選択",
+          "meta": "REV2 結論次第",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-a-3",
+          "type": "action",
+          "title": "父宅訪問 2回目(保険関係 / 健康診断 / 車関係)",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-a-4",
+          "type": "action",
+          "title": "父宅訪問 3回目(カードローン+隠れ債務+過去会社書類・慎重トーン)",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-a-5",
+          "type": "action",
+          "title": "母向け LINE 第4〜7便(住宅ローン契約書 / 月吉自宅購入時資料 / 離婚時関連 / 信用情報開示協力)",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-a-6",
+          "type": "action",
+          "title": "受任契約の意思決定(費用・期間・分担合意)",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-a-7",
+          "type": "action",
+          "title": "STUDIO で全ページ実装(草案承認後)",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-a-8",
+          "type": "action",
+          "title": "ドメイン取得手続き(選定後)",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-a-9",
+          "type": "action",
+          "title": "6月総括 → 7月計画作成(月末)",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-j-1",
+          "type": "decision",
+          "title": "工程AI v0.1.1〜v0.1.4 のうち YES 判定分を確定",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-j-2",
+          "type": "decision",
+          "title": "カレンダー機能 詳細設計 承認(着手判断 Yes の場合)",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-j-3",
+          "type": "decision",
+          "title": "LBC買取スキーム 実現可能性 評価(自己資金 vs 銀行融資・兄相談含む)",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-j-4",
+          "type": "decision",
+          "title": "施工事例 3〜5 件の同意取得開始(A/B/C レベル混在)",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "month-j-5",
+          "type": "decision",
+          "title": "旧『LBC株 サイトの参考』2024-01素材 取捨選択",
+          "meta": "",
+          "notes": "",
+          "ref": ""
+        }
+      ]
+    },
+    {
+      "id": "future",
+      "label": "将来(2026-07以降)",
+      "icon": "⚪",
+      "tasks": [
+        {
+          "id": "future-a-1",
+          "type": "action",
+          "title": "フェーズ3(債務整理実行・受任契約実施)",
+          "meta": "長期",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "future-a-2",
+          "type": "action",
+          "title": "リメックス工輝 解散・清算手続き(自己破産戦略確定後)",
+          "meta": "長期",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "future-a-3",
+          "type": "action",
+          "title": "Webサイト 公開(STUDIO完成 + コンテンツ揃った時)",
+          "meta": "長期",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "future-j-1",
+          "type": "decision",
+          "title": "神田さん代表就任の正式合意(家族合意・フェーズ4)",
+          "meta": "長期",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "future-j-2",
+          "type": "decision",
+          "title": "経営者保証ガイドライン適用検討(フェーズ4)",
+          "meta": "長期",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "future-j-3",
+          "type": "decision",
+          "title": "LBC 事業承継戦略 確定(税理士相談含む)",
+          "meta": "長期",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "future-j-4",
+          "type": "decision",
+          "title": "銀行融資調達(LBC買取資金)",
+          "meta": "長期",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "future-j-5",
+          "type": "decision",
+          "title": "工程AI v0.2 SaaS化 着手判断(v0.1系統6ヶ月安定後)",
+          "meta": "長期",
+          "notes": "",
+          "ref": ""
+        },
+        {
+          "id": "future-j-6",
+          "type": "decision",
+          "title": "詐害行為取消リスク 法的整理(受任契約後)",
+          "meta": "長期",
+          "notes": "",
+          "ref": ""
+        }
+      ]
+    }
+  ]
+}
