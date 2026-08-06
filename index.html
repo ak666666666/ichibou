@@ -672,6 +672,20 @@ html { zoom: var(--ui-zoom, 1); }
 .answer-stateline.settled { color:#2f6349; }
 .answer-stateline.open    { color:#8a6620; }
 .answer-stateline.unknown { color:var(--ink-mute); }
+/* 会話の「元の内容」ブロック(2026-08-06) — どの受信箱項目から始まった話か、タップで全文表示 */
+.answer-origin { border:1px dashed var(--line); background:rgba(255,255,255,.5); padding:8px 12px; margin-bottom:10px; font-size:12px; cursor:pointer; }
+.answer-origin-head { display:flex; align-items:center; gap:6px; color:var(--ink-mute); }
+.answer-origin-head .caret { font-size:10px; }
+.answer-origin-name { color:var(--ink-soft); font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.answer-origin-body { display:none; margin-top:8px; white-space:pre-wrap; word-break:break-word; line-height:1.75; color:var(--ink-soft); border-top:1px solid var(--line); padding-top:8px; }
+.answer-origin.open .answer-origin-body { display:block; }
+.answer-origin-turn { margin-top:8px; padding-top:8px; border-top:1px dotted var(--line); }
+.answer-origin-turn b { color:var(--ink); font-weight:600; }
+/* 受信箱カードの返信欄 */
+.inbox-reply-row { display:flex; gap:6px; margin-top:10px; }
+.inbox-reply-input { flex:1; min-width:0; border:1px solid var(--line); background:#fff; padding:6px 10px; font-size:12px; font-family:inherit; }
+.inbox-reply-input:disabled { opacity:.5; }
+.inbox-thread-note { font-size:11px; color:#8a6620; margin-top:8px; }
 
 /* ===== コピーボタン(2026-08-04)=====
    書いた文章・届いた文章を、その場で1タップでクリップボードへ。
@@ -1989,11 +2003,19 @@ function removeTagFromLog(log, tag) {
   log.tags = log.tags.filter(t => t !== tag);
 }
 
+// 2026-08-06: ➤送信で生まれた「▶続き」メモは会話の裏方なので雑メモ一覧に出さない(晃良確定)。
+// データは消さないので、必要になれば表示に戻せる。以後の返信はDB行方式なので、これは過去分の掃除。
+function isSystemLog(l) {
+  return /^▶続き\s*[:：]/.test((l && l.text) || "");
+}
+
 function renderLogs() {
   const list = document.getElementById("log-list");
   list.innerHTML = "";
-  const total = state.logs.length;
-  const completedCount = state.logs.filter(l => l.completed).length;
+  const visibleLogs = state.logs.filter(l => !isSystemLog(l));
+  const hiddenCount = state.logs.length - visibleLogs.length;
+  const total = visibleLogs.length;
+  const completedCount = visibleLogs.filter(l => l.completed).length;
   const activeCount = total - completedCount;
   // タブカウンタは未完了数を表示(完了は片付いた扱い)
   document.getElementById("count-logs").textContent = activeCount;
@@ -2015,7 +2037,7 @@ function renderLogs() {
   const bar = document.createElement("div");
   bar.className = "log-filter-bar";
   bar.innerHTML = `
-    <span class="summary">総 ${total}件 / 未完了 ${activeCount} / 完了 ${completedCount}</span>
+    <span class="summary">総 ${total}件 / 未完了 ${activeCount} / 完了 ${completedCount}${hiddenCount ? ` <span style="color:var(--ink-mute)">/ 会話用 ${hiddenCount}件は非表示</span>` : ""}</span>
     ${completedCount > 0 ? `<button class="log-filter-toggle ${showCompleted ? "on" : ""}" id="log-show-completed">${showCompleted ? "☑" : "☐"} 完了済みも表示</button>` : ""}
   `;
   list.appendChild(bar);
@@ -2080,7 +2102,7 @@ function renderLogs() {
   }
 
   // フィルタ後のログ(完了 + タグ)
-  let visible = showCompleted ? state.logs : state.logs.filter(l => !l.completed);
+  let visible = showCompleted ? visibleLogs : visibleLogs.filter(l => !l.completed);
   if (activeTagFilter) {
     visible = visible.filter(l => (l.tags || []).includes(activeTagFilter));
   }
@@ -3581,7 +3603,8 @@ async function pullInbox() {
     // 2026-07-29: sys_* のシステム通知も受信箱カードには出さない
     inboxItems = (data || []).filter(it => {
       const c = it.cw_id || "";
-      return !c.startsWith("ans_") && !c.startsWith("sys_");
+      // ans_=回答タブ / sys_=システム / req_=晃良の返信(会話の一部なので受信箱には出さない)
+      return !c.startsWith("ans_") && !c.startsWith("sys_") && !c.startsWith("req_");
     });
     renderInbox();
     loadAnswers(); // 受信箱の更新経路(初期化/realtime/復帰時)に相乗りして回答も更新
@@ -3695,8 +3718,43 @@ function renderInbox() {
     el.querySelectorAll("[data-act]").forEach(btn => {
       btn.addEventListener("click", () => handleInboxAction(item, btn.dataset.act));
     });
+
+    // 2026-08-06: 受信箱の項目にもその場で返信できるようにする。
+    // 送ると受信箱からは消え、以後のやり取りは回答タブに集約される(晃良指示)。
+    if (!item.consumed) {
+      const rr = document.createElement("div");
+      rr.className = "inbox-reply-row";
+      rr.innerHTML = `<input class="inbox-reply-input" type="text" placeholder="この件について聞く・返す(→ 回答タブに届く)"><button class="inbox-btn read" data-ibreply>➤ 送信</button>`;
+      el.appendChild(rr);
+      const rb = rr.querySelector("[data-ibreply]");
+      const ri = rr.querySelector(".inbox-reply-input");
+      const send = async () => {
+        const word = ri.value.trim();
+        if (!word) { ri.focus(); return; }
+        rb.disabled = true; ri.disabled = true;
+        try {
+          await postThreadReply(item, word);
+          // 返信したら受信箱からは消す(晃良確定: 同じ話が2タブに並ばないように)
+          await consumeInbox(item, "回答タブで会話中");
+          switchToAnswersTab();
+          startAnswerWait("受信箱の件を送信。PCで回答を生成しています…", 10);
+        } catch (e) {
+          console.error("inbox reply error:", e);
+          alert("返信の送信に失敗しました。通信状態を確認してもう一度お試しください。");
+          rb.disabled = false; ri.disabled = false;
+        }
+      };
+      rb.addEventListener("click", send);
+      ri.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); send(); } });
+    }
     list.appendChild(el);
   });
+}
+
+// 回答タブへ移動する(受信箱から返信した直後に、会話の続きが見える場所へ連れて行く)
+function switchToAnswersTab() {
+  const tab = document.querySelector('.tab[data-view="answers"]');
+  if (tab) tab.click();
 }
 
 function inboxComposeText(item) {
@@ -3811,6 +3869,7 @@ document.querySelectorAll("[data-if]").forEach(btn => {
 let answersItems = [];          // ans_ 行(未読+既読、最新100件)
 let answersFilter = "unread";   // 'unread' | 'all'
 let answersAutoBusy = false;    // 自動既読の多重実行ガード
+let threadRows = [];            // thread_id を持つ全行(元の項目・返信・回答)
 
 // ============================================================
 // 📋 コピーボタン(2026-08-04 晃良要望)
@@ -3961,6 +4020,45 @@ function startAnswerWait(label, timeoutMin) {
 }
 
 // ============================================================
+// 💬 会話(スレッド)— 2026-08-06 晃良要望
+// ------------------------------------------------------------
+// 「受信箱の項目にもその場で返信したい。以後のやり取りは回答タブに集約したい。
+//   元がどれだったかは回答タブでタップすれば全文が見たい」
+//
+// 設計の要点(晃良の「あいまいにならない・端末間でめちゃくちゃにならない」指示):
+//   ・会話の同一性は ichibou_inbox.thread_id(DBの列)で持つ。本文に埋めた文字列ではない
+//   ・返信は state(雑メモ)を経由せず、DBに1行 INSERT するだけ。
+//     stateは全体を上書きする同期方式なので、2端末が同時に書くと片方が消える。行の追加ならその事故が起きない
+//   ・1スレッド = 元の項目1行 + 返信N行(kind='reply') + 回答N行(cw_id='ans_*')。全部同じ thread_id
+// ============================================================
+function newThreadId() {
+  return "th_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+}
+
+// 会話に返信を1件積む。元の行に thread_id が無ければここで確定させる。
+// 戻り値: thread_id(失敗時は例外)
+async function postThreadReply(originRow, text) {
+  const threadId = originRow.thread_id || newThreadId();
+  if (!originRow.thread_id) {
+    const { error } = await sb.from("ichibou_inbox")
+      .update({ thread_id: threadId }).eq("id", originRow.id);
+    if (error) throw error;
+    originRow.thread_id = threadId;
+  }
+  const { error: e2 } = await sb.from("ichibou_inbox").insert({
+    kind: "reply",
+    cw_id: "req_" + newThreadId().slice(3),
+    thread_id: threadId,
+    title: "▶ 返信",
+    detail: text,
+    priority: "high",
+    consumed: false
+  });
+  if (e2) throw e2;
+  return threadId;
+}
+
+// ============================================================
 // 🚀 デプロイ要求(2026-08-04)
 // ------------------------------------------------------------
 // Cowork のサンドボックスからは GitHub へ push できない(プロキシ遮断)。
@@ -3984,12 +4082,15 @@ async function loadAnswers() {
   if (!navigator.onLine) return;
   try {
     const { data, error } = await sb.from("ichibou_inbox")
-      .select("id, title, detail, created_at, consumed, consumed_at, cw_id, dest")
-      .like("cw_id", "ans_%")
+      .select("id, title, detail, created_at, consumed, consumed_at, cw_id, dest, kind, thread_id")
+      .or("cw_id.like.ans_%,thread_id.not.is.null")
       .order("created_at", { ascending: false })
-      .limit(100);
+      .limit(300);
     if (error) throw error;
-    answersItems = data || [];
+    const rows = data || [];
+    // 回答カードとして並べるのは ans_* だけ。元の項目と返信は「会話の材料」として別に持つ
+    answersItems = rows.filter(r => (r.cw_id || "").startsWith("ans_"));
+    threadRows = rows.filter(r => r.thread_id);
     buildAnswerThreads();
     await autoConsumeAnswers();   // 続き到着・決着で用済みになった回答を自動既読
     renderAnswers();
@@ -4004,6 +4105,8 @@ function answerCleanTitle(t) {
   return (t || "").replace(/^💬 回答: /, "").replace(/^▶続き:\s*/, "").replace(/^[「『]|[」』]$/g, "").trim();
 }
 function answerThreadKey(a) {
+  // 2026-08-06: DBの thread_id が最優先。以下は thread_id が無い旧データ用の後方互換
+  if (a.thread_id) return a.thread_id;
   const q = answerSplit(a.detail).quote || "";
   const m = q.match(/\[TH:([^\]]{1,80})\]/);
   if (m) return m[1];
@@ -4036,6 +4139,22 @@ function answerStripMarks(body) {
                      .replace(/\n{3,}/g, "\n\n").trim();
 }
 // answersItems の各行に _thread/_turn/_turns/_settled/_latest を付与し、スレッドMapを返す
+// スレッドの「元になった項目」を返す(受信箱の項目など)。無ければ null
+function threadOrigin(threadId) {
+  if (!threadId) return null;
+  const mates = threadRows.filter(r => r.thread_id === threadId
+    && !(r.cw_id || "").startsWith("ans_") && r.kind !== "reply");
+  if (mates.length === 0) return null;
+  mates.sort((x, y) => new Date(x.created_at) - new Date(y.created_at));
+  return mates[0];
+}
+// スレッド内の晃良の返信を古い順に返す
+function threadReplies(threadId) {
+  if (!threadId) return [];
+  return threadRows.filter(r => r.thread_id === threadId && r.kind === "reply")
+    .sort((x, y) => new Date(x.created_at) - new Date(y.created_at));
+}
+
 function buildAnswerThreads() {
   const groups = new Map();
   answersItems.forEach(a => {
@@ -4150,6 +4269,28 @@ function renderAnswers() {
     }
     if (multi && !a._latest) stateText = `この後に続きの回答あり(全${a._turns}回)。`;
     const stateLine = `<div class="answer-stateline ${a._state}">${escapeHtml(stateText)}</div>`;
+
+    // 2026-08-06: 「この話、元は何だったっけ」を回答タブだけで解決する。
+    // 受信箱を探しに行く手間を無くすのが目的なので、元の全文と自分の返信をここに畳んで持たせる。
+    let originHtml = "";
+    const origin = threadOrigin(a._thread);
+    const replies = threadReplies(a._thread);
+    if (origin || replies.length) {
+      const label = origin
+        ? `${inboxKindLabel(origin.kind) || "受信箱"}: ${origin.title || "(無題)"}`
+        : "この会話のやり取り";
+      let body = "";
+      if (origin) {
+        body += `<div><b>元の内容</b>(${formatTs(new Date(origin.created_at).getTime())})\n${escapeHtml(origin.title || "")}\n${escapeHtml(origin.detail || "")}</div>`;
+      }
+      replies.forEach((r, i) => {
+        body += `<div class="answer-origin-turn"><b>自分の返信 ${i + 1}</b>(${formatTs(new Date(r.created_at).getTime())})\n${escapeHtml(r.detail || "")}</div>`;
+      });
+      originHtml = `<div class="answer-origin" data-origin-toggle>
+        <div class="answer-origin-head"><span class="caret">▶</span><span class="answer-origin-name">${escapeHtml(label)}</span><span>タップで全文</span></div>
+        <div class="answer-origin-body">${body}</div>
+      </div>`;
+    }
     el.innerHTML = `
       <div class="answer-head">
         ${a.consumed ? "" : '<span class="answer-dot"></span>'}
@@ -4160,6 +4301,7 @@ function renderAnswers() {
         ${copyBtnHtml(true)}
       </div>
       ${stateLine}
+      ${originHtml}
       ${parts.quote ? `<div class="answer-quote collapsed" title="タップで元メモを全文表示" data-quote-toggle>${escapeHtml(parts.quote.replace(/[ \t]*\[TH:[^\]]{1,80}\][ \t]*/g, " ").trim())}</div>` : ""}
       <div class="answer-body" data-copy-src>${escapeHtml(answerStripMarks(parts.body))}</div>
       <div class="answer-actions">
@@ -4181,15 +4323,32 @@ function renderAnswers() {
     replyRow.innerHTML = `<input class="answer-reply-input" type="text" placeholder="一言・続きの依頼(空でもOK)"><button class="answer-btn primary" data-reask>➤ 送信</button>`;
     el.appendChild(replyRow);
     const reaskBtn = replyRow.querySelector("[data-reask]");
-    reaskBtn.addEventListener("click", () => {
+    reaskBtn.addEventListener("click", async () => {
       const word = replyRow.querySelector(".answer-reply-input").value.trim();
+      const nextTurn = (a._turns || 1) + 1;
+      // 2026-08-06: 雑メモ経由をやめ、DBに返信を1行 INSERT する方式へ。
+      // 端末をまたいでも消えない・雑メモが汚れない・会話が thread_id で確定する。
+      reaskBtn.disabled = true;
+      replyRow.querySelector(".answer-reply-input").disabled = true;
+      try {
+        await postThreadReply(a, word || "(続き・深掘りを希望)");
+        reaskBtn.textContent = `✓ 送信(${nextTurn}回目)`;
+        startAnswerWait(`${nextTurn}回目を送信。PCで回答を生成しています…`, 10);
+      } catch (e) {
+        console.error("reply error:", e);
+        alert("返信の送信に失敗しました。通信状態を確認してもう一度お試しください。");
+        reaskBtn.disabled = false;
+        replyRow.querySelector(".answer-reply-input").disabled = false;
+      }
+      return;
+      // ↓ 旧方式(雑メモ経由)は無効。しばらく残して問題が無ければ削除する
+      // eslint-disable-next-line no-unreachable
       const p2 = answerSplit(a.detail);
       // 2026-07-27: 送信=即応答化(晃良指示)。urgentClaude=true で最優先レーンに載せる。
       // 巡回が拾う仕組み上、完全な瞬時ではなく「数分以内」が物理限界(巡回は5分間隔)
       // 2026-07-28: [TH:<key>] を埋めてスレッドを確定させる(次の回答の「> 元メモ」引用から辿れる)。
       // これで「2回目/3回目」の往復番号がタイトル揺れに関係なく続く。
       const thKey = a._thread || answerThreadKey(a);
-      const nextTurn = (a._turns || 1) + 1;
       state.logs.push(normalizeLog({
         id: uid(), ts: Date.now(),
         text: `▶続き:「${(a.title || "").replace(/^💬 回答: /, "")}」[TH:${thKey}] (${nextTurn}回目)\n${word || "(続き・深掘りを希望)"}\n\n> 元回答(抜粋): ${(p2.body || "").slice(0, 120)}…`,
@@ -4199,12 +4358,17 @@ function renderAnswers() {
       }));
       saveState();
       renderLogs();
-      reaskBtn.textContent = `✓ 送信(${nextTurn}回目)`;
-      reaskBtn.disabled = true;
-      replyRow.querySelector(".answer-reply-input").disabled = true;
-      // 2026-08-04: 送信したその場で「動き出した」ことが見えるようにする(Coworkの➤と同じ感覚)
-      startAnswerWait(`${nextTurn}回目を送信。PCで回答を生成しています…`, 10);
     });
+
+    // 「元の内容」の開閉(2026-08-06)
+    const originEl = el.querySelector("[data-origin-toggle]");
+    if (originEl) {
+      originEl.addEventListener("click", () => {
+        originEl.classList.toggle("open");
+        const c = originEl.querySelector(".caret");
+        if (c) c.textContent = originEl.classList.contains("open") ? "▼" : "▶";
+      });
+    }
 
     // 元メモ引用のタップで全文/折りたたみ切替
     const quoteEl = el.querySelector("[data-quote-toggle]");
