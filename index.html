@@ -672,6 +672,39 @@ html { zoom: var(--ui-zoom, 1); }
 .answer-stateline.settled { color:#2f6349; }
 .answer-stateline.open    { color:#8a6620; }
 .answer-stateline.unknown { color:var(--ink-mute); }
+
+/* ===== コピーボタン(2026-08-04)=====
+   書いた文章・届いた文章を、その場で1タップでクリップボードへ。
+   スマホでも確実に押せるよう常時薄く表示し、タップ面は最低32px確保する。 */
+.copy-scope { position: relative; }
+.copy-btn {
+  position: absolute; top: 6px; right: 6px; z-index: 3;
+  width: 32px; height: 32px; padding: 0; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: rgba(255,255,255,.72); color: var(--ink-mute);
+  font-family: inherit; font-size: 13px; cursor: pointer;
+  opacity: .45; transition: opacity .15s, color .15s, border-color .15s, background .15s;
+}
+.copy-btn:hover, .copy-btn:focus-visible { opacity: 1; color: var(--ink); border-color: var(--ink-soft); background: #fff; }
+.copy-btn.done { opacity: 1; color: #2f6349; border-color: #3f7d5a; background: #eef6f1; }
+.copy-btn.fail { opacity: 1; color: #a03c1f; border-color: #c8502e; background: #fbeeea; }
+/* 行の中に並べる版(回答カードのヘッダ・タスク行など、右上が既に埋まっている場所用) */
+.copy-btn.inline { position: static; width: 26px; height: 26px; font-size: 12px; flex: none; }
+@media (hover: none) { .copy-btn { opacity: .6; } }
+/* ボタンと文字が重ならないように右側を空ける */
+.capture-input, .moya-input, .note-edit-body { padding-right: 42px; }
+.note-card.copy-scope .note-card-title, .log-item.copy-scope .log-time { padding-right: 38px; }
+.moya-cloud.copy-scope .moya-text { padding-right: 38px; }
+.answer-head { flex-wrap: wrap; }
+/* コピー完了のトースト */
+.copy-toast {
+  position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
+  background: var(--ink); color: var(--bg); padding: 9px 18px; border-radius: 999px;
+  font-size: 12.5px; z-index: 9999; pointer-events: none;
+  opacity: 0; transition: opacity .18s;
+}
+.copy-toast.show { opacity: .95; }
 .answer-threadline { font-size:11px; color:var(--ink-mute); margin:-2px 0 8px; padding-left:2px; }
 .answer-time { color:var(--ink-mute); font-size:11px; font-family:"JetBrains Mono",monospace; flex:none; }
 .answer-quote { color:var(--ink-mute); font-size:12px; line-height:1.7; border-left:2px solid var(--line); padding-left:10px; margin-bottom:10px; white-space:pre-wrap; word-break:break-word; cursor:pointer; position:relative; }
@@ -808,7 +841,7 @@ html { zoom: var(--ui-zoom, 1); }
         「なんかやらなきゃいけない気がする」「あの件、そろそろ考えないと」——そういうまとまらない断片を、構造化せずに放り込める場所。育ったら→プロジェクトに昇格。しばらく育たなければ→消してもいい。書くこと自体が、脳からメモリを降ろす作業。
       </div>
       <div class="moya-input-box">
-        <textarea class="moya-input" id="moya-input" placeholder="言葉にならなくていい。単語でも、半分の文でも。&#10;「◯◯のこと、気になってる」レベルでOK。"></textarea>
+        <div class="copy-scope"><textarea class="moya-input" id="moya-input" data-copy-src placeholder="言葉にならなくていい。単語でも、半分の文でも。&#10;「◯◯のこと、気になってる」レベルでOK。"></textarea><button class="copy-btn" data-copy type="button" title="この文章をコピー" aria-label="この文章をコピー">📋</button></div>
         <div class="voice-status" id="moya-voice-status">🎙 聞いています… もう一度タップで停止</div>
         <div class="moya-actions">
           <span class="moya-hint">⌘/Ctrl + ENTER で保存</span>
@@ -828,7 +861,7 @@ html { zoom: var(--ui-zoom, 1); }
       <div class="capture-title">雑メモ</div>
       <div class="capture-sub">既に形のある記録。タップで後から編集可。紐付けは後回しでOK。</div>
       <div class="capture-box">
-        <textarea class="capture-input" id="capture-input" placeholder="Geminiとの会話の抜粋、本で読んだこと、会議のメモなど。"></textarea>
+        <div class="copy-scope"><textarea class="capture-input" id="capture-input" data-copy-src placeholder="Geminiとの会話の抜粋、本で読んだこと、会議のメモなど。"></textarea><button class="copy-btn" data-copy type="button" title="この文章をコピー" aria-label="この文章をコピー">📋</button></div>
         <div class="voice-status" id="capture-voice-status">🎙 聞いています… もう一度タップで停止</div>
         <div class="capture-actions">
           <label class="capture-want-answer" title="チェックで Claude が読んで回答・実行を検討します(次回スキャン時)">
@@ -1073,7 +1106,7 @@ html { zoom: var(--ui-zoom, 1); }
       <label class="capture-want-answer" id="note-edit-urgent-wrap" style="display:none;" title="チェックで15分以内の起動を希望"><input type="checkbox" id="note-edit-urgent" /> 🚀 今すぐ</label>
       <label class="capture-want-answer" id="note-edit-always-wrap" title="チェック中はこのノートが更新されるたび、次のスキャンで読み直して回答します(日記向け・1日1回まで)"><input type="checkbox" id="note-edit-always" /> ♻ 常時(日記など)</label>
     </div>
-    <textarea class="note-edit-body" id="note-edit-body" placeholder="本文(改行・空白自由。長文OK。マークダウン記法の表示対応は段階的に拡充予定)"></textarea>
+    <div class="copy-scope"><textarea class="note-edit-body" id="note-edit-body" data-copy-src placeholder="本文(改行・空白自由。長文OK。マークダウン記法の表示対応は段階的に拡充予定)"></textarea><button class="copy-btn" data-copy type="button" title="本文をコピー" aria-label="本文をコピー">📋</button></div>
   </div>
 </div>
 
@@ -1627,8 +1660,10 @@ function renderMoyas() {
     const urgentBtn = m.wantAnswer
       ? `<button class="log-urgent-btn ${m.urgentClaude ? "on" : ""}" data-act="urgent">${m.urgentClaude ? "🚀 起動待ち…" : "🚀 今すぐ"}</button>`
       : "";
+    el.classList.add("copy-scope");
     el.innerHTML = `
-      <div class="moya-text" contenteditable="true" data-id="${m.id}">${escapeHtml(m.text)}</div>
+      ${copyBtnHtml(false)}
+      <div class="moya-text" contenteditable="true" data-copy-src data-id="${m.id}">${escapeHtml(m.text)}</div>
       <div class="moya-meta">${formatTs(m.ts)}<span class="moya-age ${ageClass}">${ageLabel}</span></div>
       <div class="moya-cloud-actions">
         ${wantBadge}
@@ -2095,9 +2130,11 @@ function renderLogs() {
         `<button class="tag-chip" data-tag="${escapeHtml(t)}" title="クリックでこのタグでフィルタ">#${escapeHtml(t)}<span class="tag-x" data-removetag="${escapeHtml(t)}" title="このタグを外す">✕</span></button>`
       ).join("");
       const tagsRowHtml = `<div class="log-tags-row"><span class="tags-label">TAGS</span>${tagsList}<input class="tag-add-input" type="text" placeholder="+ タグ" list="log-tag-datalist" /></div>`;
+      item.classList.add("copy-scope");
       item.innerHTML = `
+        ${copyBtnHtml(false)}
         <div class="log-time">${timeStr}${completedLabel}</div>
-        <div class="log-text" ${editableAttr} data-id="${log.id}">${escapeHtml(log.text)}</div>
+        <div class="log-text" ${editableAttr} data-copy-src data-id="${log.id}">${escapeHtml(log.text)}</div>
         ${tagsRowHtml}
         <div class="log-actions">${tagHtml}${wantBtn}${urgentBtn}${completeHtml}<button class="log-attach-btn" data-attach title="URLリンクを添付">📎</button><button class="log-delete">削除</button></div>
       `;
@@ -2768,7 +2805,7 @@ function renderNotes() {
   } else {
     notes.forEach(n => {
       const card = document.createElement('div');
-      card.className = 'note-card';
+      card.className = 'note-card copy-scope';
       const date = new Date(n.updatedAt || n.createdAt);
       const dateStr = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
       const bodyPreview = (n.body || '').replace(/\n+/g, ' ').slice(0, 180);
@@ -2777,6 +2814,7 @@ function renderNotes() {
       const titleClass = n.title ? '' : ' empty';
       const wantBadge = n.wantAnswer ? `<span class="log-want-badge">${n.urgentClaude ? "🚀 今すぐ" : "☑ 回答希望"}</span>` : '';
       card.innerHTML = `
+        ${copyBtnHtml(false)}
         <div class="note-card-title${titleClass}">${escapeHtml(n.title || '(無題)')}</div>
         ${bodyPreview ? `<div class="note-card-body">${escapeHtml(bodyPreview)}</div>` : ''}
         <div class="note-card-meta">
@@ -2786,6 +2824,9 @@ function renderNotes() {
           ${wantBadge}
         </div>
       `;
+      // 一覧カードの本文は2行に省略表示なので、コピーは省略前の全文を渡す(2026-08-04)
+      const noteCopyBtn = card.querySelector("[data-copy]");
+      if (noteCopyBtn) noteCopyBtn._copyText = [n.title || "", n.body || ""].filter(Boolean).join("\n\n");
       card.onclick = () => openNoteEdit(n.id);
       listEl.appendChild(card);
     });
@@ -3383,7 +3424,7 @@ if (!window.__taskDueMenuBound) {
 // 1タスク分の DOM(完了 / タイトル編集 / 時間軸・タイプ変更 / メモ / 削除)
 function taskItemEl(t) {
   const item = document.createElement("div");
-  item.className = "task-item" + (t.completed ? " completed" : "");
+  item.className = "task-item copy-scope" + (t.completed ? " completed" : "");
   const badge = t.type === "action"
     ? `<span class="task-type-badge task-type-action">🎯 行動</span>`
     : `<span class="task-type-badge task-type-decision">🤔 判断</span>`;
@@ -3394,7 +3435,8 @@ function taskItemEl(t) {
     <div class="task-body">
       <div class="task-title-row">
         ${badge}
-        <div class="task-title"${t.completed ? "" : ' contenteditable="true"'}>${escapeHtml(t.title || "(無題)")}</div>
+        <div class="task-title" data-copy-src${t.completed ? "" : ' contenteditable="true"'}>${escapeHtml(t.title || "(無題)")}</div>
+        ${copyBtnHtml(true)}
       </div>
       <div class="task-actions">
         <button class="task-chip" data-act="bucket" title="タップで期限を選び直す(本日/今週/今月/先・日付指定)">${bm.icon} ${escapeHtml(bm.label)} ▾</button>
@@ -3771,6 +3813,87 @@ let answersFilter = "unread";   // 'unread' | 'all'
 let answersAutoBusy = false;    // 自動既読の多重実行ガード
 
 // ============================================================
+// 📋 コピーボタン(2026-08-04 晃良要望)
+// ------------------------------------------------------------
+// 「書いた文章・届いた文章を、その場で1タップでコピーしたい」。
+// 個々の描画処理に手を入れずに済むよう、document 1本のイベント委譲で処理する。
+//   使い方: 入れ物に class="copy-scope"、本文の要素に data-copy-src、
+//           ボタンに data-copy(位置は copy-scope の右上)を付けるだけ。
+//   本文が DOM に無い場合(ノート一覧カードの全文など)は btn._copyText に文字列を持たせる。
+// ============================================================
+function copyBtnHtml(inline) {
+  return `<button class="copy-btn${inline ? " inline" : ""}" data-copy type="button" title="この文章をコピー" aria-label="この文章をコピー">📋</button>`;
+}
+
+function copySourceText(el) {
+  if (!el) return "";
+  const tag = el.tagName;
+  if (tag === "TEXTAREA" || tag === "INPUT") return el.value || "";
+  return el.innerText || el.textContent || "";
+}
+
+let copyToastTimer = null;
+function showCopyToast(msg) {
+  let t = document.getElementById("copy-toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "copy-toast";
+    t.className = "copy-toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  requestAnimationFrame(() => t.classList.add("show"));
+  clearTimeout(copyToastTimer);
+  copyToastTimer = setTimeout(() => t.classList.remove("show"), 1400);
+}
+
+async function writeClipboard(text) {
+  // 新API優先。http や古い WebView では失敗するので execCommand へ退避する。
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) { /* フォールバックへ */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) {
+    console.error("copy failed:", e);
+    return false;
+  }
+}
+
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-copy]");
+  if (!btn) return;
+  // カード自体のタップ(ノートを開く等)や contenteditable のフォーカス移動を巻き込まない
+  e.preventDefault();
+  e.stopPropagation();
+  let text = btn._copyText;
+  if (text == null) {
+    const scope = btn.closest(".copy-scope") || document;
+    text = copySourceText(scope.querySelector("[data-copy-src]"));
+  }
+  text = (text || "").trim();
+  if (!text) { showCopyToast("コピーする文章がまだ無い"); return; }
+  const ok = await writeClipboard(text);
+  const label = btn.textContent;
+  btn.classList.add(ok ? "done" : "fail");
+  btn.textContent = ok ? "✓" : "✕";
+  showCopyToast(ok ? `コピーした(${text.length}文字)` : "コピーできなかった");
+  setTimeout(() => { btn.classList.remove("done", "fail"); btn.textContent = label; }, 1400);
+}, true);
+
+// ============================================================
 // ➤送信 / 🚀デプロイ の「いま動いてる」表示(2026-08-04)
 // ------------------------------------------------------------
 // PC常駐ウォッチャーが10秒おきに旗を見ているので、送信から10〜20秒で生成が始まる。
@@ -4005,7 +4128,7 @@ function renderAnswers() {
   items.forEach(a => {
     const parts = answerSplit(a.detail);
     const el = document.createElement("div");
-    el.className = "answer-item" + (a.consumed ? " read" : "");
+    el.className = "answer-item copy-scope" + (a.consumed ? " read" : "");
     const ts = a.created_at ? new Date(a.created_at).getTime() : Date.now();
     // 往復回数バッジ(2026-07-28)。1往復しかないスレッドには出さない=ノイズ回避
     const multi = (a._turns || 1) >= 2;
@@ -4034,10 +4157,11 @@ function renderAnswers() {
         ${turnBadge}
         <span class="answer-title">${escapeHtml((a.title || "").replace(/^💬 回答: /, ""))}</span>
         <span class="answer-time">${formatTs(ts)}</span>
+        ${copyBtnHtml(true)}
       </div>
       ${stateLine}
       ${parts.quote ? `<div class="answer-quote collapsed" title="タップで元メモを全文表示" data-quote-toggle>${escapeHtml(parts.quote.replace(/[ \t]*\[TH:[^\]]{1,80}\][ \t]*/g, " ").trim())}</div>` : ""}
-      <div class="answer-body">${escapeHtml(answerStripMarks(parts.body))}</div>
+      <div class="answer-body" data-copy-src>${escapeHtml(answerStripMarks(parts.body))}</div>
       <div class="answer-actions">
         ${a.consumed
           ? '<button class="answer-btn" data-aact="unread">↩ 未読に戻す</button>'
