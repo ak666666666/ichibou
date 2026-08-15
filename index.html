@@ -572,6 +572,21 @@ html { zoom: var(--ui-zoom, 1); }
 .task-actions { display: flex; gap: 6px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
 .task-chip { font-family: inherit; font-size: 10px; padding: 2px 7px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); cursor: pointer; font-weight: 600; letter-spacing: 0.04em; }
 .task-chip:hover { border-color: var(--accent); color: var(--accent); }
+/* 2026-08-15: 入力バーの期日パネル */
+.tasks-input-when { border:1px solid var(--line); background:transparent; padding:6px 12px; font-size:12px; cursor:pointer; font-family:inherit; color:var(--ink-soft); border-radius:4px; }
+.tasks-input-when.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+.tasks-when-panel { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:10px 12px; margin-top:8px; border:1px dashed var(--line); background:rgba(255,255,255,.5); }
+.tasks-when-panel[hidden] { display:none; }
+.tasks-when-f { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); }
+.tasks-when-f input { border:1px solid var(--line); background:#fff; padding:5px 8px; font-size:12px; font-family:inherit; }
+.tasks-when-clear { border:1px solid var(--line); background:transparent; padding:5px 10px; font-size:11.5px; cursor:pointer; font-family:inherit; color:var(--ink-mute); }
+.tasks-when-hint { font-size:11px; color:var(--ink-mute); flex-basis:100%; }
+/* カレンダーの表示切替 */
+.cal-toggles { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+.cal-toggle { border:1px solid var(--line); background:transparent; padding:5px 12px; font-size:11.5px; cursor:pointer; font-family:inherit; color:var(--ink-mute); border-radius:999px; }
+.cal-toggle.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+.cal-day-time { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--ink-mute); flex:none; margin-right:6px; }
+.cal-dot.span { opacity:.45; }
 /* 期限チップ(dueAt)/ 期限ピッカー(2026-07-29 タスク期限の後編集) */
 .task-chip.task-due-chip { border-color: var(--line); }
 .task-chip.task-due-chip.overdue { background: #a13630; border-color: #a13630; color: #fff; }
@@ -933,7 +948,16 @@ html { zoom: var(--ui-zoom, 1); }
           <option value="action">🎯 自分でやる</option>
           <option value="decision">🤔 判断するだけ</option>
         </select>
+        <button class="tasks-input-when" id="task-input-when" type="button" title="開始日・期日・時刻を指定する">📅 期日</button>
         <button class="tasks-input-add" id="task-input-add">＋ 追加</button>
+      </div>
+      <!-- 2026-08-15: 入力の時点で期日を決められるようにした(あとからチップを触らなくてよい) -->
+      <div class="tasks-when-panel" id="tasks-when-panel" hidden>
+        <label class="tasks-when-f">開始<input type="date" id="task-input-start"></label>
+        <label class="tasks-when-f">期日<input type="date" id="task-input-due"></label>
+        <label class="tasks-when-f">時刻<input type="time" id="task-input-time"></label>
+        <button class="tasks-when-clear" id="task-input-when-clear" type="button">✕ 消す</button>
+        <span class="tasks-when-hint">時刻は空でOK(その日の終わり扱い)。期日を入れると 本日/今週/今月/先 は自動で合います。</span>
       </div>
       <div class="tasks-meta" id="tasks-meta"></div>
       <div class="tasks-viewmode">
@@ -1243,6 +1267,11 @@ function normalizeTask(t) {
     note: t.note || "",
     // dueAt = 具体的な期限(epoch ms / 未設定は null)。bucket(ざっくり時間軸)と併用 / 2026-07-29
     dueAt: typeof t.dueAt === "number" ? t.dueAt : null,
+    // 2026-08-15: カレンダーに落とし込める粒度へ。期日に時刻を持たせ、開始日で期間も表せるようにした。
+    //   dueHasTime=false のときは「その日の終わりまで(23:59)」の従来どおりの締め方
+    //   startAt があると、カレンダー上で startAt〜dueAt の期間として帯で出る
+    dueHasTime: t.dueHasTime === true,
+    startAt: typeof t.startAt === "number" ? t.startAt : null,
     completed: !!t.completed,
     completedAt: t.completedAt || null,
     wantAnswer: t.wantAnswer === true,
@@ -3181,12 +3210,21 @@ function tasksArr() {
   return state.tasks;
 }
 
-function addTask(title, bucket, type) {
+function addTask(title, bucket, type, when) {
   const t = (title || "").trim();
   if (!t) return false;
-  tasksArr().push(normalizeTask({ title: t, bucket, type }));
+  const w = when || {};
+  // 期日を入れたら bucket はそれに合わせる(2026-08-15)。
+  // 日付を指定したのに「先」タブに入って見つからない、という迷子を防ぐ。
+  const finalBucket = w.dueAt ? (bucketFromDate(w.dueAt) || bucket) : bucket;
+  tasksArr().push(normalizeTask({
+    title: t, bucket: finalBucket, type,
+    dueAt: w.dueAt ?? null,
+    dueHasTime: w.dueHasTime === true,
+    startAt: w.startAt ?? null
+  }));
   saveState();
-  ensureTaskVisible(bucket, type);   // 「追加したのに画面に出ない」を防ぐ
+  ensureTaskVisible(finalBucket, type);   // 「追加したのに画面に出ない」を防ぐ
   renderTasks();
   return true;
 }
@@ -3321,15 +3359,44 @@ function calYmd(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 // その月に出す「日 → 出来事」の索引を1回で作る(セルごとに全件走査しない)
+// 2026-08-15: カレンダーは「タスクを見る場所」。雑メモ・もやは既定で隠し、必要な時だけ出す(晃良確定)
+let calShowNotes = false;
+
 function calBuildIndex() {
   const idx = {};
-  const put = (ymd, kind, obj) => {
+  const put = (ymd, kind, obj, extra) => {
     if (!ymd) return;
-    (idx[ymd] || (idx[ymd] = [])).push({ kind, obj });
+    (idx[ymd] || (idx[ymd] = [])).push({ kind, obj, ...(extra || {}) });
   };
-  tasksArr().forEach(t => { if (t.dueAt) put(calYmd(t.dueAt), "task", t); });
-  (Array.isArray(state.logs) ? state.logs : []).forEach(l => { if (l.ts) put(calYmd(l.ts), "log", l); });
-  (Array.isArray(state.moyas) ? state.moyas : []).forEach(m => { if (m.ts) put(calYmd(m.ts), "moya", m); });
+  tasksArr().forEach(t => {
+    if (!t.dueAt) return;
+    const dueYmd = calYmd(t.dueAt);
+    put(dueYmd, "task", t, { at: t.dueAt, edge: "due" });
+    // 開始日があれば、開始〜期日の各日にも薄く出す(期間として見えるように)
+    if (t.startAt && t.startAt < t.dueAt) {
+      const d = new Date(t.startAt);
+      const end = new Date(t.dueAt);
+      let guard = 0;
+      while (guard++ < 400) {
+        const ymd = calYmd(d.getTime());
+        if (ymd === dueYmd) break;
+        put(ymd, "task", t, { at: d.getTime(), edge: guard === 1 ? "start" : "span" });
+        d.setDate(d.getDate() + 1);
+        if (d > end) break;
+      }
+    }
+  });
+  if (calShowNotes) {
+    (Array.isArray(state.logs) ? state.logs : []).forEach(l => { if (l.ts) put(calYmd(l.ts), "log", l, { at: l.ts }); });
+    (Array.isArray(state.moyas) ? state.moyas : []).forEach(m => { if (m.ts) put(calYmd(m.ts), "moya", m, { at: m.ts }); });
+  }
+  // 日ごとに時刻順(時刻なしは末尾)
+  Object.values(idx).forEach(arr => arr.sort((a, b) => {
+    const ah = a.kind === "task" && a.obj.dueHasTime && a.edge === "due";
+    const bh = b.kind === "task" && b.obj.dueHasTime && b.edge === "due";
+    if (ah !== bh) return ah ? -1 : 1;
+    return (a.at || 0) - (b.at || 0);
+  }));
   return idx;
 }
 function calItemText(it) {
@@ -3362,7 +3429,7 @@ function renderTaskCalendar() {
     ].filter(Boolean).join(" ");
     // ドットは最大6個まで(それ以上は件数バッジ側で表現)
     const dots = items.slice(0, 6).map(it =>
-      `<i class="cal-dot ${it.kind}${it.kind === "task" && it.obj.completed ? " done" : ""}"></i>`
+      `<i class="cal-dot ${it.kind}${it.kind === "task" && it.obj.completed ? " done" : ""}${it.edge === "span" || it.edge === "start" ? " span" : ""}"></i>`
     ).join("");
     const badge = items.length > 6 ? `<span class="cal-badge">${items.length}</span>` : "";
     cells += `<button type="button" class="${cls}" data-ymd="${ymd}">`
@@ -3380,11 +3447,15 @@ function renderTaskCalendar() {
           <button class="cal-nav-btn" data-cal="next">翌月 ›</button>
         </div>
       </div>
+      <div class="cal-toggles">
+        <button type="button" class="cal-toggle ${calShowNotes ? "on" : ""}" data-caltoggle="notes">${calShowNotes ? "☑" : "☐"} 雑メモ・もやも表示</button>
+        <span style="font-size:11px;color:var(--ink-mute);">既定はタスクだけ</span>
+      </div>
       <div class="cal-grid">${cells}</div>
       <div class="cal-legend">
         <span><i class="cal-dot task"></i>タスク期日</span>
-        <span><i class="cal-dot log"></i>雑メモ</span>
-        <span><i class="cal-dot moya"></i>もや</span>
+        <span><i class="cal-dot task span"></i>着手〜期日の途中</span>
+        ${calShowNotes ? '<span><i class="cal-dot log"></i>雑メモ</span><span><i class="cal-dot moya"></i>もや</span>' : ""}
         <span>薄いドット=完了済 / 数字=その日の件数</span>
       </div>
       <div class="cal-day" id="cal-day"></div>
@@ -3398,13 +3469,20 @@ function renderTaskCalendar() {
     dayEl.innerHTML = `<div class="cal-day-h">${calSelectedYmd.replace(/-/g, "/")} の予定・記録(${items.length}件)</div>`
       + (items.length === 0
         ? `<div class="cal-day-empty">この日に紐づくものはありません。</div>`
-        : items.map(it =>
-            `<div class="cal-day-row${it.kind === "task" && it.obj.completed ? " done" : ""}">`
-            + `<span class="cal-day-kind ${it.kind}">${label[it.kind]}</span>`
-            + `<span class="cal-day-text">${escapeHtml(calItemText(it))}</span></div>`
-          ).join(""));
+        : items.map(it => {
+            const isTask = it.kind === "task";
+            const timeTxt = (isTask && it.obj.dueHasTime && it.edge === "due") ? taskDueHm(it.obj.dueAt) : "";
+            const edgeTxt = !isTask ? ""
+              : it.edge === "start" ? "着手"
+              : it.edge === "span" ? "進行中"
+              : (it.obj.startAt ? "締切" : "");
+            return `<div class="cal-day-row${isTask && it.obj.completed ? " done" : ""}">`
+              + `<span class="cal-day-kind ${it.kind}">${label[it.kind]}${edgeTxt ? "・" + edgeTxt : ""}</span>`
+              + (timeTxt ? `<span class="cal-day-time">${timeTxt}</span>` : "")
+              + `<span class="cal-day-text">${escapeHtml(calItemText(it))}</span></div>`;
+          }).join(""));
   } else {
-    dayEl.innerHTML = `<div class="cal-day-empty">日付をタップすると、その日のタスク期日・雑メモ・もやが出ます。</div>`;
+    dayEl.innerHTML = `<div class="cal-day-empty">日付をタップすると、その日のタスク(着手・進行中・締切)が出ます。</div>`;
   }
 
   wrap.querySelectorAll("[data-cal]").forEach(btn => {
@@ -3415,6 +3493,9 @@ function renderTaskCalendar() {
       else { calAnchor = null; calSelectedYmd = null; }
       renderTaskCalendar();
     });
+  });
+  wrap.querySelectorAll("[data-caltoggle]").forEach(btn => {
+    btn.addEventListener("click", () => { calShowNotes = !calShowNotes; renderTaskCalendar(); });
   });
   wrap.querySelectorAll(".cal-cell").forEach(cell => {
     cell.addEventListener("click", () => {
@@ -3435,9 +3516,48 @@ function taskDueYmd(ts) {
   const p = n => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-function taskDueLabel(ts) {
+function taskDueHm(ts) {
+  if (!ts) return "";
   const d = new Date(ts);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  const p = n => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// 「8/20」または「8/20 14:00」。開始日があれば「8/18→8/20」の形にする
+function taskDueLabel(ts, hasTime) {
+  const d = new Date(ts);
+  const base = `${d.getMonth() + 1}/${d.getDate()}`;
+  return hasTime ? `${base} ${taskDueHm(ts)}` : base;
+}
+function taskRangeLabel(t) {
+  if (!t.dueAt) return "";
+  const due = taskDueLabel(t.dueAt, t.dueHasTime);
+  if (!t.startAt) return due;
+  const s = new Date(t.startAt);
+  return `${s.getMonth() + 1}/${s.getDate()} → ${due}`;
+}
+// 日付(YYYY-MM-DD)+時刻(HH:MM)から epoch ms。時刻が空なら その日の終わり(23:59:59)
+function taskComposeTs(ymd, hm) {
+  if (!ymd) return { ts: null, hasTime: false };
+  if (hm) {
+    const ts = new Date(`${ymd}T${hm}:00`).getTime();
+    return { ts: Number.isFinite(ts) ? ts : null, hasTime: true };
+  }
+  const ts = new Date(`${ymd}T23:59:59`).getTime();
+  return { ts: Number.isFinite(ts) ? ts : null, hasTime: false };
+}
+// 期日から ざっくり時間軸(bucket)を割り出す。
+// 2026-08-15: 日付を入れたのに「本日」タブに埋もれて見つからない、を防ぐため自動で合わせる。
+function bucketFromDate(ts) {
+  if (!ts) return null;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const d = new Date(ts);
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((day - today) / 86400000);
+  if (diffDays <= 0) return "today";
+  if (diffDays <= 7) return "thisWeek";
+  if (diffDays <= 31) return "thisMonth";
+  return "future";
 }
 function taskDueState(ts) {
   if (!ts) return "";
@@ -3462,8 +3582,10 @@ function openTaskDueMenu(t, itemEl) {
     return `<button class="task-due-opt${cur}" data-b="${b}">${m.icon} ${escapeHtml(m.label)}${cur ? " ✓" : ""}</button>`;
   }).join("");
   menu.innerHTML = opts
-    + `<label class="task-due-date">📌 日付<input type="date" class="task-due-input" value="${taskDueYmd(t.dueAt)}"></label>`
-    + (t.dueAt ? `<button class="task-due-opt" data-clear="1">✕ 日付を外す</button>` : "")
+    + `<label class="task-due-date">🚩 開始<input type="date" class="task-start-input" value="${taskDueYmd(t.startAt)}"></label>`
+    + `<label class="task-due-date">📌 期日<input type="date" class="task-due-input" value="${taskDueYmd(t.dueAt)}"></label>`
+    + `<label class="task-due-date">🕐 時刻<input type="time" class="task-time-input" value="${t.dueHasTime ? taskDueHm(t.dueAt) : ""}"></label>`
+    + (t.dueAt || t.startAt ? `<button class="task-due-opt" data-clear="1">✕ 日付を外す</button>` : "")
     + `<button class="task-due-opt task-due-close" data-close="1">閉じる</button>`;
   const acts = itemEl.querySelector(".task-actions");
   acts.parentNode.insertBefore(menu, acts.nextSibling);
@@ -3471,17 +3593,38 @@ function openTaskDueMenu(t, itemEl) {
     const btn = e.target.closest("button");
     if (!btn) return;
     if (btn.dataset.close) { menu.remove(); return; }
-    if (btn.dataset.clear) { updateTask(t.id, { dueAt: null }); closeTaskDueMenus(); renderTasks(); return; }
+    if (btn.dataset.clear) { updateTask(t.id, { dueAt: null, dueHasTime: false, startAt: null }); closeTaskDueMenus(); renderTasks(); return; }
     if (btn.dataset.b) { updateTask(t.id, { bucket: btn.dataset.b }); closeTaskDueMenus(); renderTasks(); }
   });
-  menu.querySelector(".task-due-input").addEventListener("change", (e) => {
-    const v = e.target.value;
-    // 期限は「その日の終わりまで」= 23:59 締め(2026-07-22 合意の締め方に合わせる)
-    const ts = v ? new Date(`${v}T23:59:59`).getTime() : null;
-    updateTask(t.id, { dueAt: Number.isFinite(ts) ? ts : null });
-    closeTaskDueMenus();
-    renderTasks();
-  });
+  // 2026-08-15: 開始日・期日・時刻をまとめて反映する(どれを変えても同じ処理)
+  const applyWhen = (close) => {
+    const dueV = menu.querySelector(".task-due-input").value;
+    const timeV = menu.querySelector(".task-time-input").value;
+    const startV = menu.querySelector(".task-start-input").value;
+    const d = taskComposeTs(dueV, timeV);
+    const startTs = startV ? new Date(`${startV}T00:00:00`).getTime() : null;
+    const patch = {
+      dueAt: d.ts,
+      dueHasTime: d.hasTime,
+      startAt: Number.isFinite(startTs) ? startTs : null
+    };
+    // 期日を入れたら ざっくり時間軸も合わせる(リストで迷子にならないように)
+    const b = bucketFromDate(d.ts);
+    if (b) patch.bucket = b;
+    updateTask(t.id, patch);
+    if (close) { closeTaskDueMenus(); renderTasks(); return; }
+    // 2026-08-15: 開始日→時刻 と続けて設定できるよう、閉じない時は再描画しない。
+    // renderTasks() はカードごと作り直すため、開いていたメニューが消えて2つ目が設定できなくなる。
+    const fresh = tasksArr().find(x => x.id === t.id);
+    const chip = itemEl.querySelector(".task-due-chip");
+    if (fresh && chip) {
+      chip.textContent = `📌 ${taskRangeLabel(fresh)}`;
+      chip.className = `task-chip task-due-chip ${taskDueState(fresh.dueAt)}`;
+    }
+  };
+  menu.querySelector(".task-due-input").addEventListener("change", () => applyWhen(true));
+  menu.querySelector(".task-time-input").addEventListener("change", () => applyWhen(false));
+  menu.querySelector(".task-start-input").addEventListener("change", () => applyWhen(false));
 }
 // メニュー外タップで閉じる(1回だけ登録)
 if (!window.__taskDueMenuBound) {
@@ -3511,7 +3654,7 @@ function taskItemEl(t) {
       </div>
       <div class="task-actions">
         <button class="task-chip" data-act="bucket" title="タップで期限を選び直す(本日/今週/今月/先・日付指定)">${bm.icon} ${escapeHtml(bm.label)} ▾</button>
-        ${t.dueAt ? `<button class="task-chip task-due-chip ${taskDueState(t.dueAt)}" data-act="due" title="タップで期限を変更">📌 ${taskDueLabel(t.dueAt)}</button>` : ""}
+        ${t.dueAt ? `<button class="task-chip task-due-chip ${taskDueState(t.dueAt)}" data-act="due" title="タップで期限を変更">📌 ${escapeHtml(taskRangeLabel(t))}</button>` : ""}
         <button class="task-chip" data-act="type" title="タップで 🎯/🤔 を切替">${t.type === "action" ? "🎯 行動" : "🤔 判断"}</button>
         <button class="task-chip" data-act="note">${hasNote ? "📝 メモ" : "＋ メモ"}</button>
         <button class="log-want-toggle ${t.wantAnswer ? 'on' : ''}" data-act="want" title="タップでClaude回答&実行希望を切替">${t.wantAnswer ? '☑ 回答希望' : '☐ 回答希望'}</button>
@@ -3618,15 +3761,50 @@ document.getElementById("tasks-hide-done").addEventListener("change", (e) => {
 });
 
 // 入力バー: タイトル + Enter を最速動線に(「＋ 追加」ボタンでも同じ)
+function taskInputWhen() {
+  const due = document.getElementById("task-input-due").value;
+  const hm = document.getElementById("task-input-time").value;
+  const st = document.getElementById("task-input-start").value;
+  const d = taskComposeTs(due, hm);
+  const startTs = st ? new Date(`${st}T00:00:00`).getTime() : null;
+  return {
+    dueAt: d.ts,
+    dueHasTime: d.hasTime,
+    startAt: Number.isFinite(startTs) ? startTs : null
+  };
+}
+function taskInputWhenClear() {
+  ["task-input-due", "task-input-time", "task-input-start"].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = "";
+  });
+  syncWhenButton();
+}
+function syncWhenButton() {
+  const btn = document.getElementById("task-input-when");
+  if (!btn) return;
+  const w = taskInputWhen();
+  btn.classList.toggle("on", !!(w.dueAt || w.startAt));
+  btn.textContent = w.dueAt ? `📅 ${taskDueLabel(w.dueAt, w.dueHasTime)}` : "📅 期日";
+}
 function taskInputAdd() {
   const titleEl = document.getElementById("task-input-title");
   const bucketEl = document.getElementById("task-input-bucket");
   const typeEl = document.getElementById("task-input-type");
-  if (addTask(titleEl.value, bucketEl.value, typeEl.value)) {
+  if (addTask(titleEl.value, bucketEl.value, typeEl.value, taskInputWhen())) {
     titleEl.value = "";
+    taskInputWhenClear();          // 次のタスクに期日を引きずらない
     titleEl.focus();
   }
 }
+document.getElementById("task-input-when").addEventListener("click", () => {
+  const panel = document.getElementById("tasks-when-panel");
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) document.getElementById("task-input-due").focus();
+});
+document.getElementById("task-input-when-clear").addEventListener("click", taskInputWhenClear);
+["task-input-due", "task-input-time", "task-input-start"].forEach(id => {
+  document.getElementById(id).addEventListener("change", syncWhenButton);
+});
 document.getElementById("task-input-add").addEventListener("click", taskInputAdd);
 document.getElementById("task-input-title").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); taskInputAdd(); }
