@@ -572,6 +572,14 @@ html { zoom: var(--ui-zoom, 1); }
 .task-actions { display: flex; gap: 6px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
 .task-chip { font-family: inherit; font-size: 10px; padding: 2px 7px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); cursor: pointer; font-weight: 600; letter-spacing: 0.04em; }
 .task-chip:hover { border-color: var(--accent); color: var(--accent); }
+/* 2026-08-15: 寝る前に明日の分をまとめて書くモード */
+.tasks-night-btn { border:1px solid #6b5ea8; background:transparent; padding:6px 12px; font-size:12px; cursor:pointer; font-family:inherit; color:#5a4f92; border-radius:4px; }
+.tasks-night-btn.on { background:#5a4f92; color:#fff; border-color:#5a4f92; }
+.tasks-night-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 14px; margin-top:8px; border:1px solid #6b5ea8; background:#f4f2fb; font-size:12px; color:#4a4080; }
+.tasks-night-bar[hidden] { display:none; }
+.tasks-night-bar strong { font-size:13px; }
+.tasks-night-count { font-family:"JetBrains Mono",monospace; }
+.tasks-night-exit { border:1px solid #6b5ea8; background:transparent; padding:4px 10px; font-size:11.5px; cursor:pointer; font-family:inherit; color:#5a4f92; margin-left:auto; }
 /* 2026-08-15: 入力バーの期日パネル */
 .tasks-input-when { border:1px solid var(--line); background:transparent; padding:6px 12px; font-size:12px; cursor:pointer; font-family:inherit; color:var(--ink-soft); border-radius:4px; }
 .tasks-input-when.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
@@ -940,6 +948,7 @@ html { zoom: var(--ui-zoom, 1); }
         <input type="text" class="tasks-input-title" id="task-input-title" placeholder="タスクを入力…(Enter で追加)" autocomplete="off">
         <select class="tasks-input-sel" id="task-input-bucket">
           <option value="today">🔥 本日</option>
+          <option value="tomorrow">☀ 明日</option>
           <option value="thisWeek">📅 今週</option>
           <option value="thisMonth">🗓 今月</option>
           <option value="future">🌱 先</option>
@@ -949,6 +958,7 @@ html { zoom: var(--ui-zoom, 1); }
           <option value="decision">🤔 判断するだけ</option>
         </select>
         <button class="tasks-input-when" id="task-input-when" type="button" title="開始日・期日・時刻を指定する">📅 期日</button>
+        <button class="tasks-night-btn" id="task-night-btn" type="button" title="入力欄を明日固定にして、明日の分だけをまとめて書く">🌙 明日の準備</button>
         <button class="tasks-input-add" id="task-input-add">＋ 追加</button>
       </div>
       <!-- 2026-08-15: 入力の時点で期日を決められるようにした(あとからチップを触らなくてよい) -->
@@ -959,6 +969,13 @@ html { zoom: var(--ui-zoom, 1); }
         <button class="tasks-when-clear" id="task-input-when-clear" type="button">✕ 消す</button>
         <span class="tasks-when-hint">時刻は空でOK(その日の終わり扱い)。期日を入れると 本日/今週/今月/先 は自動で合います。</span>
       </div>
+      <div class="tasks-night-bar" id="tasks-night-bar" hidden>
+        <strong>🌙 明日の準備モード</strong>
+        <span id="tasks-night-date"></span>
+        <span class="tasks-night-count" id="tasks-night-count"></span>
+        <span style="color:var(--ink-mute);">入れたタスクは自動で明日の期日になります。翌朝は「本日」に上がります。</span>
+        <button class="tasks-night-exit" id="task-night-exit" type="button">✕ 終了</button>
+      </div>
       <div class="tasks-meta" id="tasks-meta"></div>
       <div class="tasks-viewmode">
         <button class="tasks-viewmode-btn active" data-tvm="list" title="時間軸(本日/今週/今月/先)ごとの一覧">📋 リスト</button>
@@ -967,6 +984,7 @@ html { zoom: var(--ui-zoom, 1); }
       <div class="tasks-calendar" id="tasks-calendar" style="display:none;"></div>
       <div class="tasks-filter">
         <button class="tasks-filter-btn active" data-filter="today">本日のみ</button>
+        <button class="tasks-filter-btn" data-filter="tomorrow">明日まで</button>
         <button class="tasks-filter-btn" data-filter="thisWeek">今週まで</button>
         <button class="tasks-filter-btn" data-filter="all">全部</button>
         <span class="tasks-filter-sep">|</span>
@@ -1161,10 +1179,11 @@ const STORAGE_KEY = "ichibou_v3";
 // bucket = 時間軸 / type = 行動か判断か。
 // ⚠ normalizeTask() は下の `let state = loadLocalState()` の時点で実行されるため、
 //    これらの const は DEFAULT_STATE より前に置く(後ろに置くと TDZ で ReferenceError)。
-const TASK_BUCKETS = ["today", "thisWeek", "thisMonth", "future"];
+const TASK_BUCKETS = ["today", "tomorrow", "thisWeek", "thisMonth", "future"];
 const TASK_TYPES = ["action", "decision"];
 const TASK_BUCKET_META = {
   today:     { label: "本日", icon: "🔥" },
+  tomorrow:  { label: "明日", icon: "☀" },
   thisWeek:  { label: "今週", icon: "📅" },
   thisMonth: { label: "今月", icon: "🗓" },
   future:    { label: "先",   icon: "🌱" }
@@ -3216,6 +3235,11 @@ function addTask(title, bucket, type, when) {
   const w = when || {};
   // 期日を入れたら bucket はそれに合わせる(2026-08-15)。
   // 日付を指定したのに「先」タブに入って見つからない、という迷子を防ぐ。
+  // 「明日」を選んだだけの時も日付として持たせる。そうしないと翌朝に繰り上がらない(2026-08-15)
+  if (!w.dueAt && bucket === "tomorrow") {
+    w.dueAt = tomorrowTs();
+    w.dueHasTime = false;
+  }
   const finalBucket = w.dueAt ? (bucketFromDate(w.dueAt) || bucket) : bucket;
   tasksArr().push(normalizeTask({
     title: t, bucket: finalBucket, type,
@@ -3232,7 +3256,7 @@ function addTask(title, bucket, type, when) {
 // 追加したタスクが現在のフィルタで見えないなら、フィルタを広げる
 function ensureTaskVisible(bucket, type) {
   let changed = false;
-  const idx = TASK_BUCKETS.indexOf(bucket);
+  const idx = TASK_BUCKETS.indexOf(bucket);   // bucket は taskBucketOf() で解決済みの値が渡る
   const curIdx = TASK_BUCKETS.indexOf(tasksFilter);
   if (tasksFilter !== "all" && idx > curIdx) { tasksFilter = "all"; changed = true; }
   if (tasksTypeFilter !== "all" && tasksTypeFilter !== type) { tasksTypeFilter = "all"; changed = true; }
@@ -3271,6 +3295,16 @@ function cycleBucket(cur) {
 function countRemainingTasks() {
   // バッジは「本日」の残件数(優先度が一番高いので妥当)
   return tasksArr().filter(t => t.bucket === "today" && !t.completed).length;
+}
+
+// ===== 表示先(時間軸)の決め方 — 2026-08-15 =====
+// 期日(dueAt)があるタスクは、保存された bucket ではなく**その場で日付から計算する**。
+// こうすると「寝る前に明日で入れたタスクが、翌朝は何もしなくても本日の欄に上がる」。
+// 保存値を書き換える方式だと、アプリを開かなかった日を挟むとラベルがずれていく。
+// 期日が無いタスクだけ、保存された bucket をそのまま使う(ざっくり管理用)。
+function taskBucketOf(t) {
+  if (t && t.dueAt) return bucketFromDate(t.dueAt) || t.bucket || "today";
+  return (t && t.bucket) || "today";
 }
 
 function renderTasksCount() {
@@ -3322,7 +3356,7 @@ function renderTasks() {
   includeBuckets.forEach(bucket => {
     const meta = TASK_BUCKET_META[bucket];
     const filtered = all.filter(t => {
-      if (t.bucket !== bucket) return false;
+      if (taskBucketOf(t) !== bucket) return false;
       if (tasksTypeFilter !== "all" && t.type !== tasksTypeFilter) return false;
       if (tasksHideDone && t.completed) return false;
       return true;
@@ -3347,6 +3381,7 @@ function renderTasks() {
   });
 
   if (!renderedAny) emptyEl.style.display = "block";
+  renderNightCount();
   renderTasksCount();
 }
 
@@ -3555,6 +3590,7 @@ function bucketFromDate(ts) {
   const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const diffDays = Math.round((day - today) / 86400000);
   if (diffDays <= 0) return "today";
+  if (diffDays === 1) return "tomorrow";
   if (diffDays <= 7) return "thisWeek";
   if (diffDays <= 31) return "thisMonth";
   return "future";
@@ -3761,6 +3797,55 @@ document.getElementById("tasks-hide-done").addEventListener("change", (e) => {
 });
 
 // 入力バー: タイトル + Enter を最速動線に(「＋ 追加」ボタンでも同じ)
+// ===== 🌙 明日の準備モード(2026-08-15 晃良要望)=====
+// 寝る前に明日の分をまとめて書くための状態。ONの間は:
+//   ・入力したタスクの期日が自動で「明日」になる(=翌朝、何もしなくても本日の欄に上がる)
+//   ・リストが明日の分だけに絞られる(書いたものを見返しながら足せる)
+// 画面の状態なので保存しない。アプリを閉じれば解除される。
+let nightMode = false;
+
+function tomorrowTs() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59).getTime();
+}
+function tomorrowYmd() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function setNightMode(on) {
+  nightMode = on;
+  const btn = document.getElementById("task-night-btn");
+  const bar = document.getElementById("tasks-night-bar");
+  if (btn) btn.classList.toggle("on", on);
+  if (bar) bar.hidden = !on;
+  if (on) {
+    // 入力欄を明日に固定して見せる(期日パネルを開かなくても分かるように)
+    const dueEl = document.getElementById("task-input-due");
+    if (dueEl) dueEl.value = tomorrowYmd();
+    syncWhenButton();
+    tasksFilter = "tomorrow";
+    syncTaskFilterButtons();
+    const d = new Date(tomorrowTs());
+    const dow = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+    const dateEl = document.getElementById("tasks-night-date");
+    if (dateEl) dateEl.textContent = `${d.getMonth() + 1}/${d.getDate()}(${dow})の分`;
+    const titleEl = document.getElementById("task-input-title");
+    if (titleEl) titleEl.focus();
+  } else {
+    taskInputWhenClear();
+  }
+  renderTasks();
+}
+function renderNightCount() {
+  const el = document.getElementById("tasks-night-count");
+  if (!el) return;
+  const n = tasksArr().filter(t => !t.completed && taskBucketOf(t) === "tomorrow").length;
+  el.textContent = `${n}件`;
+}
+
 function taskInputWhen() {
   const due = document.getElementById("task-input-due").value;
   const hm = document.getElementById("task-input-time").value;
@@ -3790,9 +3875,17 @@ function taskInputAdd() {
   const titleEl = document.getElementById("task-input-title");
   const bucketEl = document.getElementById("task-input-bucket");
   const typeEl = document.getElementById("task-input-type");
-  if (addTask(titleEl.value, bucketEl.value, typeEl.value, taskInputWhen())) {
+  let when = taskInputWhen();
+  // 明日の準備モード中は、期日を指定していなくても明日にする
+  if (nightMode && !when.dueAt) when = { ...when, dueAt: tomorrowTs(), dueHasTime: false };
+  if (addTask(titleEl.value, bucketEl.value, typeEl.value, when)) {
     titleEl.value = "";
     taskInputWhenClear();          // 次のタスクに期日を引きずらない
+    if (nightMode) {               // ただし明日の準備中は「明日」を保ったまま連続入力できるようにする
+      const dueEl = document.getElementById("task-input-due");
+      if (dueEl) dueEl.value = tomorrowYmd();
+      syncWhenButton();
+    }
     titleEl.focus();
   }
 }
@@ -3802,6 +3895,8 @@ document.getElementById("task-input-when").addEventListener("click", () => {
   if (!panel.hidden) document.getElementById("task-input-due").focus();
 });
 document.getElementById("task-input-when-clear").addEventListener("click", taskInputWhenClear);
+document.getElementById("task-night-btn").addEventListener("click", () => setNightMode(!nightMode));
+document.getElementById("task-night-exit").addEventListener("click", () => setNightMode(false));
 ["task-input-due", "task-input-time", "task-input-start"].forEach(id => {
   document.getElementById(id).addEventListener("change", syncWhenButton);
 });
