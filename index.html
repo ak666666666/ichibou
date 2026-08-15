@@ -559,7 +559,9 @@ html { zoom: var(--ui-zoom, 1); }
 .tasks-empty { text-align: center; padding: 40px 20px; color: var(--ink-mute); font-size: 13px; }
 /* --- 2026-07-09 自己管理化: 入力バー + 行内操作 --- */
 .tasks-input-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; background: var(--bg-2); border-radius: 6px; margin-bottom: 14px; }
-.tasks-input-title { flex: 1 1 240px; min-width: 0; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); }
+/* 2026-08-15: 1行入力(input)だと改行が打てなかったので textarea に変更。
+   入力量に応じて自分で伸びる(既定1行・最大8行相当まで)。 */
+.tasks-input-title { flex: 1 1 240px; min-width: 0; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); resize: vertical; line-height: 1.6; min-height: 38px; max-height: 40vh; overflow-y: auto; white-space: pre-wrap; }
 .tasks-input-title:focus { outline: none; border-color: var(--accent); }
 .tasks-input-sel { font-family: inherit; font-size: 12px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink-soft); cursor: pointer; }
 .tasks-input-add { font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 4px; cursor: pointer; }
@@ -945,7 +947,7 @@ html { zoom: var(--ui-zoom, 1); }
         </div>
       </div>
       <div class="tasks-input-bar">
-        <input type="text" class="tasks-input-title" id="task-input-title" placeholder="タスクを入力…(Enter で追加)" autocomplete="off">
+        <textarea class="tasks-input-title" id="task-input-title" rows="1" placeholder="タスクを入力…(改行OK / ＋追加 で登録)" autocomplete="off"></textarea>
         <select class="tasks-input-sel" id="task-input-bucket">
           <option value="today">🔥 本日</option>
           <option value="tomorrow">☀ 明日</option>
@@ -3436,7 +3438,11 @@ function calBuildIndex() {
 }
 function calItemText(it) {
   const o = it.obj || {};
-  return String(o.title || o.text || "").trim() || "(無題)";
+  const raw = String(o.title || o.text || "").trim();
+  if (!raw) return "(無題)";
+  // 2026-08-15: タスク名が複数行になったので、1行で並べる場所は先頭行だけ出す
+  const lines = raw.split("\n").filter(l => l.trim());
+  return lines.length > 1 ? lines[0] + " …" : lines[0];
 }
 function renderTaskCalendar() {
   const wrap = document.getElementById("tasks-calendar");
@@ -3880,6 +3886,7 @@ function taskInputAdd() {
   if (nightMode && !when.dueAt) when = { ...when, dueAt: tomorrowTs(), dueHasTime: false };
   if (addTask(titleEl.value, bucketEl.value, typeEl.value, when)) {
     titleEl.value = "";
+    autoGrowTaskInput();           // 伸びた入力欄を1行に戻す
     taskInputWhenClear();          // 次のタスクに期日を引きずらない
     if (nightMode) {               // ただし明日の準備中は「明日」を保ったまま連続入力できるようにする
       const dueEl = document.getElementById("task-input-due");
@@ -3901,9 +3908,25 @@ document.getElementById("task-night-exit").addEventListener("click", () => setNi
   document.getElementById(id).addEventListener("change", syncWhenButton);
 });
 document.getElementById("task-input-add").addEventListener("click", taskInputAdd);
+// 2026-08-15 変更(晃良要望「改行できるようにして」):
+//   Enter        = 改行(素通し)
+//   Ctrl/⌘+Enter = 追加
+//   スマホには Ctrl が無いので「＋ 追加」ボタンが主動線。タスクカードの編集欄と同じ作法に揃えた(2026-07-27)
 document.getElementById("task-input-title").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); taskInputAdd(); }
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); taskInputAdd(); }
 });
+// 入力量に応じて高さを自動調整(雑メモの記録前欄と同じ挙動)
+function autoGrowTaskInput() {
+  const el = document.getElementById("task-input-title");
+  if (!el) return;
+  // 空の時は高さ指定を外してCSSの既定(1行)に戻す。
+  // textarea の scrollHeight は「折り返した placeholder」の分まで含むため、
+  // 空でも2行分(61px)を返してしまい、追加後に1行へ戻らなかった(2026-08-15)。
+  if (!el.value) { el.style.height = ""; return; }
+  el.style.height = "0px";   // "auto" だと縮まない環境があるので0にしてから測り直す
+  el.style.height = Math.min(el.scrollHeight, Math.round(window.innerHeight * 0.4)) + "px";
+}
+document.getElementById("task-input-title").addEventListener("input", autoGrowTaskInput);
 
 // ========================================================================
 // ===== 受信箱(Cowork→一望同期) =====
