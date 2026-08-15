@@ -1287,6 +1287,16 @@ function saveState() {
 // フォーカスを外した瞬間、または一定時間経過後に 保留した再描画をまとめて実行。
 let deferredRender = false;
 let deferredRenderTimer = null;
+
+// 2026-08-15: IME(日本語変換)中かどうかを常時把握する。
+// 変換途中で再描画すると、確定前の文字が丸ごと消える。
+let imeComposing = false;
+document.addEventListener("compositionstart", () => { imeComposing = true; }, true);
+document.addEventListener("compositionend", () => {
+  imeComposing = false;
+  flushDeferredRenders();
+}, true);
+
 function isEditingActive() {
   const el = document.activeElement;
   if (!el || el === document.body) return false;
@@ -1295,15 +1305,53 @@ function isEditingActive() {
   if (el.isContentEditable) return true;
   return false;
 }
+// 入力中か(IME変換中も含む)
+function isTypingNow() {
+  return imeComposing || isEditingActive();
+}
+// 「いま指定した範囲の中で入力している」か。
+// 回答タブのリストを描き直しても、雑メモ欄に入力中なら無害 — という判定に使う。
+function isEditingInside(selector) {
+  if (!isEditingActive() && !imeComposing) return false;
+  const el = document.activeElement;
+  if (!el || el === document.body) return false;
+  return !!(el.closest && el.closest(selector));
+}
+
+// 入力中に来た再描画を溜めておき、手が止まってから流す(2026-08-15)
+const deferredRenders = new Map();
+function deferRender(name, fn, selector) {
+  if (isEditingInside(selector)) {
+    deferredRenders.set(name, fn);
+    return true;   // 保留した
+  }
+  return false;    // そのまま描いてよい
+}
+function flushDeferredRenders() {
+  if (deferredRenders.size === 0) return;
+  if (isTypingNow()) return;   // まだ打っているなら待つ
+  const fns = [...deferredRenders.values()];
+  deferredRenders.clear();
+  fns.forEach(fn => { try { fn(); } catch (e) { console.error("deferred render error:", e); } });
+}
 function safeRenderAll(source) {
   if (isEditingActive()) {
     deferredRender = true;
-    // 保険:8秒後にフォーカスが外れてなくても更新を反映(古い表示のまま長く残さない)
+    // 2026-08-15 修正: 以前はここで「8秒後に強制的に renderAll()」していた。
+    // だが長文を打っている最中でも容赦なく発火するため、**入力中に文字が全部消える**主因になっていた
+    // (晃良報告「数秒に1回、入力が全部リセットされる」)。
+    // 強制はやめ、手が止まるまで待ち続ける。3秒ごとに様子を見て、打ち終わっていたら反映する。
     if (deferredRenderTimer) clearTimeout(deferredRenderTimer);
-    deferredRenderTimer = setTimeout(() => {
+    const waitUntilIdle = () => {
+      if (isTypingNow()) {
+        deferredRenderTimer = setTimeout(waitUntilIdle, 3000);
+        return;
+      }
+      deferredRenderTimer = null;
       deferredRender = false;
       renderAll();
-    }, 8000);
+    };
+    deferredRenderTimer = setTimeout(waitUntilIdle, 3000);
     return;
   }
   renderAll();
@@ -1312,6 +1360,7 @@ function safeRenderAll(source) {
 document.addEventListener("focusout", () => {
   // 少し待つ(次の入力要素にフォーカス移動する場合を考慮)
   setTimeout(() => {
+    flushDeferredRenders();
     if (deferredRender && !isEditingActive()) {
       deferredRender = false;
       if (deferredRenderTimer) { clearTimeout(deferredRenderTimer); deferredRenderTimer = null; }
@@ -3672,6 +3721,8 @@ function inboxFormatDue(due) {
 let inboxFilter = "unread"; // 'unread' | 'all'
 
 function renderInbox() {
+  // 2026-08-15: 受信箱の返信欄に入力中なら描き直さない(理由は renderAnswers と同じ)
+  if (deferRender("inbox", renderInbox, "#inbox-list")) return;
   const list = document.getElementById("inbox-list");
   if (!list) return;
   const unreadCount = inboxItems.filter(it => !it.consumed).length;
@@ -3964,6 +4015,8 @@ let answerWait = null;
 function renderAnswerWait() {
   const box = document.getElementById("answers-waiting");
   if (!box) return;
+  // 入力中はバナーの書き換えもしない(同じ親の中でフォーカスが飛ぶのを避ける)
+  if (isEditingInside("#answers-list, #answers-waiting")) return;
   if (!answerWait) { box.innerHTML = ""; return; }
   if (answerWait.state === "done") {
     box.innerHTML = `<div class="answer-wait done">✓ ${escapeHtml(answerWait.doneLabel || "届きました")}</div>`;
@@ -4007,6 +4060,9 @@ function startAnswerWait(label, timeoutMin) {
   answerWait.tick = setInterval(renderAnswerWait, 1000);
   answerWait.poll = setInterval(async () => {
     if (!answerWait) return;
+    // 2026-08-15: 入力中はポーリング自体を見送る。
+    // 6秒おきに回答リストを描き直すため、返信を打っている最中だと文字が消えていた(晃良報告の主因のひとつ)。
+    if (isTypingNow()) return;
     const baseline = answerWait.baseline;
     await loadAnswers();
     if (!answerWait) return;
@@ -4232,6 +4288,9 @@ function answerSplit(detail) {
 }
 
 function renderAnswers() {
+  // 2026-08-15: 回答タブの返信欄に入力中なら描き直さない。
+  // realtime や「生成中」ポーリングが数秒おきに走るため、素通しすると打っている途中で入力欄ごと消える。
+  if (deferRender("answers", renderAnswers, "#answers-list, #answers-waiting")) return;
   buildAnswerThreads();
   renderAnswersCount();
   const list = document.getElementById("answers-list");
