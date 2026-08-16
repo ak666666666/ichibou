@@ -1857,7 +1857,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
     tab.classList.add("active");
     document.getElementById("view-" + tab.dataset.view).classList.add("active");
-    if (tab.dataset.view === "shirei") { renderShirei(); loadShirei(); }   // 描いてから最新を取り直す
+    if (tab.dataset.view === "shirei") { renderShirei(); loadShirei(); loadAnswers(); }   // 描いてから最新を取り直す
     if (tab.dataset.view === "history") { renderHistory(); loadHistory(); }
     if (tab.dataset.view === "weekly") renderWeekly();
     if (tab.dataset.view === "takoashi") renderTakoashi();
@@ -5409,6 +5409,9 @@ async function loadAnswers() {
     renderAnswers();
     // ホームの「未読の回答」「回答待ち」はこの結果に依存するので、読み込み後に描き直す(2026-08-15)
     try { renderHome(); } catch (e) { /* ホーム未描画でも無害 */ }
+    // 2026-08-16: 司令塔の上部ストリップも同じ数字を使う。
+    // これが無いと、回答の読み込みが終わる前に「回答待ち 64」のような未確定の数字が一瞬出る
+    try { renderShirei(); } catch (e) { /* 司令塔未描画でも無害 */ }
   } catch (e) { console.error("Answers pull error:", e); }
 }
 
