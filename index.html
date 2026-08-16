@@ -574,6 +574,30 @@ html { zoom: var(--ui-zoom, 1); }
 .task-actions { display: flex; gap: 6px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
 .task-chip { font-family: inherit; font-size: 10px; padding: 2px 7px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); cursor: pointer; font-weight: 600; letter-spacing: 0.04em; }
 .task-chip:hover { border-color: var(--accent); color: var(--accent); }
+/* ===== 一望(ホーム)2026-08-15 ===== */
+.home-wrap { max-width: 820px; }
+.home-title { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
+.home-sub { font-size: 12px; color: var(--ink-mute); margin-bottom: 16px; }
+.home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.home-card { border: 1px solid var(--line); background: #fbf9f3; padding: 14px 16px; cursor: pointer; text-align: left; font-family: inherit; transition: transform .12s, box-shadow .12s; }
+.home-card:hover { transform: translateY(-1px); box-shadow: var(--paper-shadow); }
+.home-card.alert { border-color: #c8502e; background: #fbeeea; }
+.home-card.warn { border-color: #b88a2e; background: #fdf8ec; }
+.home-card.calm { opacity: .75; }
+.home-card-n { font-size: 26px; font-weight: 700; line-height: 1.1; font-family: "JetBrains Mono", monospace; }
+.home-card.alert .home-card-n { color: #a03c1f; }
+.home-card.warn .home-card-n { color: #8a6620; }
+.home-card-l { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+.home-card-h { font-size: 10.5px; color: var(--ink-mute); margin-top: 2px; }
+.home-recent { margin-bottom: 16px; }
+.home-h { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 8px; letter-spacing: .04em; }
+.home-row { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+.home-row:last-child { border-bottom: none; }
+.home-row .t { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--ink-mute); flex: none; }
+.home-row .x { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-row .b { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--line-soft); color: var(--ink-mute); flex: none; }
+.home-empty { font-size: 12px; color: var(--ink-mute); padding: 10px 0; }
+.home-sys { font-size: 11px; color: var(--ink-mute); border-top: 1px solid var(--line-soft); padding-top: 10px; line-height: 1.9; }
 /* 2026-08-15: 寝る前に明日の分をまとめて書くモード */
 .tasks-night-btn { border:1px solid #6b5ea8; background:transparent; padding:6px 12px; font-size:12px; cursor:pointer; font-family:inherit; color:#5a4f92; border-radius:4px; }
 .tasks-night-btn.on { background:#5a4f92; color:#fff; border-color:#5a4f92; }
@@ -822,7 +846,11 @@ html { zoom: var(--ui-zoom, 1); }
     <button class="tab" data-view="answers">回答 <span class="count" id="count-answers">0</span></button>
     <button class="tab" data-view="capture">雑メモ <span class="count" id="count-logs">0</span></button>
     <button class="tab" data-view="notes">ノート <span class="count" id="count-notes">0</span></button>
-    <button class="tab" data-view="takoashi">タコ足</button>
+    <!-- 2026-08-15: タコ足マップを「一望(ホーム)」に置換。
+         理由: タコ足はプロジェクトともやを足として描く画面だが、実データは projects=0 / moyas=0 で
+         何も描かれない空の絵になっていた。実際の使い方(雑メモ→Claudeの回答→タスク)に合う画面へ入れ替えた。
+         もやタブ撤去(2026-07-12)・プロジェクトタブ撤去(2026-08-01)と同方式で、DOM・描画関数・データは温存。 -->
+    <button class="tab" data-view="home">一望 <span class="count" id="count-home">0</span></button>
     <button class="tab" data-view="weekly">週次</button>
   </nav>
 
@@ -948,6 +976,7 @@ html { zoom: var(--ui-zoom, 1); }
       </div>
       <div class="tasks-input-bar">
         <textarea class="tasks-input-title" id="task-input-title" rows="1" placeholder="タスクを入力…(改行OK / ＋追加 で登録)" autocomplete="off"></textarea>
+        <button class="mic-btn" id="task-mic" title="音声入力" aria-label="音声入力">🎙</button>
         <select class="tasks-input-sel" id="task-input-bucket">
           <option value="today">🔥 本日</option>
           <option value="tomorrow">☀ 明日</option>
@@ -971,6 +1000,7 @@ html { zoom: var(--ui-zoom, 1); }
         <button class="tasks-when-clear" id="task-input-when-clear" type="button">✕ 消す</button>
         <span class="tasks-when-hint">時刻は空でOK(その日の終わり扱い)。期日を入れると 本日/今週/今月/先 は自動で合います。</span>
       </div>
+      <div class="voice-status" id="task-voice-status">🎙 聞いています… もう一度タップで停止</div>
       <div class="tasks-night-bar" id="tasks-night-bar" hidden>
         <strong>🌙 明日の準備モード</strong>
         <span id="tasks-night-date"></span>
@@ -998,6 +1028,17 @@ html { zoom: var(--ui-zoom, 1); }
       </div>
       <div class="tasks-list" id="tasks-list"></div>
       <div class="tasks-empty" id="tasks-empty" style="display:none;">フィルタ条件に該当するタスクはありません。</div>
+    </div>
+  </section>
+
+  <!-- ===== 一望(ホーム)2026-08-15 ===== -->
+  <section class="view" id="view-home">
+    <div class="home-wrap">
+      <div class="home-title">一望</div>
+      <div class="home-sub" id="home-sub"></div>
+      <div class="home-grid" id="home-grid"></div>
+      <div class="home-recent" id="home-recent"></div>
+      <div class="home-sys" id="home-sys"></div>
     </div>
   </section>
 
@@ -1605,6 +1646,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     document.getElementById("view-" + tab.dataset.view).classList.add("active");
     if (tab.dataset.view === "weekly") renderWeekly();
     if (tab.dataset.view === "takoashi") renderTakoashi();
+    if (tab.dataset.view === "home") { renderHome(); loadAnswers(); }   // 回答の未読数を取り直してから描く
     if (tab.dataset.view === "moya") renderMoyas();
     if (tab.dataset.view === "answers") { renderAnswers(); loadAnswers(); }
     if (tab.dataset.view === "inbox") renderInbox();
@@ -2458,6 +2500,108 @@ document.getElementById("pick-create-name").addEventListener("keydown", (e) => {
 document.getElementById("pick-modal").addEventListener("click", (e) => { if (e.target.id === "pick-modal") closePickModal(); });
 
 // ===== タコ足 =====
+// ========================================================================
+// ===== 一望(ホーム)2026-08-15 =====
+// ------------------------------------------------------------------------
+// 何を出すかは、実際の使われ方から決めた(2026-08-15 時点の実データ):
+//   projects=0 / moyas=0 / タグ付きメモ=0  → タコ足マップは何も描けない空の画面だった
+//   logs=140(うち☑回答希望が64) / notes=30 / tasks=18
+//   = 「雑メモに書く → Claudeに投げる → 回答を受け取る」+「タスクの期限管理」が実際の使い方
+// なので、この画面はその流れの"詰まり"だけを出す。数字は全部タップで担当タブへ飛ぶ。
+// ========================================================================
+function homeStats() {
+  const now = Date.now();
+  const tasks = tasksArr();
+  const answeredIds = new Set(
+    (answersItems || []).map(a => (a.cw_id || "").replace(/^ans_/, ""))
+  );
+  const logs = Array.isArray(state.logs) ? state.logs : [];
+  const notes = Array.isArray(state.notes) ? state.notes : [];
+  // ☑を付けたのに、まだ回答が返ってきていないもの
+  const waiting = [...logs, ...notes].filter(x =>
+    x && x.wantAnswer === true && x.completed !== true && !answeredIds.has(x.id)
+  );
+  const unreadAnswers = (answersItems || []).filter(a => !a.consumed).length;
+  const overdue = tasks.filter(t => !t.completed && t.dueAt && t.dueAt < now);
+  const todayTasks = tasks.filter(t => !t.completed && taskBucketOf(t) === "today");
+  const tomorrowTasks = tasks.filter(t => !t.completed && taskBucketOf(t) === "tomorrow");
+  return { waiting, unreadAnswers, overdue, todayTasks, tomorrowTasks, tasks, logs };
+}
+
+function renderHome() {
+  const grid = document.getElementById("home-grid");
+  if (!grid) return;
+  if (deferRender("home", renderHome, "#view-home")) return;
+  const st = homeStats();
+  const now = new Date();
+  const dow = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
+  const subEl = document.getElementById("home-sub");
+  if (subEl) subEl.textContent = `${now.getMonth() + 1}月${now.getDate()}日(${dow}) — いま気にすべきことだけ`;
+
+  const card = (n, label, hint, view, cls) =>
+    `<button type="button" class="home-card ${cls || ""}" data-goto="${view}">`
+    + `<div class="home-card-n">${n}</div><div class="home-card-l">${escapeHtml(label)}</div>`
+    + (hint ? `<div class="home-card-h">${escapeHtml(hint)}</div>` : "") + `</button>`;
+
+  grid.innerHTML = [
+    card(st.unreadAnswers, "未読の回答", st.unreadAnswers ? "読んで、続けるなら➤送信" : "全部読んだ", "answers",
+         st.unreadAnswers > 0 ? "warn" : "calm"),
+    card(st.waiting.length, "回答待ち", st.waiting.length ? "PC起動中に順次届く" : "待ちはなし", "capture",
+         st.waiting.length > 3 ? "warn" : "calm"),
+    card(st.overdue.length, "期限ぎれ", st.overdue.length ? "期日を過ぎたタスク" : "遅れなし", "tasks",
+         st.overdue.length > 0 ? "alert" : "calm"),
+    card(st.todayTasks.length, "本日のタスク", `明日は ${st.tomorrowTasks.length} 件`, "tasks",
+         st.todayTasks.length > 0 ? "" : "calm")
+  ].join("");
+
+  // 手を付けるべきタスク(期限ぎれ → 本日 → 明日 の順に最大6件)
+  const recEl = document.getElementById("home-recent");
+  const pick = [...st.overdue, ...st.todayTasks.filter(t => !st.overdue.includes(t)), ...st.tomorrowTasks].slice(0, 6);
+  const firstLine = (x) => String(x || "").split("\n")[0];
+  let html = `<div class="home-h">つぎに手を付けるもの</div>`;
+  html += pick.length === 0
+    ? `<div class="home-empty">期限つきのタスクはありません。タスクタブから追加できます。</div>`
+    : pick.map(t => {
+        const late = t.dueAt && t.dueAt < Date.now();
+        return `<div class="home-row"><span class="t">${t.dueAt ? taskDueLabel(t.dueAt, t.dueHasTime) : "—"}</span>`
+          + `<span class="x">${escapeHtml(firstLine(t.title))}</span>`
+          + `<span class="b">${late ? "遅れ" : TASK_BUCKET_META[taskBucketOf(t)].label}</span></div>`;
+      }).join("");
+
+  // 直近の雑メモ(何を書いたか思い出す用)
+  const recent = st.logs.filter(l => !isSystemLog(l))
+    .slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 4);
+  html += `<div class="home-h" style="margin-top:16px;">最近の雑メモ</div>`;
+  html += recent.length === 0
+    ? `<div class="home-empty">まだ雑メモはありません。</div>`
+    : recent.map(l => `<div class="home-row"><span class="t">${formatTs(l.ts)}</span>`
+        + `<span class="x">${escapeHtml(firstLine(l.text))}</span>`
+        + (l.wantAnswer ? `<span class="b">☑</span>` : "") + `</div>`).join("");
+  recEl.innerHTML = html;
+
+  // 足まわりの状態(PCが止まっていると回答が来ないので、そこだけ見えるようにする)
+  const sysEl = document.getElementById("home-sys");
+  if (sysEl) {
+    const bk = (answersItems || []).length;
+    sysEl.innerHTML = `雑メモ ${st.logs.length}件 · ノート ${(state.notes || []).length}件 · タスク ${st.tasks.length}件`
+      + `<br>回答は PC が起動している間に届きます。届かない時はPCの電源を確認してください。`;
+  }
+
+  grid.querySelectorAll("[data-goto]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = document.querySelector(`.tab[data-view="${btn.dataset.goto}"]`);
+      if (tab) tab.click();
+    });
+  });
+
+  const cnt = document.getElementById("count-home");
+  if (cnt) {
+    const n = st.unreadAnswers + st.overdue.length;
+    cnt.textContent = n;
+    cnt.classList.toggle("alert", n > 0);
+  }
+}
+
 function renderTakoashi() {
   const svg = document.getElementById("takoashi-viewport"); // 拡大縮小用のgroup要素に描画
   const active = state.projects.filter(p => !p.frozen);
@@ -3195,6 +3339,7 @@ document.getElementById("note-edit-modal").addEventListener("click", (e) => {
 });
 
 function renderAll() {
+  try { renderHome(); } catch (e) { /* ホームは表示中でなくても数字だけ更新する */ }
   renderProjects();
   renderLogs();
   renderMoyas();
@@ -4446,6 +4591,8 @@ async function loadAnswers() {
     buildAnswerThreads();
     await autoConsumeAnswers();   // 続き到着・決着で用済みになった回答を自動既読
     renderAnswers();
+    // ホームの「未読の回答」「回答待ち」はこの結果に依存するので、読み込み後に描き直す(2026-08-15)
+    try { renderHome(); } catch (e) { /* ホーム未描画でも無害 */ }
   } catch (e) { console.error("Answers pull error:", e); }
 }
 
@@ -4996,6 +5143,7 @@ document.getElementById("inbox-next-modal").addEventListener("click", (e) => {
 
   bindMic("moya-mic", "moya-input", "moya-voice-status");
   bindMic("capture-mic", "capture-input", "capture-voice-status");
+  bindMic("task-mic", "task-input-title", "task-voice-status");   // 2026-08-15 追加
 })();
 
 // ===== 全体の文字サイズ切替 =====
