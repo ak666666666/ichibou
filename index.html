@@ -811,6 +811,57 @@ html { zoom: var(--ui-zoom, 1); }
 .deploy-btn:disabled { opacity:.5; cursor:default; }
 .answer-reply-input { flex:1; min-width:0; border:1px solid var(--line); background:#fbf9f3; padding:6px 10px; font-size:12px; font-family:inherit; }
 .answer-reply-input:disabled { opacity:.5; }
+
+/* ========== 司令塔タブ(2026-08-16 外部OS v1) ==========
+   状態の正本は Supabase の ichibou_projects / ichibou_activity。
+   この画面は「保存された文章」を表示しているのではなく、開くたびに問い合わせて描く。
+   旧 _現況.md は人が書いた文章だったので実態とずれても誰も気づかなかった(例: 7/31以降ウォッチャー故障という誤報を8日抱えた)。 */
+.shirei-wrap { max-width: 940px; }
+.shirei-title { font-family: "Shippori Mincho", serif; font-size: 26px; letter-spacing: 0.08em; margin-bottom: 4px; }
+.shirei-sub { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--ink-mute); letter-spacing: 0.06em; margin-bottom: 22px; }
+.shirei-sub .warn { color: var(--accent); }
+
+.shirei-sec { margin-bottom: 26px; }
+.shirei-h {
+  display: flex; align-items: baseline; gap: 10px;
+  font-family: "Shippori Mincho", serif; font-size: 15px; letter-spacing: 0.06em;
+  padding-bottom: 7px; margin-bottom: 10px; border-bottom: 1px solid var(--line-soft);
+}
+.shirei-h .n { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); margin-left: auto; letter-spacing: 0.1em; }
+.shirei-h.wait { color: var(--accent); border-bottom-color: var(--accent-soft); }
+
+.shirei-card {
+  background: #fbf9f3; border: 1px solid var(--line-soft); border-left: 3px solid var(--line);
+  border-radius: 3px; padding: 13px 16px; margin-bottom: 8px; box-shadow: var(--paper-shadow);
+}
+.shirei-card.wait   { border-left-color: var(--accent); background: #fdf4f1; }
+.shirei-card.active { border-left-color: var(--green); }
+.shirei-card.stall  { border-left-color: var(--amber); }
+.shirei-card.frozen { border-left-color: var(--fog); opacity: 0.72; }
+
+.shirei-nm { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; font-size: 15px; font-weight: 700; }
+.shirei-nm .dept { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); letter-spacing: 0.08em; font-weight: 400; }
+.shirei-nm .mins { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--accent); border: 1px solid var(--accent-soft); border-radius: 99px; padding: 0 7px; font-weight: 400; }
+.shirei-nm .stale { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--amber); border: 1px solid var(--amber); border-radius: 99px; padding: 0 6px; font-weight: 400; }
+.shirei-purpose { font-size: 12.5px; color: var(--ink-mute); margin-top: 2px; }
+.shirei-next { font-size: 14px; margin-top: 8px; }
+.shirei-next b { color: var(--ink); }
+.shirei-next .arrow { color: var(--accent); font-family: "JetBrains Mono", monospace; margin-right: 6px; }
+.shirei-blk { font-size: 12.5px; color: var(--ink-soft); margin-top: 5px; padding-left: 2px; }
+.shirei-blk .tag { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.06em; color: var(--ink-mute); border: 1px solid var(--line); border-radius: 2px; padding: 0 5px; margin-right: 7px; }
+.shirei-meta { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--ink-mute); margin-top: 7px; letter-spacing: 0.05em; }
+
+.shirei-fold { cursor: pointer; user-select: none; }
+.shirei-fold:hover { color: var(--ink); }
+.shirei-fold .caret { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); }
+
+.shirei-act { display: grid; grid-template-columns: 84px 1fr; gap: 0 12px; font-size: 13px; padding: 7px 2px; border-bottom: 1px solid #eee8da; }
+.shirei-act:last-child { border-bottom: none; }
+.shirei-act .t { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); }
+.shirei-act .k { font-size: 11px; }
+.shirei-empty { font-size: 13px; color: var(--ink-mute); padding: 10px 2px; }
+.shirei-err { font-size: 13px; color: var(--accent); padding: 10px 2px; }
+@media (max-width: 560px) { .shirei-act { grid-template-columns: 1fr; gap: 2px; } }
 </style>
 </head>
 <body>
@@ -841,7 +892,10 @@ html { zoom: var(--ui-zoom, 1); }
 
   <nav class="tabs">
     <!-- 2026-08-01: プロジェクトタブを撤去し、その位置(先頭)にタスクを移動(もやタブ撤去と同方式・データとview-projectsのDOMは温存) -->
-    <button class="tab active" data-view="tasks">タスク <span class="count" id="count-tasks">0</span></button>
+    <!-- 2026-08-16: 司令塔タブを追加し、起動時の初期表示をタスク→司令塔に変更(外部OS v1)。
+         理由: 全プロジェクトの現在地を最初に見せるため。戻す場合はこの2行の active を入れ替える。 -->
+    <button class="tab active" data-view="shirei">司令塔 <span class="count" id="count-shirei">0</span></button>
+    <button class="tab" data-view="tasks">タスク <span class="count" id="count-tasks">0</span></button>
     <button class="tab" data-view="inbox">受信箱 <span class="count" id="count-inbox">0</span></button>
     <button class="tab" data-view="answers">回答 <span class="count" id="count-answers">0</span></button>
     <button class="tab" data-view="capture">雑メモ <span class="count" id="count-logs">0</span></button>
@@ -853,6 +907,16 @@ html { zoom: var(--ui-zoom, 1); }
     <button class="tab" data-view="home">一望 <span class="count" id="count-home">0</span></button>
     <button class="tab" data-view="weekly">週次</button>
   </nav>
+
+  <!-- 2026-08-16: 司令塔タブ(外部OS v1)。全プロジェクトの現在地・次の一手・詰まりを1画面で見る。
+       データ源は Supabase の ichibou_projects / ichibou_activity(この画面専用。state には載せない)。 -->
+  <section class="view active" id="view-shirei">
+    <div class="shirei-wrap">
+      <div class="shirei-title">司令塔</div>
+      <div class="shirei-sub" id="shirei-sub">読み込み中…</div>
+      <div id="shirei-body"></div>
+    </div>
+  </section>
 
   <!-- 2026-08-01: タブ撤去により到達不能(DOM・データ・renderProjects は温存) -->
   <section class="view" id="view-projects">
@@ -966,7 +1030,7 @@ html { zoom: var(--ui-zoom, 1); }
     </div>
   </section>
 
-  <section class="view active" id="view-tasks">
+  <section class="view" id="view-tasks">
     <div class="tasks-wrap">
       <div class="tasks-header">
         <div>
@@ -1644,6 +1708,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
     tab.classList.add("active");
     document.getElementById("view-" + tab.dataset.view).classList.add("active");
+    if (tab.dataset.view === "shirei") { renderShirei(); loadShirei(); }   // 描いてから最新を取り直す
     if (tab.dataset.view === "weekly") renderWeekly();
     if (tab.dataset.view === "takoashi") renderTakoashi();
     if (tab.dataset.view === "home") { renderHome(); loadAnswers(); }   // 回答の未読数を取り直してから描く
@@ -3337,6 +3402,173 @@ document.getElementById("notes-search").addEventListener("input", renderNotes);
 document.getElementById("note-edit-modal").addEventListener("click", (e) => {
   if (e.target.id === "note-edit-modal") closeNoteEdit();
 });
+
+// ========================================================================
+// ===== 司令塔タブ(2026-08-16 外部OS v1)=====
+// ========================================================================
+// 目的: 「頭の中で地図が描けない」を、道具の側で解く。
+// データ源: Supabase の ichibou_projects(状態の正本) と ichibou_activity(変更履歴)。
+//   ※ state(ichibou_state) には載せない。プロジェクト状態はどのチャットからも直接読み書きするため、
+//     アプリの同期(pushToCloud)を経由させない方が壊れにくい。
+// 設計の要: この画面は「保存された要約」を出さない。開くたびに問い合わせて、その場で組み立てる。
+//   旧運用は _現況.md という人の書いた文章で状態を持っていたため、実態とずれても誰も気づかなかった。
+//   (実例: 「ウォッチャーが7/31以降 緊急処理をしていない」を8日間抱えていたが、実際は正常だった)
+let shireiProjects = null;
+let shireiActivity = [];
+let shireiError = "";
+let shireiFrozenOpen = false;
+const SHIREI_CACHE_KEY = "ichibou_shirei_cache";
+
+const SHIREI_BLOCKER_LABEL = { owner: "晃良の判断・手作業が要る", tech: "技術的な詰まり", idle: "放置", none: "" };
+const SHIREI_STATUS_LABEL  = { active: "動いている", waiting: "待ち", stalled: "止まっている", frozen: "凍結", done: "完了" };
+
+async function loadShirei() {
+  if (!navigator.onLine) { shireiError = "オフラインです。最後に読めた内容を表示しています。"; loadShireiCache(); renderShirei(); return; }
+  try {
+    const [p, a] = await Promise.all([
+      sb.from("ichibou_projects").select("*").order("sort", { ascending: true }),
+      sb.from("ichibou_activity").select("*").order("created_at", { ascending: false }).limit(12)
+    ]);
+    if (p.error) throw p.error;
+    shireiProjects = p.data || [];
+    shireiActivity = (a && !a.error && a.data) ? a.data : [];
+    shireiError = "";
+    try { localStorage.setItem(SHIREI_CACHE_KEY, JSON.stringify({ p: shireiProjects, a: shireiActivity })); } catch (e) {}
+  } catch (e) {
+    console.error("Shirei pull error:", e);
+    shireiError = "読み込みに失敗しました。通信を確認してください。";
+    loadShireiCache();
+  }
+  renderShirei();
+}
+
+function loadShireiCache() {
+  if (shireiProjects) return;
+  try {
+    const c = JSON.parse(localStorage.getItem(SHIREI_CACHE_KEY) || "null");
+    if (c) { shireiProjects = c.p || []; shireiActivity = c.a || []; }
+  } catch (e) {}
+}
+
+function shireiDaysSince(v) {
+  if (!v) return null;
+  const t = new Date(v).getTime();
+  if (!t || isNaN(t)) return null;
+  return Math.floor((Date.now() - t) / 86400000);
+}
+
+function shireiYmd(v) {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  const p = (n) => String(n).padStart(2, "0");
+  return d.getFullYear() + "." + p(d.getMonth() + 1) + "." + p(d.getDate());
+}
+
+function shireiCard(p, cls) {
+  const badges = [];
+  if (p.owner_wait && p.minutes) badges.push('<span class="mins">約' + p.minutes + '分</span>');
+  const stale = shireiDaysSince(p.updated_at);
+  if (stale !== null && stale >= 7) badges.push('<span class="stale">' + stale + '日 更新なし</span>');
+
+  let h = '<div class="shirei-card ' + cls + '">';
+  h += '<div class="shirei-nm">' + escapeHtml(p.name || "")
+     + '<span class="dept">' + escapeHtml(p.dept || "") + '</span>' + badges.join("") + '</div>';
+  if (p.purpose)  h += '<div class="shirei-purpose">' + escapeHtml(p.purpose) + '</div>';
+  if (p.next_action) h += '<div class="shirei-next"><span class="arrow">▶</span><b>' + escapeHtml(p.next_action) + '</b></div>';
+  if (p.blocker && p.blocker !== "none") {
+    h += '<div class="shirei-blk"><span class="tag">' + escapeHtml(SHIREI_BLOCKER_LABEL[p.blocker] || p.blocker) + '</span>'
+       + escapeHtml(p.blocker_note || "") + '</div>';
+  }
+  const meta = [];
+  if (p.progress)   meta.push(p.progress);
+  if (p.last_touch) meta.push("実体の最終更新 " + shireiYmd(p.last_touch));
+  if (meta.length)  h += '<div class="shirei-meta">' + escapeHtml(meta.join(" · ")) + '</div>';
+  h += '</div>';
+  return h;
+}
+
+function shireiSection(title, hint, items, cls, headCls) {
+  if (!items.length) return "";
+  let h = '<div class="shirei-sec"><div class="shirei-h ' + (headCls || "") + '">' + escapeHtml(title);
+  if (hint) h += '<span class="n">' + escapeHtml(hint) + '</span>';
+  h += '</div>';
+  h += items.map(p => shireiCard(p, cls)).join("");
+  h += '</div>';
+  return h;
+}
+
+function renderShirei() {
+  const body = document.getElementById("shirei-body");
+  if (!body) return;
+  if (deferRender("shirei", renderShirei, "#view-shirei")) return;
+
+  const subEl = document.getElementById("shirei-sub");
+  const all = shireiProjects;
+
+  if (all === null) { if (subEl) subEl.textContent = "読み込み中…"; body.innerHTML = ""; return; }
+
+  const wait   = all.filter(p => p.owner_wait && p.status !== "done");
+  const rest   = all.filter(p => !p.owner_wait && p.status !== "done");
+  const active = rest.filter(p => p.status === "active");
+  const stall  = rest.filter(p => p.status === "waiting" || p.status === "stalled");
+  const frozen = rest.filter(p => p.status === "frozen");
+
+  wait.sort((a, b) => (a.minutes || 999) - (b.minutes || 999));   // 早く終わるものから
+  const waitMins = wait.reduce((s, p) => s + (p.minutes || 0), 0);
+
+  const now = new Date();
+  const dow = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
+  if (subEl) {
+    subEl.innerHTML = (now.getMonth() + 1) + "月" + now.getDate() + "日(" + dow + ") — "
+      + (wait.length
+          ? '<span class="warn">あなた待ち ' + wait.length + '件' + (waitMins ? '(約' + waitMins + '分)' : '') + '</span> / '
+          : 'あなた待ちなし / ')
+      + '動いている ' + active.length + ' / 止まっている ' + stall.length + ' / 凍結 ' + frozen.length;
+  }
+
+  let h = "";
+  if (shireiError) h += '<div class="shirei-err">' + escapeHtml(shireiError) + '</div>';
+
+  h += shireiSection("あなたを待っている", wait.length ? "ここが空くと他が動く" : "", wait, "wait", "wait");
+  if (!wait.length) {
+    h += '<div class="shirei-sec"><div class="shirei-h">あなたを待っている<span class="n">なし</span></div>'
+       + '<div class="shirei-empty">あなたが手を動かさないと進まないものは、いまありません。</div></div>';
+  }
+  h += shireiSection("動いている", "ここに集中する", active, "active");
+  h += shireiSection("止まっている", "", stall, "stall");
+
+  if (frozen.length) {
+    h += '<div class="shirei-sec"><div class="shirei-h shirei-fold" id="shirei-frozen-toggle">'
+       + '<span class="caret">' + (shireiFrozenOpen ? "▾" : "▸") + '</span>凍結'
+       + '<span class="n">' + frozen.length + '件 — 見なくてよい</span></div>';
+    if (shireiFrozenOpen) h += frozen.map(p => shireiCard(p, "frozen")).join("");
+    h += '</div>';
+  }
+
+  // 変更履歴。「あなた(Claude)が何を変えたか」を晃良が追えるようにする
+  h += '<div class="shirei-sec"><div class="shirei-h">私がやったこと<span class="n">直近' + shireiActivity.length + '件</span></div>';
+  h += shireiActivity.length
+    ? shireiActivity.map(a => {
+        const icon = { do: "・", decide: "◆", fix: "✓", ship: "🚀", find: "!" }[a.kind] || "・";
+        return '<div class="shirei-act"><span class="t">' + shireiYmd(a.created_at) + '</span>'
+             + '<span><span class="k">' + icon + '</span> ' + escapeHtml(a.what || "") + '</span></div>';
+      }).join("")
+    : '<div class="shirei-empty">まだ記録がありません。</div>';
+  h += '</div>';
+
+  h += '<div class="shirei-meta" style="margin-top:18px;">'
+     + 'この画面は開くたびに Supabase へ問い合わせて組み立てています。保存された文章ではないので、古くなりません。'
+     + '</div>';
+
+  body.innerHTML = h;
+
+  const ft = document.getElementById("shirei-frozen-toggle");
+  if (ft) ft.addEventListener("click", () => { shireiFrozenOpen = !shireiFrozenOpen; renderShirei(); });
+
+  const cnt = document.getElementById("count-shirei");
+  if (cnt) cnt.textContent = wait.length;
+}
 
 function renderAll() {
   try { renderHome(); } catch (e) { /* ホームは表示中でなくても数字だけ更新する */ }
@@ -5178,6 +5410,7 @@ renderLogs();
 renderMoyas();
 renderInbox();
 renderTasks(); // 2026-08-01: 起動時の初期表示がタスクタブになったため
+loadShirei();  // 2026-08-16: 起動時の初期表示は司令塔タブ
 
 (async function initSync() {
   if (!navigator.onLine) { setSyncStatus("offline", "オフライン"); return; }
