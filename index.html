@@ -932,6 +932,71 @@ html { zoom: var(--ui-zoom, 1); }
   .step .box { width: 26px; height: 26px; }        /* タッチで押しやすく */
   .step { grid-template-columns: 32px 1fr; }
 }
+
+/* ---------- タブの数字を消し、動きのあるものだけ点で示す(2026-08-16) ---------- */
+.tab .count { display: none !important; }
+.tab.has-dot { position: relative; }
+.tab.has-dot::after {
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-left: 7px; vertical-align: 2px;
+}
+
+/* ---------- 司令塔: 上部ストリップ(旧ホームの吸収) ---------- */
+.shirei-strip { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+.shirei-strip .sc {
+  flex: 1 1 120px; display: flex; align-items: baseline; gap: 8px;
+  background: #fbf9f3; border: 1px solid var(--line-soft); border-radius: 3px;
+  padding: 10px 13px; cursor: pointer; font-family: inherit; text-align: left;
+}
+.shirei-strip .sc:hover { border-color: var(--line); background: #fff; }
+.shirei-strip .sc .n { font-family: "JetBrains Mono", monospace; font-size: 19px; color: var(--ink); }
+.shirei-strip .sc .l { font-size: 11.5px; color: var(--ink-mute); }
+.shirei-strip .sc.warn  .n { color: var(--amber); }
+.shirei-strip .sc.alert .n { color: var(--accent); }
+
+/* ---------- 司令塔: 日付が迫っているもの ---------- */
+.shirei-tasks { cursor: pointer; }
+.shirei-tasks .trow {
+  display: grid; grid-template-columns: 92px 1fr auto; gap: 0 12px; align-items: baseline;
+  padding: 8px 2px; border-bottom: 1px solid #efe9db; font-size: 13.5px;
+}
+.shirei-tasks .trow:last-child { border-bottom: none; }
+.shirei-tasks .d { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); }
+.shirei-tasks .d.late { color: var(--accent); }
+.shirei-tasks .b { font-size: 10.5px; color: var(--ink-mute); }
+
+/* ---------- 履歴タブ ---------- */
+.hist-wrap { max-width: 860px; }
+.hist-title { font-family: "Shippori Mincho", serif; font-size: 26px; letter-spacing: 0.08em; margin-bottom: 4px; }
+.hist-sub { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--ink-mute); margin-bottom: 20px; }
+.hist-filter { display: flex; gap: 6px; margin-bottom: 18px; }
+.hist-filter .hf {
+  font-family: inherit; font-size: 12.5px; padding: 5px 14px; cursor: pointer;
+  background: none; border: 1px solid var(--line-soft); border-radius: 99px; color: var(--ink-mute);
+}
+.hist-filter .hf.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.hist-day {
+  font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute);
+  letter-spacing: 0.1em; margin: 20px 0 6px; padding-bottom: 5px; border-bottom: 1px solid var(--line-soft);
+}
+.hist-row {
+  display: grid; grid-template-columns: 44px 34px 18px 1fr; gap: 0 8px; align-items: baseline;
+  padding: 7px 2px; font-size: 13.5px; line-height: 1.65; border-bottom: 1px solid #f2ede2;
+}
+.hist-row:last-child { border-bottom: none; }
+.hist-row .hm { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); }
+.hist-row .hw {
+  font-size: 10px; text-align: center; border-radius: 2px; padding: 1px 0;
+  border: 1px solid var(--line-soft); color: var(--ink-mute);
+}
+.hist-row.claude .hw { border-color: #cfe0d2; color: var(--green); }
+.hist-row.akira  .hw { border-color: var(--accent-soft); color: var(--accent); }
+.hist-row .hk { font-size: 11px; color: var(--ink-mute); }
+.hist-row .hx b { font-weight: 700; }
+@media (max-width: 560px) {
+  .hist-row { grid-template-columns: 40px 30px 16px 1fr; gap: 0 6px; font-size: 13px; }
+  .shirei-strip .sc { flex: 1 1 44%; }
+}
 </style>
 </head>
 <body>
@@ -974,8 +1039,12 @@ html { zoom: var(--ui-zoom, 1); }
          理由: タコ足はプロジェクトともやを足として描く画面だが、実データは projects=0 / moyas=0 で
          何も描かれない空の絵になっていた。実際の使い方(雑メモ→Claudeの回答→タスク)に合う画面へ入れ替えた。
          もやタブ撤去(2026-07-12)・プロジェクトタブ撤去(2026-08-01)と同方式で、DOM・描画関数・データは温存。 -->
-    <button class="tab" data-view="home">一望 <span class="count" id="count-home">0</span></button>
+    <!-- 2026-08-16: 「一望(ホーム)」タブを撤去し、中身を司令塔の上部へ吸収。
+         理由: ホームも司令塔も「いま気にすべきことを出す」画面で、入口が2つに割れていた。
+         もや(7/12)・プロジェクト(8/1)・タコ足(8/15)と同方式で、DOM・renderHome・データは温存。 -->
+    <span id="count-home" style="display:none">0</span>
     <button class="tab" data-view="weekly">週次</button>
+    <button class="tab" data-view="history">履歴</button>
   </nav>
 
   <!-- 2026-08-16: 司令塔タブ(外部OS v1)。全プロジェクトの現在地・次の一手・詰まりを1画面で見る。
@@ -985,6 +1054,16 @@ html { zoom: var(--ui-zoom, 1); }
       <div class="shirei-title">司令塔</div>
       <div class="shirei-sub" id="shirei-sub">読み込み中…</div>
       <div id="shirei-body"></div>
+    </div>
+  </section>
+
+  <!-- 2026-08-16: 履歴タブ。「何がいつ、誰の手で変わったか」だけを時系列で見る。
+       司令塔＝これから / 履歴＝これまで、で役割を分けた。 -->
+  <section class="view" id="view-history">
+    <div class="hist-wrap">
+      <div class="hist-title">履歴</div>
+      <div class="hist-sub" id="history-sub">読み込み中…</div>
+      <div id="history-body"></div>
     </div>
   </section>
 
@@ -1779,6 +1858,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     tab.classList.add("active");
     document.getElementById("view-" + tab.dataset.view).classList.add("active");
     if (tab.dataset.view === "shirei") { renderShirei(); loadShirei(); }   // 描いてから最新を取り直す
+    if (tab.dataset.view === "history") { renderHistory(); loadHistory(); }
     if (tab.dataset.view === "weekly") renderWeekly();
     if (tab.dataset.view === "takoashi") renderTakoashi();
     if (tab.dataset.view === "home") { renderHome(); loadAnswers(); }   // 回答の未読数を取り直してから描く
@@ -3509,7 +3589,7 @@ async function loadShirei() {
   try {
     const [p, a, s] = await Promise.all([
       sb.from("ichibou_projects").select("*").order("sort", { ascending: true }),
-      sb.from("ichibou_activity").select("*").order("created_at", { ascending: false }).limit(12),
+      sb.from("ichibou_activity").select("*").order("created_at", { ascending: false }).limit(200),
       sb.from("ichibou_steps").select("*").order("seq", { ascending: true })
     ]);
     if (p.error) throw p.error;
@@ -3726,12 +3806,17 @@ function renderShirei() {
   let h = "";
   if (shireiError) h += '<div class="shirei-err">' + escapeHtml(shireiError) + '</div>';
 
+  // 旧「一望(ホーム)」タブの中身をここへ吸収(2026-08-16)。
+  // 司令塔とホームは「いま気にすべきことを出す」という同じ仕事をしていて、入口が2つある状態だった。
+  h += shireiStrip(wait.length);
+
   if (wait.length) {
     h += shireiSection("あなたを待っている", "この順にやると速い — 上ほど短い", wait, "wait", "wait", true);
   } else {
     h += '<div class="shirei-sec"><div class="shirei-h">あなたを待っている<span class="n">なし</span></div>'
        + '<div class="shirei-empty">あなたが手を動かさないと進まないものは、いまありません。</div></div>';
   }
+  h += shireiTaskSection();
   h += shireiSection("動いている", "ここに集中する", active, "active");
   h += shireiSection("止まっている", "", stall, "stall");
 
@@ -3748,16 +3833,8 @@ function renderShirei() {
     h += '</div>';
   }
 
-  // 変更履歴。「あなた(Claude)が何を変えたか」を晃良が追えるようにする
-  h += '<div class="shirei-sec"><div class="shirei-h">私がやったこと<span class="n">直近' + shireiActivity.length + '件</span></div>';
-  h += shireiActivity.length
-    ? shireiActivity.map(a => {
-        const icon = { do: "・", decide: "◆", fix: "✓", ship: "🚀", find: "!" }[a.kind] || "・";
-        return '<div class="shirei-act"><span class="t">' + shireiYmd(a.created_at) + '</span>'
-             + '<span><span class="k">' + icon + '</span> ' + escapeHtml(a.what || "") + '</span></div>';
-      }).join("")
-    : '<div class="shirei-empty">まだ記録がありません。</div>';
-  h += '</div>';
+  h += '<div class="shirei-sec"><div class="shirei-h shirei-fold" data-goto2="history">'
+     + '私と晃良がやったこと<span class="n">履歴タブで見る →</span></div></div>';
 
   h += '<div class="shirei-meta" style="margin-top:18px;">'
      + 'この画面は開くたびに Supabase へ問い合わせて組み立てています。保存された文章ではないので、古くなりません。'
@@ -3775,6 +3852,9 @@ function renderShirei() {
   if (!root) return;
 
   root.addEventListener("click", async (ev) => {
+    const goto2 = ev.target.closest("[data-goto2]");
+    if (goto2) { shireiGoTab(goto2.dataset.goto2); return; }
+
     const fold = ev.target.closest("[data-fold]");
     if (fold) { shireiFrozenOpen = !shireiFrozenOpen; renderShirei(); return; }
 
@@ -3909,6 +3989,171 @@ async function shireiPost(p, text, isAuto) {
   await loadShirei();
 }
 
+
+// ---------- 旧ホームの吸収: 上部ストリップと期限つきタスク ----------
+function shireiGoTab(view) {
+  const tab = document.querySelector('.tab[data-view="' + view + '"]');
+  if (tab) tab.click();
+}
+
+// 4つの数字。プロジェクトではなく「時間で迫ってくるもの」を出す
+function shireiStrip(waitN) {
+  let st;
+  try { st = homeStats(); } catch (e) { return ""; }
+  // 4つとも0なら出さない。中身のない枠が並ぶだけの状態を画面に残さない
+  if (!st.unreadAnswers && !st.waiting.length && !st.overdue.length && !st.todayTasks.length) return "";
+  const chip = (n, label, view, cls) =>
+    '<button type="button" class="sc ' + (cls || "") + '" data-goto2="' + view + '">'
+    + '<span class="n">' + n + '</span><span class="l">' + escapeHtml(label) + '</span></button>';
+  return '<div class="shirei-strip">'
+    + chip(st.unreadAnswers, "未読の回答", "answers", st.unreadAnswers > 0 ? "warn" : "")
+    + chip(st.waiting.length, "回答待ち",   "capture", "")
+    + chip(st.overdue.length, "期限ぎれ",   "tasks",   st.overdue.length > 0 ? "alert" : "")
+    + chip(st.todayTasks.length, "本日のタスク", "tasks", "")
+    + '</div>';
+}
+
+// 期限で迫っているタスク。プロジェクトの「次の一手」とは別軸なので独立した節にする
+function shireiTaskSection() {
+  let st;
+  try { st = homeStats(); } catch (e) { return ""; }
+  const pick = [...st.overdue,
+                ...st.todayTasks.filter(t => !st.overdue.includes(t)),
+                ...st.tomorrowTasks].slice(0, 5);
+  if (!pick.length) return "";
+  const firstLine = (x) => String(x || "").split("\n")[0];
+  let h = '<div class="shirei-sec"><div class="shirei-h">日付が迫っているもの'
+        + '<span class="n">タスクタブへ →</span></div>';
+  h += '<div class="shirei-tasks" data-goto2="tasks">';
+  pick.forEach(t => {
+    const late = t.dueAt && t.dueAt < Date.now();
+    h += '<div class="trow"><span class="d' + (late ? " late" : "") + '">'
+       + (t.dueAt ? taskDueLabel(t.dueAt, t.dueHasTime) : "—") + '</span>'
+       + '<span class="x">' + escapeHtml(firstLine(t.title)) + '</span>'
+       + '<span class="b">' + (late ? "遅れ" : TASK_BUCKET_META[taskBucketOf(t)].label) + '</span></div>';
+  });
+  h += '</div></div>';
+  return h;
+}
+
+// ========================================================================
+// ===== 履歴タブ(2026-08-16)=====
+// ------------------------------------------------------------------------
+// 「何がいつ、誰の手で変わったか」を1本の時系列にする。
+// 材料は3つ: ichibou_activity(私がやったこと) / ichibou_steps の done_at(晃良が手順を消し込んだ記録)
+//            / ichibou_inbox の ans_deploy_*(一望本体が本番に出た記録)
+// 司令塔は「これから」、履歴は「これまで」。役割で分けたので、司令塔からは撤去した。
+// ========================================================================
+let shireiDeploys = [];
+let historyFilter = "all";   // all / claude / akira
+
+async function loadHistory() {
+  if (!navigator.onLine) { renderHistory(); return; }
+  try {
+    if (shireiProjects === null) { await loadShirei(); }
+    const { data } = await sb.from("ichibou_inbox")
+      .select("cw_id, title, detail, created_at")
+      .like("cw_id", "ans_deploy_%")
+      .order("created_at", { ascending: false }).limit(60);
+    shireiDeploys = data || [];
+  } catch (e) { console.error("history pull error:", e); }
+  renderHistory();
+}
+
+function historyItems() {
+  const out = [];
+  const pname = (pid) => {
+    const p = (shireiProjects || []).find(x => x.id === pid);
+    return p ? p.name : "";
+  };
+  (shireiActivity || []).forEach(a => out.push({
+    at: a.created_at, who: a.actor === "akira" ? "akira" : "claude",
+    kind: a.kind || "do", proj: pname(a.project_id), text: a.what || ""
+  }));
+  (shireiSteps || []).filter(s => s.done && s.done_at).forEach(s => out.push({
+    at: s.done_at, who: s.done_by === "claude" ? "claude" : "akira",
+    kind: "step", proj: pname(s.project_id), text: s.text || ""
+  }));
+  (shireiDeploys || []).forEach(d => {
+    const ok = /完了/.test(d.title || "");
+    out.push({ at: d.created_at, who: "claude", kind: ok ? "ship" : "fix",
+               proj: "一望", text: "本番へデプロイ" + (ok ? "完了" : "（" + (d.title || "") + "）") });
+  });
+  out.sort((a, b) => new Date(b.at) - new Date(a.at));
+  return historyFilter === "all" ? out : out.filter(x => x.who === historyFilter);
+}
+
+function renderHistory() {
+  const body = document.getElementById("history-body");
+  if (!body) return;
+  if (deferRender("history", renderHistory, "#view-history")) return;
+
+  const items = historyItems();
+  const sub = document.getElementById("history-sub");
+  if (sub) sub.textContent = items.length
+    ? items.length + "件 — 新しい順。司令塔が「これから」、ここが「これまで」"
+    : "まだ記録がありません。";
+
+  const KIND = {
+    do:     { i: "・", l: "作業" },
+    decide: { i: "◆", l: "決定" },
+    fix:    { i: "✓", l: "修正" },
+    ship:   { i: "🚀", l: "公開" },
+    find:   { i: "!", l: "発見" },
+    step:   { i: "☑", l: "手順" }
+  };
+
+  let h = '<div class="hist-filter">'
+    + ["all", "claude", "akira"].map(f =>
+        '<button type="button" class="hf' + (historyFilter === f ? " on" : "") + '" data-hf="' + f + '">'
+        + ({ all: "全部", claude: "私", akira: "晃良" })[f] + '</button>').join("")
+    + '</div>';
+
+  if (!items.length) { body.innerHTML = h + '<div class="shirei-empty">記録がありません。</div>'; return; }
+
+  let lastDay = "";
+  items.forEach(x => {
+    const day = shireiYmd(x.at);
+    if (day !== lastDay) { h += '<div class="hist-day">' + day + '</div>'; lastDay = day; }
+    const k = KIND[x.kind] || KIND.do;
+    h += '<div class="hist-row ' + x.who + '">'
+       + '<span class="hm">' + shireiHm(x.at).slice(6) + '</span>'
+       + '<span class="hw">' + (x.who === "claude" ? "私" : "晃良") + '</span>'
+       + '<span class="hk" title="' + k.l + '">' + k.i + '</span>'
+       + '<span class="hx">' + (x.proj ? '<b>' + escapeHtml(x.proj) + '</b> ' : "") + escapeHtml(x.text) + '</span>'
+       + '</div>';
+  });
+  body.innerHTML = h;
+}
+
+(function bindHistory() {
+  const root = document.getElementById("view-history");
+  if (!root) return;
+  root.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-hf]");
+    if (b) { historyFilter = b.dataset.hf; renderHistory(); }
+  });
+})();
+
+// タブの数字を消し、代わりに「動きがあるものだけ点で示す」(2026-08-16)
+// 既存コードは今も count-* に数値を書き続けるので、要素は残したままCSSで隠し、
+// 中身の変化だけ見て点を出す。既存の描画関数に一切手を入れない形にしてある。
+(function tabDots() {
+  const targets = ["count-inbox", "count-shirei", "count-answers"];
+  const sync = () => targets.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const n = parseInt(el.textContent, 10);
+    const tab = el.closest(".tab");
+    if (tab) tab.classList.toggle("has-dot", !!n && n > 0);
+  });
+  targets.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    new MutationObserver(sync).observe(el, { childList: true, characterData: true, subtree: true });
+  });
+  sync();
+})();
 function renderAll() {
   try { renderHome(); } catch (e) { /* ホームは表示中でなくても数字だけ更新する */ }
   renderProjects();
