@@ -812,10 +812,11 @@ html { zoom: var(--ui-zoom, 1); }
 .answer-reply-input { flex:1; min-width:0; border:1px solid var(--line); background:#fbf9f3; padding:6px 10px; font-size:12px; font-family:inherit; }
 .answer-reply-input:disabled { opacity:.5; }
 
-/* ========== 司令塔タブ(2026-08-16 外部OS v1) ==========
-   状態の正本は Supabase の ichibou_projects / ichibou_activity。
+/* ========== 司令塔タブ(2026-08-16 外部OS v1 / v2で手順・会話を追加) ==========
+   状態の正本は Supabase の ichibou_projects / ichibou_steps / ichibou_activity。
    この画面は「保存された文章」を表示しているのではなく、開くたびに問い合わせて描く。
-   旧 _現況.md は人が書いた文章だったので実態とずれても誰も気づかなかった(例: 7/31以降ウォッチャー故障という誤報を8日抱えた)。 */
+   旧 _現況.md は人が書いた文章だったので実態とずれても誰も気づかなかった
+   (例: 7/31以降ウォッチャー故障という誤報を8日抱えた)。 */
 .shirei-wrap { max-width: 940px; }
 .shirei-title { font-family: "Shippori Mincho", serif; font-size: 26px; letter-spacing: 0.08em; margin-bottom: 4px; }
 .shirei-sub { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--ink-mute); letter-spacing: 0.06em; margin-bottom: 22px; }
@@ -832,17 +833,25 @@ html { zoom: var(--ui-zoom, 1); }
 
 .shirei-card {
   background: #fbf9f3; border: 1px solid var(--line-soft); border-left: 3px solid var(--line);
-  border-radius: 3px; padding: 13px 16px; margin-bottom: 8px; box-shadow: var(--paper-shadow);
+  border-radius: 3px; margin-bottom: 8px; box-shadow: var(--paper-shadow);
 }
 .shirei-card.wait   { border-left-color: var(--accent); background: #fdf4f1; }
 .shirei-card.active { border-left-color: var(--green); }
 .shirei-card.stall  { border-left-color: var(--amber); }
 .shirei-card.frozen { border-left-color: var(--fog); opacity: 0.72; }
+.shirei-card.done   { border-left-color: var(--green); opacity: 0.7; }
+.shirei-card.open   { box-shadow: 0 2px 0 rgba(0,0,0,0.03), 0 8px 26px rgba(60,50,30,0.10); }
 
+.shirei-head { padding: 13px 16px; cursor: pointer; }
+.shirei-head:hover { background: rgba(0,0,0,0.012); }
 .shirei-nm { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; font-size: 15px; font-weight: 700; }
+.shirei-nm .rank { font-family: "JetBrains Mono", monospace; font-size: 12px; color: #fff; background: var(--accent);
+  border-radius: 3px; padding: 1px 6px; font-weight: 700; }
 .shirei-nm .dept { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); letter-spacing: 0.08em; font-weight: 400; }
 .shirei-nm .mins { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--accent); border: 1px solid var(--accent-soft); border-radius: 99px; padding: 0 7px; font-weight: 400; }
 .shirei-nm .stale { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--amber); border: 1px solid var(--amber); border-radius: 99px; padding: 0 6px; font-weight: 400; }
+.shirei-nm .ping { font-family: "JetBrains Mono", monospace; font-size: 10px; color: #fff; background: var(--green); border-radius: 99px; padding: 1px 7px; font-weight: 400; }
+.shirei-nm .caret { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-mute); font-weight: 400; }
 .shirei-purpose { font-size: 12.5px; color: var(--ink-mute); margin-top: 2px; }
 .shirei-next { font-size: 14px; margin-top: 8px; }
 .shirei-next b { color: var(--ink); }
@@ -850,6 +859,61 @@ html { zoom: var(--ui-zoom, 1); }
 .shirei-blk { font-size: 12.5px; color: var(--ink-soft); margin-top: 5px; padding-left: 2px; }
 .shirei-blk .tag { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.06em; color: var(--ink-mute); border: 1px solid var(--line); border-radius: 2px; padding: 0 5px; margin-right: 7px; }
 .shirei-meta { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--ink-mute); margin-top: 7px; letter-spacing: 0.05em; }
+
+/* 進捗バー */
+.shirei-prog { display: flex; align-items: center; gap: 9px; margin-top: 9px; }
+.shirei-prog .bar { flex: 1; height: 4px; background: var(--bg-2); border-radius: 99px; overflow: hidden; }
+.shirei-prog .bar i { display: block; height: 100%; background: var(--green); border-radius: 99px; transition: width .25s; }
+.shirei-prog .txt { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--ink-mute); }
+
+/* 展開部 */
+.shirei-body { border-top: 1px solid var(--line-soft); padding: 14px 16px 16px; background: rgba(255,255,255,0.45); }
+.shirei-sech { font-family: "Shippori Mincho", serif; font-size: 13px; letter-spacing: 0.08em; color: var(--ink-soft); margin: 0 0 9px; }
+.shirei-sech.mt { margin-top: 20px; }
+
+.step { display: grid; grid-template-columns: 26px 1fr; gap: 0 10px; padding: 9px 0; border-bottom: 1px solid #efe9db; }
+.step:last-of-type { border-bottom: none; }
+.step .box {
+  width: 20px; height: 20px; margin-top: 2px; border: 1.5px solid var(--line); border-radius: 3px;
+  background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: transparent; user-select: none; transition: all .15s;
+}
+.step .box:hover { border-color: var(--green); }
+.step.is-done .box { background: var(--green); border-color: var(--green); color: #fff; }
+.step .t { font-size: 14px; line-height: 1.6; }
+.step.is-done .t { color: var(--ink-mute); text-decoration: line-through; }
+.step .t .seq { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); margin-right: 7px; }
+.step .t .imp { font-size: 10px; color: var(--accent); border: 1px solid var(--accent-soft); border-radius: 2px; padding: 0 5px; margin-left: 7px; white-space: nowrap; }
+.step .t .min { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); margin-left: 7px; }
+.step .d { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; line-height: 1.65; }
+.step .by { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--green); margin-top: 4px; }
+.step .d a { color: var(--blue); }
+
+.shirei-allok { margin-top: 12px; padding: 11px 14px; background: #eef4ee; border: 1px solid #cfe0d2; border-radius: 3px; font-size: 13px; color: var(--green); }
+
+/* 会話 */
+.shirei-msg { margin: 8px 0; font-size: 13.5px; line-height: 1.7; }
+.shirei-msg .who { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.08em; color: var(--ink-mute); display: block; margin-bottom: 3px; }
+.shirei-msg .bub { padding: 9px 12px; border-radius: 4px; white-space: pre-wrap; word-break: break-word; }
+.shirei-msg.me  .bub { background: var(--bg-2); }
+.shirei-msg.cl  .bub { background: #fff; border: 1px solid var(--line-soft); }
+.shirei-msg.pend .bub { background: #fff; border: 1px dashed var(--line); color: var(--ink-mute); font-size: 12.5px; }
+
+.shirei-ask { margin-top: 12px; }
+.shirei-ask textarea {
+  width: 100%; min-height: 62px; resize: vertical; padding: 10px 12px; font-size: 14px;
+  font-family: inherit; line-height: 1.6; color: var(--ink);
+  background: #fff; border: 1px solid var(--line); border-radius: 3px;
+}
+.shirei-ask textarea:focus { outline: none; border-color: var(--accent-soft); }
+.shirei-ask .row { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
+.shirei-ask .hint { font-size: 11.5px; color: var(--ink-mute); }
+.shirei-send {
+  background: var(--ink); color: #fff; border: none; border-radius: 3px; padding: 8px 18px;
+  font-family: inherit; font-size: 13px; cursor: pointer; letter-spacing: 0.06em;
+}
+.shirei-send:hover { background: var(--accent); }
+.shirei-send:disabled { background: var(--line); cursor: default; }
 
 .shirei-fold { cursor: pointer; user-select: none; }
 .shirei-fold:hover { color: var(--ink); }
@@ -861,7 +925,13 @@ html { zoom: var(--ui-zoom, 1); }
 .shirei-act .k { font-size: 11px; }
 .shirei-empty { font-size: 13px; color: var(--ink-mute); padding: 10px 2px; }
 .shirei-err { font-size: 13px; color: var(--accent); padding: 10px 2px; }
-@media (max-width: 560px) { .shirei-act { grid-template-columns: 1fr; gap: 2px; } }
+@media (max-width: 560px) {
+  .shirei-act { grid-template-columns: 1fr; gap: 2px; }
+  .shirei-head { padding: 12px 13px; }
+  .shirei-body { padding: 13px 13px 15px; }
+  .step .box { width: 26px; height: 26px; }        /* タッチで押しやすく */
+  .step { grid-template-columns: 32px 1fr; }
+}
 </style>
 </head>
 <body>
@@ -3404,59 +3474,94 @@ document.getElementById("note-edit-modal").addEventListener("click", (e) => {
 });
 
 // ========================================================================
-// ===== 司令塔タブ(2026-08-16 外部OS v1)=====
+// ===== 司令塔タブ(2026-08-16 外部OS v1 → v2)=====
 // ========================================================================
 // 目的: 「頭の中で地図が描けない」を、道具の側で解く。
-// データ源: Supabase の ichibou_projects(状態の正本) と ichibou_activity(変更履歴)。
+// データ源: Supabase の ichibou_projects(状態の正本) / ichibou_steps(手順) / ichibou_activity(変更履歴)
 //   ※ state(ichibou_state) には載せない。プロジェクト状態はどのチャットからも直接読み書きするため、
 //     アプリの同期(pushToCloud)を経由させない方が壊れにくい。
 // 設計の要: この画面は「保存された要約」を出さない。開くたびに問い合わせて、その場で組み立てる。
 //   旧運用は _現況.md という人の書いた文章で状態を持っていたため、実態とずれても誰も気づかなかった。
 //   (実例: 「ウォッチャーが7/31以降 緊急処理をしていない」を8日間抱えていたが、実際は正常だった)
+//
+// v2(2026-08-16 夜) で足したもの:
+//   ・カードをタップすると「詳細なやり方」が手順チェックリストで開く
+//   ・その場で質問を送れる。既存の返信レーン(ichibou_inbox の kind='reply' + thread_id)に相乗りするので、
+//     ウォッチャーが10秒以内にClaudeを起動し、回答が同じカードの中に返ってくる
+//   ・手順を全部チェックすると、確認依頼が自動で飛ぶ(＝終わったかどうかをClaude側が見る)
 let shireiProjects = null;
 let shireiActivity = [];
-let shireiError = "";
+let shireiSteps    = [];
+let shireiThreads  = [];
+let shireiError    = "";
+let shireiOpen     = new Set();   // 展開中のプロジェクトid
+let shireiDrafts   = {};          // 入力途中の質問(再描画で消さないため)
+let shireiSending  = null;
 let shireiFrozenOpen = false;
+let shireiPollTimer = null;
 const SHIREI_CACHE_KEY = "ichibou_shirei_cache";
 
 const SHIREI_BLOCKER_LABEL = { owner: "晃良の判断・手作業が要る", tech: "技術的な詰まり", idle: "放置", none: "" };
-const SHIREI_STATUS_LABEL  = { active: "動いている", waiting: "待ち", stalled: "止まっている", frozen: "凍結", done: "完了" };
 
+// ---------- 読み込み ----------
 async function loadShirei() {
   if (!navigator.onLine) { shireiError = "オフラインです。最後に読めた内容を表示しています。"; loadShireiCache(); renderShirei(); return; }
   try {
-    const [p, a] = await Promise.all([
+    const [p, a, s] = await Promise.all([
       sb.from("ichibou_projects").select("*").order("sort", { ascending: true }),
-      sb.from("ichibou_activity").select("*").order("created_at", { ascending: false }).limit(12)
+      sb.from("ichibou_activity").select("*").order("created_at", { ascending: false }).limit(12),
+      sb.from("ichibou_steps").select("*").order("seq", { ascending: true })
     ]);
     if (p.error) throw p.error;
     shireiProjects = p.data || [];
     shireiActivity = (a && !a.error && a.data) ? a.data : [];
+    shireiSteps    = (s && !s.error && s.data) ? s.data : [];
+
+    const tids = shireiProjects.map(x => x.thread_id).filter(Boolean);
+    if (tids.length) {
+      const { data: th } = await sb.from("ichibou_inbox")
+        .select("id, cw_id, kind, title, detail, created_at, thread_id, consumed")
+        .in("thread_id", tids).order("created_at", { ascending: true });
+      shireiThreads = th || [];
+    } else { shireiThreads = []; }
+
     shireiError = "";
-    try { localStorage.setItem(SHIREI_CACHE_KEY, JSON.stringify({ p: shireiProjects, a: shireiActivity })); } catch (e) {}
+    try { localStorage.setItem(SHIREI_CACHE_KEY, JSON.stringify({ p: shireiProjects, a: shireiActivity, s: shireiSteps, t: shireiThreads })); } catch (e) {}
   } catch (e) {
     console.error("Shirei pull error:", e);
     shireiError = "読み込みに失敗しました。通信を確認してください。";
     loadShireiCache();
   }
   renderShirei();
+  shireiSyncPolling();
 }
 
 function loadShireiCache() {
   if (shireiProjects) return;
   try {
     const c = JSON.parse(localStorage.getItem(SHIREI_CACHE_KEY) || "null");
-    if (c) { shireiProjects = c.p || []; shireiActivity = c.a || []; }
+    if (c) { shireiProjects = c.p || []; shireiActivity = c.a || []; shireiSteps = c.s || []; shireiThreads = c.t || []; }
   } catch (e) {}
 }
 
+// 回答待ちがある間だけ20秒ごとに取り直す。無ければ止める(無駄な通信をしない)
+function shireiSyncPolling() {
+  const waiting = shireiThreads.some(r => r.kind === "reply" && !r.consumed);
+  const onView  = document.querySelector('.tab.active') && document.querySelector('.tab.active').dataset.view === "shirei";
+  if (waiting && onView) {
+    if (!shireiPollTimer) shireiPollTimer = setInterval(() => { loadShirei(); }, 20000);
+  } else if (shireiPollTimer) {
+    clearInterval(shireiPollTimer); shireiPollTimer = null;
+  }
+}
+
+// ---------- 小道具 ----------
 function shireiDaysSince(v) {
   if (!v) return null;
   const t = new Date(v).getTime();
   if (!t || isNaN(t)) return null;
   return Math.floor((Date.now() - t) / 86400000);
 }
-
 function shireiYmd(v) {
   if (!v) return "—";
   const d = new Date(v);
@@ -3464,36 +3569,126 @@ function shireiYmd(v) {
   const p = (n) => String(n).padStart(2, "0");
   return d.getFullYear() + "." + p(d.getMonth() + 1) + "." + p(d.getDate());
 }
+function shireiHm(v) {
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return p(d.getMonth() + 1) + "/" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+function shireiStepsOf(pid) { return shireiSteps.filter(s => s.project_id === pid); }
+function shireiThreadOf(p) {
+  if (!p.thread_id) return [];
+  return shireiThreads.filter(r => r.thread_id === p.thread_id && (r.kind === "reply" || (r.cw_id || "").startsWith("ans_")));
+}
+// 回答本文の末尾に付く状態マーカーは、カード内では見せない
+function shireiCleanAnswer(t) {
+  return String(t || "").replace(/\n?【(決着|継続)】\s*$/, "").trim();
+}
 
-function shireiCard(p, cls) {
+// ---------- 描画 ----------
+function shireiCard(p, cls, rank) {
+  const steps = shireiStepsOf(p.id);
+  const doneN = steps.filter(s => s.done).length;
+  const open  = shireiOpen.has(p.id);
+  const thread = shireiThreadOf(p);
+  const pending = thread.some(r => r.kind === "reply" && !r.consumed);
+  const unread  = thread.filter(r => (r.cw_id || "").startsWith("ans_")).length;
+
   const badges = [];
+  if (rank) badges.push('<span class="rank">' + rank + '</span>');
   if (p.owner_wait && p.minutes) badges.push('<span class="mins">約' + p.minutes + '分</span>');
   const stale = shireiDaysSince(p.updated_at);
   if (stale !== null && stale >= 7) badges.push('<span class="stale">' + stale + '日 更新なし</span>');
+  if (pending) badges.push('<span class="ping">回答待ち</span>');
+  else if (unread) badges.push('<span class="ping">回答' + unread + '</span>');
 
-  let h = '<div class="shirei-card ' + cls + '">';
-  h += '<div class="shirei-nm">' + escapeHtml(p.name || "")
-     + '<span class="dept">' + escapeHtml(p.dept || "") + '</span>' + badges.join("") + '</div>';
-  if (p.purpose)  h += '<div class="shirei-purpose">' + escapeHtml(p.purpose) + '</div>';
+  let h = '<div class="shirei-card ' + cls + (open ? ' open' : '') + '" data-pid="' + p.id + '">';
+
+  // --- 見出し(ここをタップで開閉) ---
+  h += '<div class="shirei-head" data-toggle="' + p.id + '">';
+  h += '<div class="shirei-nm">';
+  if (rank) h += badges.shift();
+  h += escapeHtml(p.name || "") + '<span class="dept">' + escapeHtml(p.dept || "") + '</span>' + badges.join("");
+  h += '<span class="caret">' + (open ? "閉じる ▲" : (steps.length ? "やり方 ▼" : "開く ▼")) + '</span>';
+  h += '</div>';
+  if (p.purpose)     h += '<div class="shirei-purpose">' + escapeHtml(p.purpose) + '</div>';
   if (p.next_action) h += '<div class="shirei-next"><span class="arrow">▶</span><b>' + escapeHtml(p.next_action) + '</b></div>';
   if (p.blocker && p.blocker !== "none") {
     h += '<div class="shirei-blk"><span class="tag">' + escapeHtml(SHIREI_BLOCKER_LABEL[p.blocker] || p.blocker) + '</span>'
        + escapeHtml(p.blocker_note || "") + '</div>';
+  }
+  if (steps.length) {
+    const pct = Math.round(doneN / steps.length * 100);
+    h += '<div class="shirei-prog"><div class="bar"><i style="width:' + pct + '%"></i></div>'
+       + '<span class="txt">' + doneN + '/' + steps.length + ' 完了</span></div>';
   }
   const meta = [];
   if (p.progress)   meta.push(p.progress);
   if (p.last_touch) meta.push("実体の最終更新 " + shireiYmd(p.last_touch));
   if (meta.length)  h += '<div class="shirei-meta">' + escapeHtml(meta.join(" · ")) + '</div>';
   h += '</div>';
+
+  // --- 展開部 ---
+  if (open) {
+    h += '<div class="shirei-body">';
+
+    h += '<div class="shirei-sech">やり方</div>';
+    if (!steps.length) {
+      h += '<div class="shirei-empty">手順はまだ書いていません。下の入力欄で「手順を出して」と送れば、私が調べて並べます。</div>';
+    } else {
+      steps.forEach(s => {
+        h += '<div class="step' + (s.done ? ' is-done' : '') + '">';
+        h += '<div class="box" data-step="' + s.id + '">✓</div>';
+        h += '<div><div class="t"><span class="seq">' + s.seq + '.</span>' + escapeHtml(s.text || "")
+           + (s.importance === "high" ? '<span class="imp">⚠ ここ重要</span>' : '')
+           + (s.minutes ? '<span class="min">' + s.minutes + '分</span>' : '') + '</div>';
+        if (s.detail) h += '<div class="d">' + escapeHtml(s.detail) + '</div>';
+        if (s.done && s.done_by === "claude") h += '<div class="by">✓ 私の側で確認しました</div>';
+        h += '</div></div>';
+      });
+      if (doneN === steps.length) {
+        h += '<div class="shirei-allok">手順は全部終わっています。'
+           + (pending ? '確認をお願いしてあります。回答が下に届きます。' : '私の方で確認して、問題なければ司令塔から外します。')
+           + '</div>';
+      }
+    }
+
+    // --- 会話 ---
+    h += '<div class="shirei-sech mt">分からないとき・状況を伝えるとき</div>';
+    thread.forEach(r => {
+      const isMe = r.kind === "reply";
+      if (isMe) {
+        h += '<div class="shirei-msg me"><span class="who">晃良 ' + shireiHm(r.created_at) + '</span>'
+           + '<div class="bub">' + escapeHtml(r.detail || "") + '</div></div>';
+      } else {
+        h += '<div class="shirei-msg cl"><span class="who">Claude ' + shireiHm(r.created_at) + '</span>'
+           + '<div class="bub">' + escapeHtml(shireiCleanAnswer(r.detail)) + '</div></div>';
+      }
+    });
+    if (pending) {
+      h += '<div class="shirei-msg pend"><div class="bub">送信しました。PCが起動していれば1〜2分で回答が届きます。この画面は開いたまま待てます。</div></div>';
+    }
+
+    const draft = shireiDrafts[p.id] || "";
+    h += '<div class="shirei-ask">'
+       + '<textarea data-ask="' + p.id + '" placeholder="ここが分からない / こう表示された / 手順を出して — そのまま書いて送ってください">' + escapeHtml(draft) + '</textarea>'
+       + '<div class="row"><button class="shirei-send" data-send="' + p.id + '"' + (shireiSending === p.id ? ' disabled' : '') + '>'
+       + (shireiSending === p.id ? '送信中…' : '送る') + '</button>'
+       + '<span class="hint">Ctrl+Enter でも送れます</span></div></div>';
+
+    h += '</div>';
+  }
+
+  h += '</div>';
   return h;
 }
 
-function shireiSection(title, hint, items, cls, headCls) {
+function shireiSection(title, hint, items, cls, headCls, ranked) {
   if (!items.length) return "";
   let h = '<div class="shirei-sec"><div class="shirei-h ' + (headCls || "") + '">' + escapeHtml(title);
   if (hint) h += '<span class="n">' + escapeHtml(hint) + '</span>';
   h += '</div>';
-  h += items.map(p => shireiCard(p, cls)).join("");
+  h += items.map((p, i) => shireiCard(p, cls, ranked ? i + 1 : 0)).join("");
   h += '</div>';
   return h;
 }
@@ -3505,14 +3700,15 @@ function renderShirei() {
 
   const subEl = document.getElementById("shirei-sub");
   const all = shireiProjects;
-
   if (all === null) { if (subEl) subEl.textContent = "読み込み中…"; body.innerHTML = ""; return; }
 
-  const wait   = all.filter(p => p.owner_wait && p.status !== "done");
-  const rest   = all.filter(p => !p.owner_wait && p.status !== "done");
+  const live   = all.filter(p => p.status !== "done");
+  const wait   = live.filter(p => p.owner_wait);
+  const rest   = live.filter(p => !p.owner_wait);
   const active = rest.filter(p => p.status === "active");
   const stall  = rest.filter(p => p.status === "waiting" || p.status === "stalled");
   const frozen = rest.filter(p => p.status === "frozen");
+  const done   = all.filter(p => p.status === "done");
 
   wait.sort((a, b) => (a.minutes || 999) - (b.minutes || 999));   // 早く終わるものから
   const waitMins = wait.reduce((s, p) => s + (p.minutes || 0), 0);
@@ -3530,8 +3726,9 @@ function renderShirei() {
   let h = "";
   if (shireiError) h += '<div class="shirei-err">' + escapeHtml(shireiError) + '</div>';
 
-  h += shireiSection("あなたを待っている", wait.length ? "ここが空くと他が動く" : "", wait, "wait", "wait");
-  if (!wait.length) {
+  if (wait.length) {
+    h += shireiSection("あなたを待っている", "この順にやると速い — 上ほど短い", wait, "wait", "wait", true);
+  } else {
     h += '<div class="shirei-sec"><div class="shirei-h">あなたを待っている<span class="n">なし</span></div>'
        + '<div class="shirei-empty">あなたが手を動かさないと進まないものは、いまありません。</div></div>';
   }
@@ -3539,10 +3736,15 @@ function renderShirei() {
   h += shireiSection("止まっている", "", stall, "stall");
 
   if (frozen.length) {
-    h += '<div class="shirei-sec"><div class="shirei-h shirei-fold" id="shirei-frozen-toggle">'
+    h += '<div class="shirei-sec"><div class="shirei-h shirei-fold" data-fold="frozen">'
        + '<span class="caret">' + (shireiFrozenOpen ? "▾" : "▸") + '</span>凍結'
        + '<span class="n">' + frozen.length + '件 — 見なくてよい</span></div>';
-    if (shireiFrozenOpen) h += frozen.map(p => shireiCard(p, "frozen")).join("");
+    if (shireiFrozenOpen) h += frozen.map(p => shireiCard(p, "frozen", 0)).join("");
+    h += '</div>';
+  }
+  if (done.length) {
+    h += '<div class="shirei-sec"><div class="shirei-h">終わった<span class="n">' + done.length + '件</span></div>';
+    h += done.map(p => shireiCard(p, "done", 0)).join("");
     h += '</div>';
   }
 
@@ -3563,11 +3765,148 @@ function renderShirei() {
 
   body.innerHTML = h;
 
-  const ft = document.getElementById("shirei-frozen-toggle");
-  if (ft) ft.addEventListener("click", () => { shireiFrozenOpen = !shireiFrozenOpen; renderShirei(); });
-
   const cnt = document.getElementById("count-shirei");
   if (cnt) cnt.textContent = wait.length;
+}
+
+// ---------- 操作(イベント委譲。再描画してもハンドラが外れない) ----------
+(function bindShirei() {
+  const root = document.getElementById("view-shirei");
+  if (!root) return;
+
+  root.addEventListener("click", async (ev) => {
+    const fold = ev.target.closest("[data-fold]");
+    if (fold) { shireiFrozenOpen = !shireiFrozenOpen; renderShirei(); return; }
+
+    const box = ev.target.closest("[data-step]");
+    if (box) { ev.stopPropagation(); await shireiToggleStep(Number(box.dataset.step)); return; }
+
+    const send = ev.target.closest("[data-send]");
+    if (send) { ev.stopPropagation(); await shireiSend(send.dataset.send); return; }
+
+    if (ev.target.closest(".shirei-ask")) return;   // 入力欄の中は無視
+
+    const head = ev.target.closest("[data-toggle]");
+    if (head) {
+      const pid = head.dataset.toggle;
+      if (shireiOpen.has(pid)) shireiOpen.delete(pid); else shireiOpen.add(pid);
+      renderShirei();
+      if (shireiOpen.has(pid)) {
+        const card = root.querySelector('.shirei-card[data-pid="' + pid + '"]');
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }
+  });
+
+  root.addEventListener("input", (ev) => {
+    const ta = ev.target.closest("[data-ask]");
+    if (ta) shireiDrafts[ta.dataset.ask] = ta.value;
+  });
+
+  root.addEventListener("keydown", async (ev) => {
+    const ta = ev.target.closest("[data-ask]");
+    if (ta && (ev.ctrlKey || ev.metaKey) && ev.key === "Enter") { ev.preventDefault(); await shireiSend(ta.dataset.ask); }
+  });
+})();
+
+// 手順のチェック。押した瞬間にDBへ書く(端末をまたいでも残る)
+async function shireiToggleStep(stepId) {
+  const s = shireiSteps.find(x => x.id === stepId);
+  if (!s) return;
+  const next = !s.done;
+  s.done = next; s.done_at = next ? new Date().toISOString() : null; s.done_by = next ? "akira" : null;
+  renderShirei();
+  try {
+    const { error } = await sb.from("ichibou_steps")
+      .update({ done: next, done_at: s.done_at, done_by: s.done_by }).eq("id", stepId);
+    if (error) throw error;
+  } catch (e) {
+    console.error("step update error:", e);
+    s.done = !next; renderShirei();
+    alert("チェックを保存できませんでした。通信を確認してください。");
+    return;
+  }
+  // 全部終わったら、確認をこちらから頼む(＝終わったかどうかを人が報告しなくてよい)
+  const p = shireiProjects.find(x => x.id === s.project_id);
+  if (!p) return;
+  const steps = shireiStepsOf(p.id);
+  if (steps.length && steps.every(x => x.done)) {
+    const already = shireiThreadOf(p).some(r => r.kind === "reply" && !r.consumed);
+    if (!already) {
+      await shireiPost(p, "「" + p.name + "」の手順をすべて完了しました。確認できるものは確認して、問題なければ司令塔から外してください。"
+        + "残っている作業や、私が次にやるべきことがあれば教えてください。", true);
+    }
+  }
+}
+
+// 質問を送る
+async function shireiSend(pid) {
+  const p = shireiProjects.find(x => x.id === pid);
+  const text = (shireiDrafts[pid] || "").trim();
+  if (!p || !text) return;
+  shireiSending = pid;
+  const ta = document.querySelector('[data-ask="' + pid + '"]');
+  if (ta) ta.blur();
+  renderShirei();
+  try {
+    await shireiPost(p, text, false);
+    shireiDrafts[pid] = "";
+  } catch (e) {
+    console.error("shirei send error:", e);
+    alert("送信できませんでした。通信を確認してください。");
+  }
+  shireiSending = null;
+  renderShirei();
+}
+
+// 会話に1件積む。既存の返信レーン(kind='reply' + thread_id)に相乗りするので、
+// ウォッチャーが pending_urgent_count() > 0 を検知して10秒以内にClaudeを起動する。
+async function shireiPost(p, text, isAuto) {
+  let threadId = p.thread_id;
+
+  // 初回だけ「会話の元になる行」を作る。回答するClaudeがこれを読んで文脈を掴む
+  if (!threadId) {
+    threadId = "th_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+    const steps = shireiStepsOf(p.id);
+    const ctx = [
+      "【司令塔のカード】" + p.name + "（" + (p.dept || "") + "）",
+      "目的: " + (p.purpose || "—"),
+      "状態: " + p.status + (p.owner_wait ? " / 晃良待ち" : ""),
+      "次の一手: " + (p.next_action || "—"),
+      "詰まり: " + (p.blocker || "none") + " " + (p.blocker_note || ""),
+      "今どこまで: " + (p.progress || "—"),
+      "作業場: " + (p.path || "—"),
+      "",
+      "手順(" + steps.filter(s => s.done).length + "/" + steps.length + " 完了):",
+      steps.map(s => (s.done ? "[x] " : "[ ] ") + s.seq + ". " + s.text).join("\n") || "（未作成）",
+      "",
+      "※ この会話は一望の司令塔タブから始まっている。回答は ichibou_projects / ichibou_steps の更新まで込みで行うこと（詳細は watcher_prompt.md の司令塔レーン）。",
+      "※ project_id = " + p.id
+    ].join("\n");
+
+    const { error: e0 } = await sb.from("ichibou_inbox").insert({
+      kind: "note", cw_id: "req_shirei_" + p.id, thread_id: threadId,
+      title: "📍 司令塔: " + p.name, detail: ctx, priority: "high", consumed: true
+    });
+    if (e0) throw e0;
+
+    const { error: e1 } = await sb.from("ichibou_projects").update({ thread_id: threadId }).eq("id", p.id);
+    if (e1) throw e1;
+    p.thread_id = threadId;
+  }
+
+  const { error: e2 } = await sb.from("ichibou_inbox").insert({
+    kind: "reply",
+    cw_id: "req_shirei_" + p.id + "_" + Date.now().toString(36),
+    thread_id: threadId,
+    title: isAuto ? "▶ 手順完了の確認依頼" : "▶ 司令塔から質問",
+    detail: text,
+    priority: "high",
+    consumed: false
+  });
+  if (e2) throw e2;
+
+  await loadShirei();
 }
 
 function renderAll() {
