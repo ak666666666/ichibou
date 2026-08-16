@@ -1043,7 +1043,10 @@ html { zoom: var(--ui-zoom, 1); }
          理由: ホームも司令塔も「いま気にすべきことを出す」画面で、入口が2つに割れていた。
          もや(7/12)・プロジェクト(8/1)・タコ足(8/15)と同方式で、DOM・renderHome・データは温存。 -->
     <span id="count-home" style="display:none">0</span>
-    <button class="tab" data-view="weekly">週次</button>
+    <!-- 2026-08-16: 週次タブを撤去。DOM・renderWeekly・データは温存。
+         理由: 中身が state.projects / state.moyas に依存していたが、どちらも0件で3つのカードすべてが空だった。
+         「Claudeに貼るプロンプト」も司令塔から直接聞けるようになって役目を終えている。
+         週次レビューの本来の仕事（放置の検知）は、司令塔のカードに「N日 止まっている」として常時出す形へ移した。 -->
     <button class="tab" data-view="history">履歴</button>
   </nav>
 
@@ -3677,8 +3680,17 @@ function shireiCard(p, cls, rank) {
   const badges = [];
   if (rank) badges.push('<span class="rank">' + rank + '</span>');
   if (p.owner_wait && p.minutes) badges.push('<span class="mins">約' + p.minutes + '分</span>');
-  const stale = shireiDaysSince(p.updated_at);
-  if (stale !== null && stale >= 7) badges.push('<span class="stale">' + stale + '日 更新なし</span>');
+  // 週次レビューの代わりに、放置を常時見せる(2026-08-16)。
+  // 週に1度たまたま気づく、ではなく、開くたびに日数が目に入る形にする。
+  if (cls !== "frozen" && cls !== "done") {
+    const stuck = shireiDaysSince(p.stalled_since);
+    if (stuck !== null && stuck >= 3) {
+      badges.push('<span class="stale">' + stuck + '日 止まっている</span>');
+    } else {
+      const stale = shireiDaysSince(p.updated_at);
+      if (stale !== null && stale >= 7) badges.push('<span class="stale">' + stale + '日 更新なし</span>');
+    }
+  }
   if (pending) badges.push('<span class="ping">回答待ち</span>');
   else if (unread) badges.push('<span class="ping">回答' + unread + '</span>');
 
