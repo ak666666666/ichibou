@@ -323,6 +323,7 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .note-folder-act-btn { background: none; border: none; color: var(--ink-mute); cursor: pointer; font-size: 14px; opacity: 0.5; transition: opacity 0.15s, color 0.15s; padding: 4px 7px; line-height: 1; }
 .note-folder:hover .note-folder-act-btn { opacity: 1; }
 .note-folder-edit:hover { color: var(--accent); }
+.note-folder-move:hover { color: var(--accent); }
 .note-folder-del:hover { color: #a13630; }
 @media (hover: none) { .note-folder-act-btn { opacity: 0.75; padding: 6px 9px; } }
 .notes-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1341,6 +1342,18 @@ html { zoom: var(--ui-zoom, 1); }
     <div class="pick-none" id="pick-none">紐付けを解除する</div>
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn ghost" id="pick-cancel">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- フォルダの移動(2026-08-17 新設。作成後にフォルダを入れ子へ出し入れする手段が無かった) -->
+<div class="modal-backdrop" id="folder-move-modal">
+  <div class="modal">
+    <h3 id="folder-move-title">フォルダの移動</h3>
+    <p style="font-size:13px;" id="folder-move-desc"></p>
+    <div class="pick-list" id="folder-move-list"></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn ghost" id="folder-move-cancel">キャンセル</button>
     </div>
   </div>
 </div>
@@ -3216,7 +3229,7 @@ function renderNotes() {
           const parent = state.noteFolders.find(x => x.id === f.parentId);
           if (parent) html += ` › <a data-fid="${parent.id}">${escapeHtml(parent.name)}</a>`;
         }
-        html += ` › <strong>${escapeHtml(f.name)}</strong> <a data-rename="${f.id}" title="フォルダ名を変更">✎</a>`;
+        html += ` › <strong>${escapeHtml(f.name)}</strong> <a data-rename="${f.id}" title="フォルダ名を変更">✎</a> <a data-move="${f.id}" title="このフォルダを別のフォルダへ移動 / 外に出す">⇄</a>`;
       } else {
         currentFolderId = null;
       }
@@ -3227,6 +3240,8 @@ function renderNotes() {
     });
     const renameLink = breadcrumb.querySelector('a[data-rename]');
     if (renameLink) renameLink.onclick = () => renameNoteFolder(renameLink.dataset.rename);
+    const moveLink = breadcrumb.querySelector('a[data-move]');
+    if (moveLink) moveLink.onclick = () => openFolderMove(moveLink.dataset.move);
   }
 
   // 子フォルダ(検索中は非表示)
@@ -3246,6 +3261,7 @@ function renderNotes() {
       card.innerHTML = `
         <div class="note-folder-acts">
           <button class="note-folder-act-btn note-folder-edit" title="フォルダ名を変更">✎</button>
+          <button class="note-folder-act-btn note-folder-move" title="別のフォルダへ移動 / 外に出す">⇄</button>
           <button class="note-folder-act-btn note-folder-del" title="フォルダを削除">×</button>
         </div>
         <div class="note-folder-name">📂 ${escapeHtml(f.name)}</div>
@@ -3258,6 +3274,8 @@ function renderNotes() {
       };
       const editBtn = card.querySelector('.note-folder-edit');
       editBtn.onclick = (e) => { e.stopPropagation(); renameNoteFolder(f.id); };
+      const moveBtn = card.querySelector('.note-folder-move');
+      moveBtn.onclick = (e) => { e.stopPropagation(); openFolderMove(f.id); };
       const delBtn = card.querySelector('.note-folder-del');
       delBtn.onclick = (e) => { e.stopPropagation(); deleteNoteFolder(f.id); };
       folderEl.appendChild(card);
@@ -3362,6 +3380,80 @@ function renameNoteFolder(folderId) {
   if (name.trim() === folder.name) return;
   folder.name = name.trim();
   saveState();
+  renderNotes();
+}
+
+// フォルダの移動(2026-08-17 新設)
+// 作成時に「今いる場所の下」に作ることしかできず、後から入れ子へ出し入れする手段が無かった。
+// ⚠ 階層は従来どおり2階層まで(ルート + その直下)。表示・件数集計・削除処理がすべて
+//    「1段だけ潜る」前提で書かれているため、ここだけ深くすると壊れる。
+let folderMoveTargetId = null;
+
+function folderMoveDestinations(folder) {
+  const hasChildren = state.noteFolders.some(f => f.parentId === folder.id);
+  const dests = [];
+  // ルート直下へ出す(すでにルートにあるものは対象外)
+  if (folder.parentId) dests.push({ id: null, label: "📁 ノート(いちばん上)", note: "外に出す" });
+  // 他のルートフォルダの中へ入れる。子を持つフォルダは入れると3階層になるので不可
+  if (!hasChildren) {
+    state.noteFolders
+      .filter(f => !f.parentId && f.id !== folder.id && f.id !== folder.parentId)
+      .forEach(f => {
+        const inside = state.notes.filter(n => n.folderId === f.id).length;
+        dests.push({ id: f.id, label: `📂 ${f.name}`, note: `📝 ${inside}` });
+      });
+  }
+  return { dests, hasChildren };
+}
+
+function openFolderMove(folderId) {
+  const folder = state.noteFolders.find(f => f.id === folderId);
+  if (!folder) return;
+  folderMoveTargetId = folderId;
+  const { dests, hasChildren } = folderMoveDestinations(folder);
+  document.getElementById("folder-move-title").textContent = `「${folder.name}」の移動先`;
+  const desc = document.getElementById("folder-move-desc");
+  desc.textContent = hasChildren
+    ? "このフォルダは中にフォルダを持っているため、他のフォルダの中へは入れられません(2階層まで)。中のフォルダを先に外へ出してください。"
+    : "中のノートも一緒に移動します。";
+  const list = document.getElementById("folder-move-list");
+  list.innerHTML = "";
+  if (dests.length === 0) {
+    list.innerHTML = '<div class="empty" style="padding:20px;">移動できる先がありません。</div>';
+  } else {
+    dests.forEach(d => {
+      const item = document.createElement("div");
+      item.className = "pick-item";
+      item.innerHTML = `<span class="pick-name">${escapeHtml(d.label)}</span><span class="pick-meta">${escapeHtml(d.note)}</span>`;
+      item.addEventListener("click", () => moveNoteFolder(folderId, d.id));
+      list.appendChild(item);
+    });
+  }
+  document.getElementById("folder-move-modal").classList.add("open");
+}
+
+function closeFolderMove() {
+  folderMoveTargetId = null;
+  document.getElementById("folder-move-modal").classList.remove("open");
+}
+
+function moveNoteFolder(folderId, destId) {
+  const folder = state.noteFolders.find(f => f.id === folderId);
+  if (!folder) return closeFolderMove();
+  // 安全弁: 自分自身・自分の子へは入れない / 移動先が子フォルダ(=3階層になる)なら拒否
+  if (destId === folderId) return closeFolderMove();
+  if (destId) {
+    const dest = state.noteFolders.find(f => f.id === destId);
+    if (!dest || dest.parentId) return closeFolderMove();
+    if (dest.parentId === folderId) return closeFolderMove();
+    if (state.noteFolders.some(f => f.parentId === folderId)) {
+      alert("中にフォルダがあるので、これ以上深くできません(2階層まで)。");
+      return closeFolderMove();
+    }
+  }
+  folder.parentId = destId || null;
+  saveState();
+  closeFolderMove();
   renderNotes();
 }
 
@@ -3534,6 +3626,8 @@ function deleteCurrentNote() {
 // ノート関連イベントバインド
 document.getElementById("note-new").onclick = createNote;
 document.getElementById("note-new-folder").onclick = createNoteFolder;
+document.getElementById("folder-move-cancel").onclick = closeFolderMove;
+document.getElementById("folder-move-modal").addEventListener("click", (e) => { if (e.target.id === "folder-move-modal") closeFolderMove(); });
 document.getElementById("note-edit-back").onclick = closeNoteEdit;
 document.getElementById("note-edit-delete").onclick = deleteCurrentNote;
 document.getElementById("note-edit-title").addEventListener("input", saveNoteEditDebounced);
