@@ -4501,8 +4501,9 @@ function renderKasegu() {
   } else {
     const sum = known.reduce((s, v) => s + (v.amount_monthly || 0), 0);
     const tgt = (moneyGoal && moneyGoal.target_monthly) || 0;
-    h += '<div class="kasegu-warn">動かしているレバーの見込み合計は <b>+' + yen(sum) + '円/月</b>。'
-       + '目標は +' + yen(tgt) + '円/月 なので、' + (sum >= tgt ? '届いています。' : 'あと ' + yen(tgt - sum) + '円/月 足りません。') + '</div>';
+    h += '<div class="kasegu-warn">金額が出ているレバーの合計は <b>+' + yen(sum) + '円/月</b>（会社の利益ベース）。'
+       + '目標の +' + yen(tgt) + '円/月 は手取りなので、' + (sum >= tgt ? 'この利益改善だけで原資は足ります。' : 'まだ ' + yen(tgt - sum) + '円/月 足りません。')
+       + '<br>ただし<b>利益がそのまま手取りになるわけではありません</b>。役員報酬を改定して初めて自分の手取りに変わります（「役員報酬の見直しを兄と話す」）。</div>';
   }
 
   // ---- 稼ぐ計画に関係していないもの ----
