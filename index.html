@@ -345,6 +345,42 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .note-edit-title:focus { border-color: var(--accent); }
 .note-edit-body { flex: 1; min-height: 360px; padding: 14px; border: 1px solid var(--line-soft); background: #fbf9f3; font-size: 14px; line-height: 1.7; font-family: inherit; outline: none; resize: vertical; }
 .note-edit-body:focus { border-color: var(--accent); }
+/* 2026-08-16 修正: ノート本文がスマホで極端に小さく(ほとんど見えなく)なる不具合。
+   原因は2つ重なっていた。
+   ①コピーボタン追加(2026-08-06)で本文を <div class="copy-scope"> で包んだため、
+     本文の flex:1 が効かなくなった(モーダル縦flexの直接の子でなくなったため)。
+   ②本文に min-height:360px が固定で入っており、画面が低い時(スマホでキーボードを開いた時など)
+     モーダルの外へはみ出して、実際に見えるのが80〜100pxしかなくなっていた。
+   → 包んだdivを「伸びる縦flex」にし、モーダルに高さを与えて残りを本文に配る。 */
+.modal.note-edit { height: 92dvh; max-height: 92dvh; }
+.modal.note-edit > .copy-scope { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.modal.note-edit > .copy-scope > .note-edit-body { flex: 1 1 auto; min-height: 140px; }
+/* ノート編集の道具立て(音声入力) */
+.note-edit-tools { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.note-edit-tools .voice-status { margin: 0; }
+@media (max-width: 600px) {
+  .modal.note-edit { padding: 12px; }
+  .modal.note-edit > .copy-scope > .note-edit-body { font-size: 16px; line-height: 1.8; padding: 12px 42px 12px 12px; }
+  .note-edit-title { font-size: 17px; padding: 11px 12px; }
+}
+/* 画面が低い時(キーボードを開いた時)は、本文以外を詰めて本文の場所を確保する */
+@media (max-height: 620px) {
+  .modal.note-edit { padding: 10px; height: 97dvh; max-height: 97dvh; }
+  .modal.note-edit .note-edit-meta { display: none; }
+  .modal.note-edit .note-edit-folder-row { margin-bottom: 6px; }
+  .modal.note-edit .note-edit-header { margin-bottom: 6px; }
+  .modal.note-edit .note-edit-title { margin-bottom: 6px; padding: 8px 10px; font-size: 15px; }
+  .modal.note-edit .note-edit-tools { margin-bottom: 5px; }
+  .modal.note-edit > .copy-scope > .note-edit-body { min-height: 110px; }
+}
+/* 小さめのスマホでキーボードを開いた極端な場合。打っている最中に使わない行は畳んで本文を守る
+   (キーボードを閉じれば元に戻る) */
+@media (max-height: 430px) {
+  .modal.note-edit .note-edit-folder-row { display: none; }
+  .modal.note-edit .note-edit-header { margin-bottom: 4px; }
+  .modal.note-edit .note-edit-title { margin-bottom: 4px; }
+  .modal.note-edit > .copy-scope > .note-edit-body { min-height: 80px; }
+}
 
 /* 思考ログモーダル内のノート表示 + 雑メモのインライン編集(Phase D-3) */
 .insight-modal-item.note-item { border-left-color: var(--accent); background: #fdfbf6; }
@@ -1515,6 +1551,10 @@ html { zoom: var(--ui-zoom, 1); }
       <label class="capture-want-answer" title="チェックで Claude が読んで回答・実行を検討します(次回スキャン時)"><input type="checkbox" id="note-edit-want-answer" /> ☑ 回答&実行希望</label>
       <label class="capture-want-answer" id="note-edit-urgent-wrap" style="display:none;" title="チェックで15分以内の起動を希望"><input type="checkbox" id="note-edit-urgent" /> 🚀 今すぐ</label>
       <label class="capture-want-answer" id="note-edit-always-wrap" title="チェック中はこのノートが更新されるたび、次のスキャンで読み直して回答します(日記向け・1日1回まで)"><input type="checkbox" id="note-edit-always" /> ♻ 常時(日記など)</label>
+    </div>
+    <div class="note-edit-tools">
+      <button class="mic-btn" id="note-mic" title="音声入力" aria-label="音声入力">🎙</button>
+      <div class="voice-status" id="note-voice-status">🎙 聞いています… もう一度タップで停止</div>
     </div>
     <div class="copy-scope"><textarea class="note-edit-body" id="note-edit-body" data-copy-src placeholder="本文(改行・空白自由。長文OK。マークダウン記法の表示対応は段階的に拡充予定)"></textarea><button class="copy-btn" data-copy type="button" title="本文をコピー" aria-label="本文をコピー">📋</button></div>
   </div>
@@ -6382,7 +6422,8 @@ document.getElementById("inbox-next-modal").addEventListener("click", (e) => {
 
   bindMic("moya-mic", "moya-input", "moya-voice-status");
   bindMic("capture-mic", "capture-input", "capture-voice-status");
-  bindMic("task-mic", "task-input-title", "task-voice-status");   // 2026-08-15 追加
+  bindMic("task-mic", "task-input-title", "task-voice-status");
+  bindMic("note-mic", "note-edit-body", "note-voice-status");     // 2026-08-16 追加   // 2026-08-15 追加
 })();
 
 // ===== 全体の文字サイズ切替 =====
