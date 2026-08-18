@@ -998,6 +998,76 @@ html { zoom: var(--ui-zoom, 1); }
   .hist-row { grid-template-columns: 40px 30px 16px 1fr; gap: 0 6px; font-size: 13px; }
   .shirei-strip .sc { flex: 1 1 44%; }
 }
+
+/* ========== 稼ぐタブ(2026-08-18) ==========
+   司令塔＝これから何をやるか / 履歴＝これまで何が起きたか / 稼ぐ＝どこへ向かうか。
+   データ源は ichibou_money_goal(目標) と ichibou_levers(レバーと、まだ分かっていない数字)。
+   方針: 金額を推測で埋めない。分からないものは「未確定」と出して、埋める作業を最上段に置く。 */
+.kasegu-wrap { max-width: 900px; }
+.kasegu-title { font-family: "Shippori Mincho", serif; font-size: 26px; letter-spacing: 0.08em; margin-bottom: 4px; }
+.kasegu-sub { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--ink-mute); margin-bottom: 20px; }
+
+.goal-box { background: #fbf9f3; border: 1px solid var(--line-soft); border-left: 3px solid var(--green);
+  border-radius: 3px; padding: 16px 18px; margin-bottom: 22px; box-shadow: var(--paper-shadow); }
+.goal-row { display: flex; gap: 26px; flex-wrap: wrap; align-items: baseline; }
+.goal-row .g { display: flex; align-items: baseline; gap: 8px; }
+.goal-row .g .v { font-family: "JetBrains Mono", monospace; font-size: 22px; color: var(--ink); }
+.goal-row .g .k { font-size: 11.5px; color: var(--ink-mute); }
+.goal-row .g .u { font-size: 12px; color: var(--ink-soft); }
+.goal-note { font-size: 12px; color: var(--ink-mute); margin-top: 10px; line-height: 1.65; }
+.goal-left { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--accent); }
+
+.kasegu-h { display: flex; align-items: baseline; gap: 10px; font-family: "Shippori Mincho", serif;
+  font-size: 15px; letter-spacing: 0.06em; padding-bottom: 7px; margin: 26px 0 10px;
+  border-bottom: 1px solid var(--line-soft); }
+.kasegu-h .n { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); margin-left: auto; }
+.kasegu-h.warn { color: var(--accent); border-bottom-color: var(--accent-soft); }
+.kasegu-lead { font-size: 12.5px; color: var(--ink-soft); margin: -4px 0 12px; line-height: 1.7; }
+
+/* 未確定の数字 */
+.unk { background: #fdf4f1; border: 1px solid var(--line-soft); border-left: 3px solid var(--accent);
+  border-radius: 3px; padding: 12px 15px; margin-bottom: 8px; }
+.unk.filled { background: #eef4ee; border-left-color: var(--green); }
+.unk .nm { font-size: 14.5px; font-weight: 700; display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.unk .who { font-family: "JetBrains Mono", monospace; font-size: 10px; border: 1px solid var(--line);
+  border-radius: 2px; padding: 0 6px; color: var(--ink-mute); font-weight: 400; }
+.unk .who.claude { border-color: #cfe0d2; color: var(--green); }
+.unk .why { font-size: 12.5px; color: var(--ink-mute); margin-top: 4px; line-height: 1.65; }
+.unk .na { font-size: 13px; margin-top: 7px; }
+.unk .na .arrow { color: var(--accent); font-family: "JetBrains Mono", monospace; margin-right: 6px; }
+.unk .val { font-family: "JetBrains Mono", monospace; font-size: 14px; color: var(--green); margin-top: 7px; }
+.unk-in { display: flex; gap: 7px; margin-top: 9px; }
+.unk-in input { flex: 1; padding: 7px 10px; font-family: inherit; font-size: 13.5px; color: var(--ink);
+  background: #fff; border: 1px solid var(--line); border-radius: 3px; }
+.unk-in input:focus { outline: none; border-color: var(--accent-soft); }
+.unk-in button { background: var(--ink); color: #fff; border: none; border-radius: 3px; padding: 0 16px;
+  font-family: inherit; font-size: 12.5px; cursor: pointer; letter-spacing: 0.06em; }
+.unk-in button:hover { background: var(--accent); }
+
+/* レバー */
+.lev { background: #fbf9f3; border: 1px solid var(--line-soft); border-left: 3px solid var(--line);
+  border-radius: 3px; padding: 13px 16px; margin-bottom: 8px; box-shadow: var(--paper-shadow); }
+.lev.moving { border-left-color: var(--green); }
+.lev.low    { opacity: 0.78; }
+.lev .nm { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; font-size: 15px; font-weight: 700; }
+.lev .sp { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--ink-mute);
+  border: 1px solid var(--line); border-radius: 99px; padding: 0 8px; font-weight: 400; }
+.lev .cf { font-family: "JetBrains Mono", monospace; font-size: 10px; border-radius: 99px; padding: 0 8px; font-weight: 400; }
+.lev .cf.high { color: var(--green); border: 1px solid #cfe0d2; }
+.lev .cf.mid  { color: var(--amber); border: 1px solid var(--amber); }
+.lev .cf.low  { color: var(--fog);   border: 1px solid var(--fog); }
+.lev .amt { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-soft); margin-top: 6px; }
+.lev .why { font-size: 12.5px; color: var(--ink-mute); margin-top: 5px; line-height: 1.7; }
+.lev .na { font-size: 14px; margin-top: 8px; }
+.lev .na .arrow { color: var(--accent); font-family: "JetBrains Mono", monospace; margin-right: 6px; }
+.lev .lk { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--ink-mute); margin-top: 7px; }
+.lev .lk a { color: var(--blue); cursor: pointer; }
+
+.kasegu-warn { background: #faf2e2; border: 1px solid var(--amber); border-radius: 3px;
+  padding: 12px 15px; font-size: 13px; color: var(--ink-soft); line-height: 1.75; margin-top: 10px; }
+.kasegu-off { font-size: 13px; color: var(--ink-mute); line-height: 1.9; }
+.kasegu-off b { color: var(--ink-soft); font-weight: 400; }
+@media (max-width: 560px) { .goal-row { gap: 16px; } .goal-left { margin-left: 0; width: 100%; } }
 </style>
 </head>
 <body>
@@ -1031,6 +1101,8 @@ html { zoom: var(--ui-zoom, 1); }
     <!-- 2026-08-16: 司令塔タブを追加し、起動時の初期表示をタスク→司令塔に変更(外部OS v1)。
          理由: 全プロジェクトの現在地を最初に見せるため。戻す場合はこの2行の active を入れ替える。 -->
     <button class="tab active" data-view="shirei">司令塔 <span class="count" id="count-shirei">0</span></button>
+    <!-- 2026-08-18: 稼ぐタブ。司令塔＝これから / 履歴＝これまで / 稼ぐ＝どこへ向かうか -->
+    <button class="tab" data-view="kasegu">稼ぐ</button>
     <button class="tab" data-view="tasks">タスク <span class="count" id="count-tasks">0</span></button>
     <button class="tab" data-view="inbox">受信箱 <span class="count" id="count-inbox">0</span></button>
     <button class="tab" data-view="answers">回答 <span class="count" id="count-answers">0</span></button>
@@ -1058,6 +1130,16 @@ html { zoom: var(--ui-zoom, 1); }
       <div class="shirei-title">司令塔</div>
       <div class="shirei-sub" id="shirei-sub">読み込み中…</div>
       <div id="shirei-body"></div>
+    </div>
+  </section>
+
+  <!-- 2026-08-18: 稼ぐタブ。目標(ichibou_money_goal)と、それに効く手(ichibou_levers)だけを置く。
+       金額は推測で埋めず、「まだ分かっていない数字」を最上段に出して、埋める作業を最初の一手にする。 -->
+  <section class="view" id="view-kasegu">
+    <div class="kasegu-wrap">
+      <div class="kasegu-title">稼ぐ</div>
+      <div class="kasegu-sub" id="kasegu-sub">読み込み中…</div>
+      <div id="kasegu-body"></div>
     </div>
   </section>
 
@@ -1875,6 +1957,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     document.getElementById("view-" + tab.dataset.view).classList.add("active");
     if (tab.dataset.view === "shirei") { renderShirei(); loadShirei(); loadAnswers(); }   // 描いてから最新を取り直す
     if (tab.dataset.view === "history") { renderHistory(); loadHistory(); }
+    if (tab.dataset.view === "kasegu") { renderKasegu(); loadKasegu(); }
     if (tab.dataset.view === "weekly") renderWeekly();
     if (tab.dataset.view === "takoashi") renderTakoashi();
     if (tab.dataset.view === "home") { renderHome(); loadAnswers(); }   // 回答の未読数を取り直してから描く
@@ -4260,6 +4343,236 @@ function renderHistory() {
   });
   sync();
 })();
+
+// ========================================================================
+// ===== 稼ぐタブ(2026-08-18)=====
+// ------------------------------------------------------------------------
+// 司令塔＝これから何をやるか / 履歴＝これまで何が起きたか / 稼ぐ＝どこへ向かうか。
+// データ源: ichibou_money_goal(目標1行) と ichibou_levers(レバー / まだ分かっていない数字)。
+//
+// 設計の芯: **金額を推測で埋めない。**
+//   稼ぐ計画は数字が1つ欠けるだけで絵になる。だから「まだ分かっていない数字」を最上段に置き、
+//   それが埋まるまでは合計を出さない。埋める作業そのものを最初の一手にしている。
+// ========================================================================
+let moneyGoal = null;
+let moneyLevers = null;
+let moneyErr = "";
+const MONEY_CACHE_KEY = "ichibou_money_cache";
+
+async function loadKasegu() {
+  if (!navigator.onLine) { moneyErr = "オフラインです。最後に読めた内容を表示しています。"; loadKaseguCache(); renderKasegu(); return; }
+  try {
+    // 「稼ぐ計画に関係していないもの」を出すのにプロジェクト一覧が要る
+    if (shireiProjects === null) { await loadShirei(); }
+    const [g, l] = await Promise.all([
+      sb.from("ichibou_money_goal").select("*").eq("id", "main").maybeSingle(),
+      sb.from("ichibou_levers").select("*").order("sort", { ascending: true })
+    ]);
+    if (l.error) throw l.error;
+    moneyGoal   = (g && !g.error) ? g.data : null;
+    moneyLevers = l.data || [];
+    moneyErr = "";
+    try { localStorage.setItem(MONEY_CACHE_KEY, JSON.stringify({ g: moneyGoal, l: moneyLevers })); } catch (e) {}
+  } catch (e) {
+    console.error("Kasegu pull error:", e);
+    moneyErr = "読み込みに失敗しました。通信を確認してください。";
+    loadKaseguCache();
+  }
+  renderKasegu();
+}
+
+function loadKaseguCache() {
+  if (moneyLevers) return;
+  try {
+    const c = JSON.parse(localStorage.getItem(MONEY_CACHE_KEY) || "null");
+    if (c) { moneyGoal = c.g || null; moneyLevers = c.l || []; }
+  } catch (e) {}
+}
+
+function yen(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  if (n >= 10000) {
+    const man = n / 10000;
+    return (Number.isInteger(man) ? man : man.toFixed(1)) + "万";
+  }
+  return String(n);
+}
+
+function monthsLeft(deadline) {
+  if (!deadline) return null;
+  const d = new Date(deadline), now = new Date();
+  if (isNaN(d.getTime())) return null;
+  return Math.max(0, (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth()));
+}
+
+const MONEY_CONF = { high: "確度 高", mid: "確度 中", low: "確度 低" };
+const MONEY_OWNER = { akira: "晃良", claude: "私", both: "二人" };
+
+function renderKasegu() {
+  const body = document.getElementById("kasegu-body");
+  if (!body) return;
+  if (deferRender("kasegu", renderKasegu, "#view-kasegu")) return;
+
+  const subEl = document.getElementById("kasegu-sub");
+  if (moneyLevers === null) { if (subEl) subEl.textContent = "読み込み中…"; body.innerHTML = ""; return; }
+
+  const unknowns = moneyLevers.filter(x => x.kind === "unknown");
+  const openUnk  = unknowns.filter(x => x.status !== "done");
+  const levers   = moneyLevers.filter(x => x.kind !== "unknown" && x.status !== "dropped");
+  const ml = monthsLeft(moneyGoal && moneyGoal.deadline);
+
+  if (subEl) {
+    subEl.textContent = "目標までの距離と、それに効く手だけを置く場所"
+      + (ml !== null ? " — 残り " + ml + "ヶ月" : "");
+  }
+
+  let h = "";
+  if (moneyErr) h += '<div class="shirei-err">' + escapeHtml(moneyErr) + '</div>';
+
+  // ---- 目標 ----
+  if (moneyGoal) {
+    h += '<div class="goal-box"><div class="goal-row">'
+       + '<div class="g"><span class="v">+' + yen(moneyGoal.target_monthly) + '</span><span class="u">円/月</span>'
+       + '<span class="k">手取りの増分</span></div>'
+       + '<div class="g"><span class="v">' + yen(moneyGoal.target_lump) + '</span><span class="u">円</span>'
+       + '<span class="k">一時金</span></div>'
+       + (ml !== null ? '<div class="goal-left">' + (moneyGoal.deadline || "") + ' まで 残り ' + ml + 'ヶ月</div>' : "")
+       + '</div>';
+    if (moneyGoal.note) h += '<div class="goal-note">' + escapeHtml(moneyGoal.note) + '</div>';
+    h += '</div>';
+  }
+
+  // ---- まだ分かっていない数字 ----
+  h += '<div class="kasegu-h ' + (openUnk.length ? "warn" : "") + '">まだ分かっていない数字'
+     + '<span class="n">' + (unknowns.length - openUnk.length) + '/' + unknowns.length + ' 判明</span></div>';
+  if (openUnk.length) {
+    h += '<div class="kasegu-lead">計画は数字が1つ欠けるだけで絵になります。'
+       + 'ここが埋まるまで、下のレバーの金額は出しません（推測で埋めない）。</div>';
+  }
+  unknowns.forEach(u => {
+    const done = u.status === "done";
+    h += '<div class="unk' + (done ? " filled" : "") + '">';
+    h += '<div class="nm">' + escapeHtml(u.name)
+       + '<span class="who ' + (u.owner === "claude" ? "claude" : "") + '">'
+       + (MONEY_OWNER[u.owner] || u.owner) + 'が出す</span></div>';
+    if (u.why) h += '<div class="why">' + escapeHtml(u.why) + '</div>';
+    if (done) {
+      h += '<div class="val">✓ ' + escapeHtml(u.amount_note) + '</div>';
+    } else {
+      if (u.next_action) h += '<div class="na"><span class="arrow">▶</span>' + escapeHtml(u.next_action) + '</div>';
+      if (u.owner !== "claude") {
+        h += '<div class="unk-in"><input type="text" data-unk="' + u.id + '" placeholder="分かっている数字をそのまま書く（例: 月32万 / だいたい80〜120万）">'
+           + '<button data-unksave="' + u.id + '">入れる</button></div>';
+      }
+    }
+    h += '</div>';
+  });
+
+  // ---- レバー ----
+  h += '<div class="kasegu-h">稼ぐレバー<span class="n">効きはじめる順</span></div>';
+  h += '<div class="kasegu-lead">上ほど早く現金になります。下ほど大きいが遠い。</div>';
+  levers.forEach(v => {
+    h += '<div class="lev ' + (v.status === "moving" ? "moving " : "") + (v.confidence === "low" ? "low" : "") + '">';
+    h += '<div class="nm">' + escapeHtml(v.name)
+       + (v.speed ? '<span class="sp">' + escapeHtml(v.speed) + '</span>' : "")
+       + '<span class="cf ' + v.confidence + '">' + (MONEY_CONF[v.confidence] || "") + '</span>'
+       + (v.status === "moving" ? '<span class="sp">動かしている</span>' : "")
+       + '</div>';
+    h += '<div class="amt">見込み: ' + escapeHtml(v.amount_note || "未確定") + '</div>';
+    if (v.why) h += '<div class="why">' + escapeHtml(v.why) + '</div>';
+    if (v.next_action) h += '<div class="na"><span class="arrow">▶</span>' + escapeHtml(v.next_action) + '</div>';
+    const pn = v.project_id && (shireiProjects || []).find(p => p.id === v.project_id);
+    h += '<div class="lk">' + (MONEY_OWNER[v.owner] || v.owner) + 'が動かす'
+       + (pn ? ' · 司令塔の「<a data-gotoproj="' + v.project_id + '">' + escapeHtml(pn.name) + '</a>」につながっている' : "")
+       + '</div>';
+    h += '</div>';
+  });
+
+  // ---- 合計は、出せるときだけ出す ----
+  const known = levers.filter(v => v.amount_monthly);
+  h += '<div class="kasegu-h">いまの構えで届くか</div>';
+  if (openUnk.length) {
+    h += '<div class="kasegu-warn">まだ計算できません。'
+       + '未確定の数字が <b>' + openUnk.length + '件</b> 残っています。'
+       + '特に「1件あたりの粗利」と「いまの役員報酬」の2つが出た時点で、'
+       + '「受注をあと何本増やせば +' + yen(moneyGoal ? moneyGoal.target_monthly : 0) + '円/月 に届くか」が計算できます。</div>';
+  } else if (!known.length) {
+    h += '<div class="kasegu-warn">数字は揃いましたが、レバーごとの見込み額がまだ入っていません。</div>';
+  } else {
+    const sum = known.reduce((s, v) => s + (v.amount_monthly || 0), 0);
+    const tgt = (moneyGoal && moneyGoal.target_monthly) || 0;
+    h += '<div class="kasegu-warn">動かしているレバーの見込み合計は <b>+' + yen(sum) + '円/月</b>。'
+       + '目標は +' + yen(tgt) + '円/月 なので、' + (sum >= tgt ? '届いています。' : 'あと ' + yen(tgt - sum) + '円/月 足りません。') + '</div>';
+  }
+
+  // ---- 稼ぐ計画に関係していないもの ----
+  const linked = new Set(moneyLevers.map(v => v.project_id).filter(Boolean));
+  const off = (shireiProjects || []).filter(p =>
+    !linked.has(p.id) && ["active", "waiting", "stalled"].indexOf(p.status) >= 0);
+  if (off.length) {
+    h += '<div class="kasegu-h">いまの稼ぐ計画に関係していないもの<span class="n">' + off.length + '件</span></div>';
+    h += '<div class="kasegu-lead">悪いものではありません。ただ、1〜2年でお金にはなりません。'
+       + '手が足りないときに削るのはここから。</div>';
+    h += '<div class="kasegu-off">'
+       + off.map(p => '<div>· <b>' + escapeHtml(p.name) + '</b>（' + escapeHtml(p.dept || "") + '）</div>').join("")
+       + '</div>';
+  }
+
+  body.innerHTML = h;
+}
+
+(function bindKasegu() {
+  const root = document.getElementById("view-kasegu");
+  if (!root) return;
+
+  root.addEventListener("click", async (ev) => {
+    const gp = ev.target.closest("[data-gotoproj]");
+    if (gp) {
+      shireiOpen.add(gp.dataset.gotoproj);
+      shireiGoTab("shirei");
+      setTimeout(() => {
+        const card = document.querySelector('.shirei-card[data-pid="' + gp.dataset.gotoproj + '"]');
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 400);
+      return;
+    }
+    const sv = ev.target.closest("[data-unksave]");
+    if (sv) { await saveUnknown(sv.dataset.unksave); return; }
+  });
+
+  root.addEventListener("keydown", async (ev) => {
+    const inp = ev.target.closest("[data-unk]");
+    if (inp && ev.key === "Enter") { ev.preventDefault(); await saveUnknown(inp.dataset.unk); }
+  });
+})();
+
+// 分かった数字をその場で確定させる。値の形は自由（「月32万」「80〜120万」でよい）。
+// 稼ぐ計画で大事なのは桁と幅で、1円単位の正確さではない。
+async function saveUnknown(id) {
+  const inp = document.querySelector('[data-unk="' + id + '"]');
+  const v = inp ? inp.value.trim() : "";
+  if (!v) return;
+  const row = moneyLevers.find(x => x.id === id);
+  if (!row) return;
+  const prevNote = row.amount_note, prevStatus = row.status;
+  row.amount_note = v; row.status = "done";
+  renderKasegu();
+  try {
+    const { error } = await sb.from("ichibou_levers")
+      .update({ amount_note: v, status: "done" }).eq("id", id);
+    if (error) throw error;
+    await sb.from("ichibou_activity").insert({
+      project_id: null, kind: "find", actor: "akira",
+      what: "稼ぐ: 「" + row.name + "」が判明 — " + v
+    });
+  } catch (e) {
+    console.error("unknown save error:", e);
+    row.amount_note = prevNote; row.status = prevStatus;
+    renderKasegu();
+    alert("保存できませんでした。通信を確認してください。");
+  }
+}
+
 function renderAll() {
   try { renderHome(); } catch (e) { /* ホームは表示中でなくても数字だけ更新する */ }
   renderProjects();
