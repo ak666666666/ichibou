@@ -798,6 +798,24 @@ html { zoom: var(--ui-zoom, 1); }
 .moya-cloud.copy-scope .moya-text { padding-right: 38px; }
 .answer-head { flex-wrap: wrap; }
 /* コピー完了のトースト */
+/* ===== 取り消しバー(2026-08-19 晃良要望「間違えて送信した時の即時取り消し」)===== */
+.undo-bar {
+  position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+  background: var(--ink); color: var(--bg); padding: 10px 14px 10px 18px;
+  border-radius: 999px; z-index: 10000; font-size: 12.5px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.28); max-width: calc(100vw - 24px);
+  opacity: 0; pointer-events: none; transition: opacity .16s, transform .16s;
+}
+.undo-bar.show { opacity: .97; pointer-events: auto; }
+.undo-bar-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.undo-bar-btn {
+  border: 1px solid rgba(255,255,255,.55); background: transparent; color: var(--bg);
+  padding: 6px 14px; border-radius: 999px; font-size: 12px; font-family: inherit;
+  cursor: pointer; flex: none; min-height: 32px;
+}
+.undo-bar-btn:hover { background: rgba(255,255,255,.16); }
+.undo-bar-count { font-family: "JetBrains Mono", monospace; font-size: 11px; opacity: .7; flex: none; }
 .copy-toast {
   position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
   background: var(--ink); color: var(--bg); padding: 9px 18px; border-radius: 999px;
@@ -1526,6 +1544,13 @@ html { zoom: var(--ui-zoom, 1); }
   </div>
 </div>
 
+<!-- 取り消しバー(2026-08-19) -->
+<div class="undo-bar" id="undo-bar">
+  <span class="undo-bar-msg" id="undo-bar-msg"></span>
+  <span class="undo-bar-count" id="undo-bar-count"></span>
+  <button class="undo-bar-btn" id="undo-bar-btn" type="button">↩ 取り消す</button>
+</div>
+
 <div class="modal-backdrop" id="note-edit-modal">
   <div class="modal note-edit">
     <div class="note-edit-header">
@@ -2219,8 +2244,10 @@ function saveMoya() {
   if (!text) return;
   const wantEl = document.getElementById("moya-want-answer");
   const wantAnswer = !!(wantEl && wantEl.checked);
-  state.moyas.push({ id: uid(), ts: Date.now(), text, wantAnswer, urgentClaude: false });
+  const newMoyaId = uid();
+  state.moyas.push({ id: newMoyaId, ts: Date.now(), text, wantAnswer, urgentClaude: false });
   saveState();
+  offerUndo("もやを置きました", undoStateItem("moyas", newMoyaId, renderMoyas));
   input.value = "";
   if (wantEl) wantEl.checked = false;
   renderMoyas();
@@ -2802,8 +2829,11 @@ function saveLog() {
   if (!text) return;
   const wantAnswerEl = document.getElementById("capture-want-answer");
   const wantAnswer = !!(wantAnswerEl && wantAnswerEl.checked);
-  state.logs.push(normalizeLog({ id: uid(), ts: Date.now(), text, projectId: null, wantAnswer }));
+  const newLogId = uid();
+  state.logs.push(normalizeLog({ id: newLogId, ts: Date.now(), text, projectId: null, wantAnswer }));
   saveState();
+  offerUndo(wantAnswer ? "雑メモを記録(☑回答希望つき)" : "雑メモを記録しました",
+            undoStateItem("logs", newLogId, renderLogs));
   input.value = "";
   if (wantAnswerEl) wantAnswerEl.checked = false; // 記録後はチェックをリセット(次のメモに引きずらない)
   autoGrowCapture(); // 記録後は既定の高さに戻す
@@ -4679,8 +4709,9 @@ function addTask(title, bucket, type, when) {
     w.dueHasTime = false;
   }
   const finalBucket = w.dueAt ? (bucketFromDate(w.dueAt) || bucket) : bucket;
+  const newTaskId = uid();
   tasksArr().push(normalizeTask({
-    title: t, bucket: finalBucket, type,
+    id: newTaskId, title: t, bucket: finalBucket, type,
     dueAt: w.dueAt ?? null,
     dueHasTime: w.dueHasTime === true,
     startAt: w.startAt ?? null
@@ -4688,6 +4719,7 @@ function addTask(title, bucket, type, when) {
   saveState();
   ensureTaskVisible(finalBucket, type);   // 「追加したのに画面に出ない」を防ぐ
   renderTasks();
+  offerUndo("タスクを追加しました", undoStateItem("tasks", newTaskId, renderTasks));
   return true;
 }
 
@@ -5517,11 +5549,14 @@ function renderInbox() {
         if (!word) { ri.focus(); return; }
         rb.disabled = true; ri.disabled = true;
         try {
-          await postThreadReply(item, word);
+          const hadThread = !!item.thread_id;
+          const r = await postThreadReply(item, word);
           // 返信したら受信箱からは消す(晃良確定: 同じ話が2タブに並ばないように)
           await consumeInbox(item, "回答タブで会話中");
           switchToAnswersTab();
           startAnswerWait("受信箱の件を送信。PCで回答を生成しています…", 10);
+          item.__cameFromInbox = true;
+          offerUndo("受信箱から送信しました", undoThreadReply(r.replyCwId, item, hadThread));
         } catch (e) {
           console.error("inbox reply error:", e);
           alert("返信の送信に失敗しました。通信状態を確認してもう一度お試しください。");
@@ -5809,6 +5844,96 @@ function startAnswerWait(label, timeoutMin) {
 }
 
 // ============================================================
+// ↩ 取り消し(2026-08-19 晃良要望「間違えて送信した時の即時取り消し」)
+// ------------------------------------------------------------
+// 直前の1操作だけを15秒間だけ戻せるようにする。対象は 記録/追加/➤送信 の4種類。
+// ➤送信だけは「PCが拾う前に止める」必要があるので、DBの行を打ち消す処理を渡す。
+//   PCは10秒おきに見に来るため、15秒あれば大半は間に合う。
+//   間に合わなかった場合は正直に「もう生成が始まっている」と伝える(黙って失敗させない)。
+// ============================================================
+const UNDO_WINDOW_MS = 15000;
+// 取り消した返信の cw_id。PCが一瞬先に拾っていた場合、回答が後から届いてしまうので、
+// 届いた時点で自動的に隠す(取り消したのに残っている、を防ぐ)。端末内に保存。
+const CANCELLED_KEY = "ichibou_cancelled_replies";
+function cancelledReplyIds() {
+  try { return JSON.parse(localStorage.getItem(CANCELLED_KEY) || "[]"); } catch (e) { return []; }
+}
+function rememberCancelledReply(cwId) {
+  try {
+    const list = cancelledReplyIds();
+    list.push(cwId);
+    localStorage.setItem(CANCELLED_KEY, JSON.stringify(list.slice(-30)));
+  } catch (e) { /* 保存できなくても本体の動作には影響させない */ }
+}
+let undoState = null;   // { label, run, timer, tick, until }
+
+function hideUndoBar() {
+  const bar = document.getElementById("undo-bar");
+  if (bar) bar.classList.remove("show");
+  if (undoState) {
+    clearTimeout(undoState.timer);
+    clearInterval(undoState.tick);
+  }
+  undoState = null;
+}
+
+// label: バーに出す文言 / run: 実際に取り消す処理(async可)
+function offerUndo(label, run) {
+  hideUndoBar();
+  const bar = document.getElementById("undo-bar");
+  const msg = document.getElementById("undo-bar-msg");
+  const cnt = document.getElementById("undo-bar-count");
+  if (!bar || !msg) return;
+  const until = Date.now() + UNDO_WINDOW_MS;
+  msg.textContent = label;
+  bar.classList.add("show");
+  const paint = () => {
+    const left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+    if (cnt) cnt.textContent = left + "秒";
+  };
+  paint();
+  undoState = {
+    label, run, until,
+    tick: setInterval(paint, 250),
+    timer: setTimeout(hideUndoBar, UNDO_WINDOW_MS)
+  };
+}
+
+(function bindUndoButton() {
+  const btn = document.getElementById("undo-bar-btn");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    if (!undoState) return;
+    const run = undoState.run;
+    btn.disabled = true;
+    try {
+      const res = await run();
+      hideUndoBar();
+      showCopyToast(res && res.msg ? res.msg : "取り消しました");
+    } catch (e) {
+      console.error("undo error:", e);
+      hideUndoBar();
+      showCopyToast("取り消しに失敗しました");
+    }
+    btn.disabled = false;
+  });
+})();
+
+// state(雑メモ・もや・タスク)から、いま追加した1件を消す共通処理
+function undoStateItem(listName, id, rerender) {
+  return () => {
+    const arr = state[listName];
+    if (Array.isArray(arr)) {
+      const i = arr.findIndex(x => x && x.id === id);
+      if (i !== -1) arr.splice(i, 1);
+    }
+    saveState();
+    if (rerender) rerender();
+    return { msg: "取り消しました" };
+  };
+}
+
+// ============================================================
 // 💬 会話(スレッド)— 2026-08-06 晃良要望
 // ------------------------------------------------------------
 // 「受信箱の項目にもその場で返信したい。以後のやり取りは回答タブに集約したい。
@@ -5834,9 +5959,10 @@ async function postThreadReply(originRow, text) {
     if (error) throw error;
     originRow.thread_id = threadId;
   }
+  const replyCwId = "req_" + newThreadId().slice(3);
   const { error: e2 } = await sb.from("ichibou_inbox").insert({
     kind: "reply",
-    cw_id: "req_" + newThreadId().slice(3),
+    cw_id: replyCwId,
     thread_id: threadId,
     title: "▶ 返信",
     detail: text,
@@ -5844,7 +5970,38 @@ async function postThreadReply(originRow, text) {
     consumed: false
   });
   if (e2) throw e2;
-  return threadId;
+  return { threadId, replyCwId };
+}
+
+// ➤送信の取り消し。PCが拾う前なら止められる(2026-08-19)。
+// 「未処理のまま残っている返信行」を打ち消す形にするので、
+// すでにPCが処理を始めていた場合は行が消費済みになっており、正直にその旨を返す。
+function undoThreadReply(replyCwId, originRow, hadThreadBefore) {
+  return async () => {
+    const { data, error } = await sb.from("ichibou_inbox")
+      .update({ consumed: true, consumed_at: new Date().toISOString(), dest: "cancelled" })
+      .eq("cw_id", replyCwId).eq("consumed", false).select("id");
+    if (error) throw error;
+    const stopped = Array.isArray(data) && data.length > 0;
+    rememberCancelledReply(replyCwId);   // 生成が先に始まっていた場合の保険
+    // 受信箱から返信した場合は、元の項目を未読に戻して受信箱へ復帰させる
+    if (stopped && originRow && originRow.__cameFromInbox) {
+      try {
+        await sb.from("ichibou_inbox")
+          .update({ consumed: false, consumed_at: null, dest: null,
+                    thread_id: hadThreadBefore ? originRow.thread_id : null })
+          .eq("id", originRow.id);
+        if (!hadThreadBefore) originRow.thread_id = null;
+        originRow.consumed = false;
+        await pullInbox();
+      } catch (e) { console.error("origin restore error:", e); }
+    }
+    stopAnswerWait(null);
+    await loadAnswers();
+    return { msg: stopped
+      ? "送信を取り消しました"
+      : "もう回答の生成が始まっていて止められませんでした(届いたら✓で隠せます)" };
+  };
 }
 
 // ============================================================
@@ -5980,8 +6137,11 @@ function buildAnswerThreads() {
 // 単発(1往復)スレッドは対象外なので、読んでいない回答が勝手に消えることはない。
 async function autoConsumeAnswers() {
   if (answersAutoBusy || !navigator.onLine) return;
+  const cancelled = new Set(cancelledReplyIds().map(id => "ans_" + id));
   const targets = answersItems.filter(a => {
     if (a.consumed) return false;
+    // 取り消した送信の回答が後から届いた場合は、見せずに畳む(2026-08-19)
+    if (cancelled.has(a.cw_id || "")) return true;
     if (!a._turns || a._turns < 2) return false;
     return a._threadSettled ? !a._settled : !a._latest;
   });
@@ -6128,9 +6288,10 @@ function renderAnswers() {
       reaskBtn.disabled = true;
       replyRow.querySelector(".answer-reply-input").disabled = true;
       try {
-        await postThreadReply(a, word || "(続き・深掘りを希望)");
+        const r = await postThreadReply(a, word || "(続き・深掘りを希望)");
         reaskBtn.textContent = `✓ 送信(${nextTurn}回目)`;
         startAnswerWait(`${nextTurn}回目を送信。PCで回答を生成しています…`, 10);
+        offerUndo(`${nextTurn}回目を送信しました`, undoThreadReply(r.replyCwId, null, true));
       } catch (e) {
         console.error("reply error:", e);
         alert("返信の送信に失敗しました。通信状態を確認してもう一度お試しください。");
