@@ -2417,6 +2417,7 @@ function renderInsightsModal() {
         }
         if (newText === log.text) return;
         log.text = newText;
+        log.updatedAt = Date.now();
         saveState();
         renderLogs();
       });
@@ -2629,6 +2630,8 @@ function renderLogs() {
       const t = new Date(log.ts);
       const timeStr = `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
       const completedLabel = log.completed && log.completedAt ? ` · 完了 ${formatTs(log.completedAt)}` : "";
+      // 後から本文を直した雑メモは「編集 M/D HH:MM」を添える(2026-08-19)
+      const editedLabel = (log.updatedAt && log.updatedAt - (log.ts || 0) > 60000) ? ` · 編集 ${formatTsShort(log.updatedAt)}` : "";
       const project = state.projects.find(p => p.id === log.projectId);
       const tagHtml = project
         ? `<button class="log-tag" data-retag>📎 ${escapeHtml(project.name || "無題")}<span class="remove">✕</span></button>`
@@ -2650,7 +2653,7 @@ function renderLogs() {
       item.classList.add("copy-scope");
       item.innerHTML = `
         ${copyBtnHtml(false)}
-        <div class="log-time">${timeStr}${completedLabel}</div>
+        <div class="log-time">${timeStr}${editedLabel}${completedLabel}</div>
         <div class="log-text" ${editableAttr} data-copy-src data-id="${log.id}">${escapeHtml(log.text)}</div>
         ${tagsRowHtml}
         <div class="log-actions">${tagHtml}${wantBtn}${urgentBtn}${completeHtml}<button class="log-attach-btn" data-attach title="URLリンクを添付">📎</button><button class="log-delete">削除</button></div>
@@ -2672,6 +2675,7 @@ function renderLogs() {
             saveState(); renderLogs();
           } else if (newText !== log.text) {
             log.text = newText;
+            log.updatedAt = Date.now();
             saveState();
           }
         });
@@ -2768,6 +2772,20 @@ function formatDayLabel(key) {
 function formatTs(ts) {
   const d = new Date(ts);
   return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+
+// 短い日時(M/D HH:MM)。2026-08-19 作成日/更新日の2本立て表示のために追加
+function formatTsShort(ts) {
+  const d = new Date(ts);
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+
+// 「作成 …(・更新 …)」の1行を作る。更新が作成から60秒以内なら"作ったきり"とみなして更新は出さない
+function stampPair(created, updated) {
+  const c = created || updated;
+  const u = updated || created;
+  if (!c) return "";
+  return (u - c > 60000) ? `作成 ${formatTs(c)} · 更新 ${formatTsShort(u)}` : `作成 ${formatTs(c)}`;
 }
 
 // 記録前の雑メモ入力欄を入力量に応じて自動拡張(最大=画面高の半分)。記録後カードのUIは不変。
@@ -3430,8 +3448,7 @@ function renderNotes() {
     notes.forEach(n => {
       const card = document.createElement('div');
       card.className = 'note-card copy-scope';
-      const date = new Date(n.updatedAt || n.createdAt);
-      const dateStr = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+      const dateStr = stampPair(n.createdAt, n.updatedAt);
       const bodyPreview = (n.body || '').replace(/\n+/g, ' ').slice(0, 180);
       const folderName = n.folderId ? (state.noteFolders.find(f => f.id === n.folderId)?.name || '') : '';
       const projName = n.projectId ? (state.projects.find(p => p.id === n.projectId)?.name || '') : '';
@@ -3685,9 +3702,7 @@ function openNoteEdit(id) {
   // 🔗 リンク添付行(機能H①)
   renderNoteAttachRow(note);
 
-  const date = new Date(note.updatedAt || note.createdAt);
-  const ds = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
-  document.getElementById("note-edit-meta").textContent = `更新 ${ds}`;
+  document.getElementById("note-edit-meta").textContent = stampPair(note.createdAt, note.updatedAt);
 
   document.getElementById("note-edit-modal").classList.add("open");
   setTimeout(() => {
@@ -5126,6 +5141,7 @@ function taskItemEl(t) {
       </div>
       <textarea class="task-note-input" placeholder="メモ(任意)" style="display:${hasNote ? "block" : "none"};">${escapeHtml(t.note || "")}</textarea>
       ${t.completed && t.completedAt ? `<div class="task-meta">✓ 完了 ${new Date(t.completedAt).toLocaleString("ja-JP")}</div>` : ""}
+      <div class="task-meta">${stampPair(t.createdAt, t.updatedAt)}</div>
     </div>
   `;
 
