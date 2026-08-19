@@ -954,6 +954,27 @@ html { zoom: var(--ui-zoom, 1); }
 .shirei-msg.cl  .bub { background: #fff; border: 1px solid var(--line-soft); }
 .shirei-msg.pend .bub { background: #fff; border: 1px dashed var(--line); color: var(--ink-mute); font-size: 12.5px; }
 
+/* 2026-08-19: 会話が伸びると1枚のカードが画面何枚分にもなって、下の入力欄まで遠かった。
+   ①古いやりとりは畳んでおく ②長い1件は6行で切って「続きを読む」で開く。 */
+.shirei-msg .bub.clip {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6;
+  overflow: hidden; position: relative;
+}
+.shirei-more {
+  display: block; width: 100%; text-align: left; margin: 2px 0 6px;
+  background: transparent; border: none; padding: 4px 2px; cursor: pointer;
+  font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .04em;
+  color: var(--ink-mute); min-height: 30px;
+}
+.shirei-more:hover { color: var(--ink); }
+.shirei-thfold {
+  display: block; width: 100%; text-align: center; margin: 6px 0 10px;
+  background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: 4px;
+  padding: 8px 10px; cursor: pointer; font-family: inherit; font-size: 12px;
+  color: var(--ink-soft); min-height: 34px;
+}
+.shirei-thfold:hover { color: var(--ink); border-color: var(--line); }
+
 .shirei-ask { margin-top: 12px; }
 .shirei-ask textarea {
   width: 100%; min-height: 62px; resize: vertical; padding: 10px 12px; font-size: 14px;
@@ -3857,6 +3878,12 @@ let shireiDrafts   = {};          // 入力途中の質問(再描画で消さな
 let shireiSending  = null;
 let shireiFrozenOpen = false;
 let shireiPollTimer = null;
+// 2026-08-19: 会話が長くなると1枚のカードが縦に伸びすぎて、入力欄まで延々スクロールする状態だった。
+// 既定では「最近の数件」だけ出し、古い分と長文はタップで開く。
+let shireiThreadFull = new Set();   // 全部見る状態にしているプロジェクトid
+let shireiMsgOpen    = new Set();   // 全文表示にしているメッセージid
+const SHIREI_MSG_TAIL = 4;          // 既定で見せる直近の件数
+const SHIREI_MSG_CLIP = 260;        // これより長い本文は6行で切る(文字数)
 const SHIREI_CACHE_KEY = "ichibou_shirei_cache";
 
 const SHIREI_BLOCKER_LABEL = { owner: "晃良の判断・手作業が要る", tech: "技術的な詰まり", idle: "放置", none: "" };
@@ -3943,6 +3970,23 @@ function shireiCleanAnswer(t) {
   return String(t || "").replace(/\n?【(決着|継続)】\s*$/, "").trim();
 }
 
+// 会話1件の描画。長い本文は6行で切り、「続きを読む」で開く(2026-08-19)
+function shireiMsgHtml(r) {
+  const isMe = r.kind === "reply";
+  const body = isMe ? String(r.detail || "") : shireiCleanAnswer(r.detail);
+  const long = body.length > SHIREI_MSG_CLIP;
+  const open = shireiMsgOpen.has(String(r.id));
+  const clip = long && !open;
+  let h = '<div class="shirei-msg ' + (isMe ? "me" : "cl") + '">'
+        + '<span class="who">' + (isMe ? "晃良 " : "Claude ") + shireiHm(r.created_at) + '</span>'
+        + '<div class="bub' + (clip ? " clip" : "") + '">' + escapeHtml(body) + '</div>';
+  if (long) {
+    h += '<button class="shirei-more" data-msgmore="' + r.id + '">'
+       + (open ? '▴ 畳む' : '▾ 続きを読む(全' + body.length + '文字)') + '</button>';
+  }
+  return h + '</div>';
+}
+
 // ---------- 描画 ----------
 function shireiCard(p, cls, rank) {
   const steps = shireiStepsOf(p.id);
@@ -4022,16 +4066,16 @@ function shireiCard(p, cls, rank) {
 
     // --- 会話 ---
     h += '<div class="shirei-sech mt">分からないとき・状況を伝えるとき</div>';
-    thread.forEach(r => {
-      const isMe = r.kind === "reply";
-      if (isMe) {
-        h += '<div class="shirei-msg me"><span class="who">晃良 ' + shireiHm(r.created_at) + '</span>'
-           + '<div class="bub">' + escapeHtml(r.detail || "") + '</div></div>';
-      } else {
-        h += '<div class="shirei-msg cl"><span class="who">Claude ' + shireiHm(r.created_at) + '</span>'
-           + '<div class="bub">' + escapeHtml(shireiCleanAnswer(r.detail)) + '</div></div>';
-      }
-    });
+    // 2026-08-19: 既定は直近 SHIREI_MSG_TAIL 件だけ。古い分は畳んでおく。
+    const full   = shireiThreadFull.has(p.id);
+    const hidden = thread.length - SHIREI_MSG_TAIL;
+    if (hidden > 0) {
+      h += '<button class="shirei-thfold" data-thmore="' + p.id + '">'
+         + (full ? '▴ 古いやりとりを畳む' : '▾ これより前の ' + hidden + ' 件を表示')
+         + '</button>';
+    }
+    const shown = (full || hidden <= 0) ? thread : thread.slice(-SHIREI_MSG_TAIL);
+    shown.forEach(r => { h += shireiMsgHtml(r); });
     if (pending) {
       h += '<div class="shirei-msg pend"><div class="bub">送信しました。PCが起動していれば1〜2分で回答が届きます。この画面は開いたまま待てます。</div></div>';
     }
@@ -4148,6 +4192,24 @@ function renderShirei() {
 
     const fold = ev.target.closest("[data-fold]");
     if (fold) { shireiFrozenOpen = !shireiFrozenOpen; renderShirei(); return; }
+
+    // 2026-08-19: 会話の折りたたみ。古いやりとり / 長い1件、どちらもタップで開閉する
+    const thmore = ev.target.closest("[data-thmore]");
+    if (thmore) {
+      ev.stopPropagation();
+      const pid = thmore.dataset.thmore;
+      if (shireiThreadFull.has(pid)) shireiThreadFull.delete(pid); else shireiThreadFull.add(pid);
+      renderShirei();
+      return;
+    }
+    const msgmore = ev.target.closest("[data-msgmore]");
+    if (msgmore) {
+      ev.stopPropagation();
+      const mid = String(msgmore.dataset.msgmore);
+      if (shireiMsgOpen.has(mid)) shireiMsgOpen.delete(mid); else shireiMsgOpen.add(mid);
+      renderShirei();
+      return;
+    }
 
     const box = ev.target.closest("[data-step]");
     if (box) { ev.stopPropagation(); await shireiToggleStep(Number(box.dataset.step)); return; }
