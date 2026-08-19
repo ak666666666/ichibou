@@ -969,6 +969,19 @@ html { zoom: var(--ui-zoom, 1); }
 }
 .shirei-send:hover { background: var(--accent); }
 .shirei-send:disabled { background: var(--line); cursor: default; }
+/* 2026-08-19: 司令塔に「終わり」の操作が無く、文章で伝えるしかなかったので追加 */
+.shirei-close {
+  border: 1px solid var(--line); background: transparent; color: var(--ink-soft);
+  padding: 7px 14px; font-size: 12px; font-family: inherit; cursor: pointer;
+  border-radius: 4px; margin-left: auto; min-height: 34px;
+}
+.shirei-close:hover { border-color: #3f7d5a; color: #2f6349; background: #eef6f1; }
+.shirei-reopen {
+  border: 1px solid var(--line); background: transparent; color: var(--ink-mute);
+  padding: 5px 12px; font-size: 11.5px; font-family: inherit; cursor: pointer;
+  border-radius: 4px; margin-top: 8px; min-height: 32px;
+}
+.shirei-reopen:hover { color: var(--ink); border-color: var(--ink-soft); }
 
 .shirei-fold { cursor: pointer; user-select: none; }
 .shirei-fold:hover { color: var(--ink); }
@@ -4028,7 +4041,11 @@ function shireiCard(p, cls, rank) {
        + '<textarea data-ask="' + p.id + '" placeholder="ここが分からない / こう表示された / 手順を出して — そのまま書いて送ってください">' + escapeHtml(draft) + '</textarea>'
        + '<div class="row"><button class="shirei-send" data-send="' + p.id + '"' + (shireiSending === p.id ? ' disabled' : '') + '>'
        + (shireiSending === p.id ? '送信中…' : '送る') + '</button>'
-       + '<span class="hint">Ctrl+Enter でも送れます</span></div></div>';
+       + '<span class="hint">Ctrl+Enter でも送れます</span>'
+       + (cls === "done"
+          ? '<button class="shirei-reopen" data-reopen="' + p.id + '">↩ もう一度やる</button>'
+          : '<button class="shirei-close" data-close="' + p.id + '">✓ この件は終わり</button>')
+       + '</div></div>';
 
     h += '</div>';
   }
@@ -4138,6 +4155,19 @@ function renderShirei() {
     const send = ev.target.closest("[data-send]");
     if (send) { ev.stopPropagation(); await shireiSend(send.dataset.send); return; }
 
+    const close = ev.target.closest("[data-close]");
+    if (close) {
+      ev.stopPropagation();
+      await shireiSetStatus(close.dataset.close, "done", "この件を終わりにしました");
+      return;
+    }
+    const reopen = ev.target.closest("[data-reopen]");
+    if (reopen) {
+      ev.stopPropagation();
+      await shireiSetStatus(reopen.dataset.reopen, "active", "もう一度やることにしました");
+      return;
+    }
+
     if (ev.target.closest(".shirei-ask")) return;   // 入力欄の中は無視
 
     const head = ev.target.closest("[data-toggle]");
@@ -4164,6 +4194,37 @@ function renderShirei() {
 })();
 
 // 手順のチェック。押した瞬間にDBへ書く(端末をまたいでも残る)
+// 2026-08-19: 司令塔の「終わり」操作。
+// これまでは終了させる手段がUIに無く、会話欄に「この件は終わり」と書いてPCの回答を待つしかなかった。
+// status を done にすると「終わった」欄へ移る(データは消さない)。取り消しバーで15秒間は戻せる。
+async function shireiSetStatus(projectId, next, label) {
+  const p = shireiProjects.find(x => String(x.id) === String(projectId));
+  if (!p) return;
+  const before = p.status;
+  p.status = next;
+  if (next === "done") p.owner_wait = false;
+  renderShirei();
+  try {
+    const patch = { status: next };
+    if (next === "done") patch.owner_wait = false;
+    const { error } = await sb.from("ichibou_projects").update(patch).eq("id", p.id);
+    if (error) throw error;
+  } catch (e) {
+    console.error("shirei status error:", e);
+    p.status = before; renderShirei();
+    alert("状態を保存できませんでした。通信を確認してください。");
+    return;
+  }
+  offerUndo(label, async () => {
+    p.status = before;
+    renderShirei();
+    try {
+      await sb.from("ichibou_projects").update({ status: before }).eq("id", p.id);
+    } catch (e) { console.error("shirei undo error:", e); }
+    return { msg: "戻しました" };
+  });
+}
+
 async function shireiToggleStep(stepId) {
   const s = shireiSteps.find(x => x.id === stepId);
   if (!s) return;
