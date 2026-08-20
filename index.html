@@ -6308,6 +6308,46 @@ function answerSplit(detail) {
   return { body: detail.slice(0, idx).trim(), quote: detail.slice(idx + 4).trim() };
 }
 
+// ============================================================
+// 🖥 Coworkへ持っていく(2026-08-20 晃良要望)
+// ------------------------------------------------------------
+// 「一望タブだとやりとりしづらいから Cowork 側で続けたい」時に貼るための1本のテキストを組む。
+// 回答本文だけでは文脈が抜けるので、元の内容・自分の返信・回答・スレッドの目印まで入れる。
+// 貼り先(Cowork / Claude Code)がそのまま続きから話せることを目的にする。
+// ============================================================
+function buildCoworkHandoff(a, parts, origin, replies) {
+  const STATE_TEXT = { settled: "決着済み", open: "継続中(まだ終わっていない)", unknown: "未判定" };
+  const title = (a.title || "(無題)").replace(/^💬 回答: /, "");
+  const L = [];
+  L.push("【一望から持ち出した会話】" + title);
+  L.push("状態: " + (STATE_TEXT[a._state] || "未判定")
+    + ((a._turns || 1) >= 2 ? ` / 往復 ${a._turn}回目(全${a._turns}回)` : ""));
+  L.push("元データ: ichibou_inbox cw_id=" + (a.cw_id || "?")
+    + (a.thread_id ? " / thread_id=" + a.thread_id : ""));
+  L.push("");
+  if (origin) {
+    L.push("── 元の内容(" + (inboxKindLabel(origin.kind) || "受信箱") + ") ──");
+    if (origin.title) L.push(origin.title);
+    if (origin.detail) L.push(origin.detail);
+    L.push("");
+  } else if (parts.quote) {
+    L.push("── 元メモ ──");
+    L.push(parts.quote.replace(/[ \t]*\[TH:[^\]]{1,80}\][ \t]*/g, " ").trim());
+    L.push("");
+  }
+  (replies || []).forEach((r, i) => {
+    L.push("── 自分の返信 " + (i + 1) + " ──");
+    L.push(r.detail || "");
+    L.push("");
+  });
+  L.push("── Claudeの回答 ──");
+  L.push(answerStripMarks(parts.body || ""));
+  L.push("");
+  L.push("── ここから ──");
+  L.push("この続きを Cowork でやりたい。一望側の回答タブには返さなくていい。");
+  return L.join("\n");
+}
+
 function renderAnswers() {
   // 2026-08-15: 回答タブの返信欄に入力中なら描き直さない。
   // realtime や「生成中」ポーリングが数秒おきに走るため、素通しすると打っている途中で入力欄ごと消える。
@@ -6389,12 +6429,19 @@ function renderAnswers() {
           ? '<button class="answer-btn" data-aact="unread">↩ 未読に戻す</button>'
           : '<button class="answer-btn primary" data-aact="read" title="この回答カードを一覧から隠すだけ。話が終わるわけではないので、あとで ➤ 送信で続けられる">✓ 読んだ(この回答を隠す)</button>'}
         <button class="answer-btn" data-aact="tonote">${answerSourceNote(a) ? "→ 元のノートに控えを残す" : "→ 雑メモに控えを残す"}</button>
+        <button class="answer-btn" data-copy data-cowork type="button" title="この会話まるごと(元の内容・自分の返信・回答)をコピー。CoworkやClaude Codeに貼れば、そのまま続きから話せる">🖥 Coworkへ持っていく</button>
         ${multi ? '<button class="answer-btn" data-aact="settle" title="上の状態表示に関係なく、晃良の判断でこのテーマを閉じる操作。スレッドの全回答を隠す">✓✓ このテーマを閉じる(自分で判断)</button>' : ""}
       </div>
     `;
     el.querySelectorAll("[data-aact]").forEach(btn => {
       btn.addEventListener("click", () => handleAnswerAction(a, btn.dataset.aact));
     });
+
+    // 🖥 Coworkへ持っていく(2026-08-20)
+    // 「一望タブだと やりとりしづらい。Cowork側で続けたい」時、探しに行かずに1タップで持ち出す。
+    // 回答本文だけコピーしても文脈が抜けるので、元の内容・自分の返信・回答をひとまとめにする。
+    const coworkBtn = el.querySelector("[data-cowork]");
+    if (coworkBtn) coworkBtn._copyText = buildCoworkHandoff(a, parts, origin, replies);
 
     // 🔁 再回答申請(インライン返信)2026-07-26: 晃良承認済み提案の実装。
     // 一言+ボタン1タップで「▶続き」メモ(☑回答希望付き)を自動生成 → 次回巡回が拾って回答する
