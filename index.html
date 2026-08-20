@@ -5680,6 +5680,7 @@ function renderInbox() {
           startAnswerWait("受信箱の件を送信。PCで回答を生成しています…", 10);
           item.__cameFromInbox = true;
           offerUndo("受信箱から送信しました", undoThreadReply(r.replyCwId, item, hadThread));
+          bumpWaitForQueue();
         } catch (e) {
           console.error("inbox reply error:", e);
           alert("返信の送信に失敗しました。通信状態を確認してもう一度お試しください。");
@@ -5938,6 +5939,22 @@ function stopAnswerWait(state, doneLabel) {
   }
 }
 
+// まとめて送った時は順番待ちが発生するので、待ち時間の上限を件数に応じて伸ばす(2026-08-20)
+async function bumpWaitForQueue() {
+  try {
+    const { count } = await sb.from("ichibou_inbox")
+      .select("id", { count: "exact", head: true })
+      .eq("kind", "reply").eq("consumed", false);
+    const n = count || 1;
+    if (n > 1 && answerWait) {
+      // 1回2〜3件・1件あたり数分なので、件数に比例して伸ばす(最大40分)
+      answerWait.limit = Math.min(40, 10 + Math.ceil(n / 2) * 5) * 60 * 1000;
+      answerWait.label = `送信しました(順番待ち ${n}件)。PCで順に回答を作っています…`;
+      renderAnswerWait();
+    }
+  } catch (e) { /* 数えられなければ既定のままでよい */ }
+}
+
 function startAnswerWait(label, timeoutMin) {
   if (answerWait) stopAnswerWait(null);
   answerWait = {
@@ -5961,7 +5978,18 @@ function startAnswerWait(label, timeoutMin) {
     if (fresh) {
       stopAnswerWait("done", (fresh.title || "").replace(/^💬 回答: /, "") + " が届きました");
     } else if (Date.now() - answerWait.since > answerWait.limit) {
-      stopAnswerWait("fail", "時間内に届きませんでした。PCが起動しているか確認してください(常駐ウォッチャーはPC稼働中のみ動きます)");
+      // 2026-08-20: まとめて送った時、PCは1回に2〜3件ずつしか処理できないため、
+      // 後ろに並んだ分は10分を超えることがある。それを「PCが止まっている」と決めつけない。
+      let queued = 0;
+      try {
+        const { count } = await sb.from("ichibou_inbox")
+          .select("id", { count: "exact", head: true })
+          .eq("kind", "reply").eq("consumed", false);
+        queued = count || 0;
+      } catch (e) { /* 数えられなくても、下の文言で困らない */ }
+      stopAnswerWait("fail", queued > 0
+        ? `まだ順番待ちです(残り${queued}件)。PCは1回に2〜3件ずつ処理するので、このまま待てば届きます`
+        : "時間内に届きませんでした。PCが起動しているか確認してください(常駐ウォッチャーはPC稼働中のみ動きます)");
     }
   }, 6000);
 }
@@ -6462,6 +6490,7 @@ function renderAnswers() {
         reaskBtn.textContent = `✓ 送信(${nextTurn}回目)`;
         startAnswerWait(`${nextTurn}回目を送信。PCで回答を生成しています…`, 10);
         offerUndo(`${nextTurn}回目を送信しました`, undoThreadReply(r.replyCwId, null, true));
+        bumpWaitForQueue();
       } catch (e) {
         console.error("reply error:", e);
         alert("返信の送信に失敗しました。通信状態を確認してもう一度お試しください。");
