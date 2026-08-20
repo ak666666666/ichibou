@@ -742,9 +742,12 @@ html { zoom: var(--ui-zoom, 1); }
 .answers-list { display:flex; flex-direction:column; gap:12px; }
 .answer-item { border:1px solid var(--line); background:#fbf9f3; padding:14px 16px; border-left:3px solid #b88a2e; }
 .answer-item.read { border-left-color:var(--line-soft); opacity:.7; }
-.answer-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.answer-head { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
 .answer-dot { width:8px; height:8px; border-radius:50%; background:#c8502e; flex:none; }
-.answer-title { font-weight:700; font-size:14px; flex:1; line-height:1.5; }
+/* 2026-08-20: タイトルがバッジ(状態・回数・時刻・コピー)に挟まれて細長く潰れ、
+   「凝縮されて見えにくい」状態だった。ヘッダから独立させ、1行まるごと横に使う。
+   文章として読める字送り(15.5px / 行間1.7)にし、折り返しても崩れないようにする。 */
+.answer-title { display:block; font-weight:700; font-size:15.5px; line-height:1.7; margin:2px 0 8px; word-break:break-word; overflow-wrap:anywhere; }
 /* 2026-07-28: 往復回数バッジ(何回目のやり取りか)＋決着表示 */
 .answer-turn { font-size:10.5px; font-family:"JetBrains Mono",monospace; color:var(--bg); background:var(--ink-soft); padding:2px 8px; border-radius:999px; flex:none; letter-spacing:.02em; }
 .answer-turn.latest { background:#b88a2e; }
@@ -824,7 +827,7 @@ html { zoom: var(--ui-zoom, 1); }
 }
 .copy-toast.show { opacity: .95; }
 .answer-threadline { font-size:11px; color:var(--ink-mute); margin:-2px 0 8px; padding-left:2px; }
-.answer-time { color:var(--ink-mute); font-size:11px; font-family:"JetBrains Mono",monospace; flex:none; }
+.answer-time { color:var(--ink-mute); font-size:11px; font-family:"JetBrains Mono",monospace; flex:none; margin-left:auto; }
 .answer-quote { color:var(--ink-mute); font-size:12px; line-height:1.7; border-left:2px solid var(--line); padding-left:10px; margin-bottom:10px; white-space:pre-wrap; word-break:break-word; cursor:pointer; position:relative; }
 .answer-quote.collapsed { max-height: 4.5em; overflow: hidden; }
 .answer-quote.collapsed::after { content: "…（タップで全文）"; position: absolute; bottom: 0; right: 0; background: linear-gradient(to right, transparent, #fbf9f3 30%); padding: 0 6px 0 24px; color: var(--accent); font-size: 11px; font-weight: 500; }
@@ -836,6 +839,7 @@ html { zoom: var(--ui-zoom, 1); }
 @media (max-width: 600px) {
   .answer-body { font-size:13px; }
   .answer-actions { gap:6px; }
+  .answer-title { font-size:15px; line-height:1.65; }
 }
 /* ===== 受信箱 既読管理(2026-07-14)===== */
 .inbox-toolbar { display:flex; gap:8px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
@@ -6444,10 +6448,10 @@ function renderAnswers() {
         ${a.consumed ? "" : '<span class="answer-dot"></span>'}
         ${stateBadge}
         ${turnBadge}
-        <span class="answer-title">${escapeHtml((a.title || "").replace(/^💬 回答: /, ""))}</span>
         <span class="answer-time">${formatTs(ts)}</span>
         ${copyBtnHtml(true)}
       </div>
+      <div class="answer-title">${escapeHtml((a.title || "").replace(/^💬 回答: /, ""))}</div>
       ${stateLine}
       ${originHtml}
       ${parts.quote ? `<div class="answer-quote collapsed" title="タップで元メモを全文表示" data-quote-toggle>${escapeHtml(parts.quote.replace(/[ \t]*\[TH:[^\]]{1,80}\][ \t]*/g, " ").trim())}</div>` : ""}
