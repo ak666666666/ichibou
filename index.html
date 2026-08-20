@@ -772,7 +772,7 @@ html { zoom: var(--ui-zoom, 1); }
 .answer-origin-turn b { color:var(--ink); font-weight:600; }
 /* 受信箱カードの返信欄 */
 .inbox-reply-row { display:flex; gap:6px; margin-top:10px; }
-.inbox-reply-input { flex:1; min-width:0; border:1px solid var(--line); background:#fff; padding:6px 10px; font-size:12px; font-family:inherit; }
+.inbox-reply-input { flex:1; min-width:0; border:1px solid var(--line); background:#fff; padding:7px 10px; font-size:13px; font-family:inherit; line-height:1.6; resize:vertical; min-height:36px; max-height:38vh; overflow-y:auto; white-space:pre-wrap; }
 .inbox-reply-input:disabled { opacity:.5; }
 .inbox-thread-note { font-size:11px; color:#8a6620; margin-top:8px; }
 
@@ -859,7 +859,10 @@ html { zoom: var(--ui-zoom, 1); }
 .log-attach-btn { border:1px solid var(--line); background:transparent; cursor:pointer; font-size:12px; padding:2px 8px; }
 @media (max-width: 600px) { .attach-chip a { max-width:180px; } }
 /* ===== 再回答申請(2026-07-26)===== */
-.answer-reply-row { display:flex; gap:6px; margin-top:10px; }
+.answer-reply-row { display:flex; gap:6px; margin-top:10px; align-items:flex-start; }
+/* カード内の🎙(既存の .mic-btn より小さい版) */
+.mic-btn.mini { min-width:36px; width:36px; height:36px; padding:0; font-size:14px; flex:none; }
+.reply-hint { font-size:10.5px; color:var(--ink-mute); margin-top:4px; }
 /* 2026-08-04: ➤送信の即時フィードバック(生成中インジケータ)と 🚀デプロイボタン */
 .answer-wait { display:flex; align-items:center; gap:8px; border:1px solid #b88a2e; background:#fdf8ec; padding:10px 14px; margin-bottom:12px; font-size:12.5px; color:#8a6620; }
 .answer-wait.done { border-color:#3f7d5a; background:#eef6f1; color:#2f6349; }
@@ -868,7 +871,8 @@ html { zoom: var(--ui-zoom, 1); }
 @keyframes ansspin { to { transform:rotate(360deg); } }
 .deploy-btn { border:1px solid #b88a2e; background:transparent; color:#8a6620; padding:6px 14px; font-size:12px; cursor:pointer; font-family:inherit; border-radius:999px; margin-left:auto; flex:none; }
 .deploy-btn:disabled { opacity:.5; cursor:default; }
-.answer-reply-input { flex:1; min-width:0; border:1px solid var(--line); background:#fbf9f3; padding:6px 10px; font-size:12px; font-family:inherit; }
+/* 2026-08-21: 1行入力(input)では改行できなかったので textarea に変更。入力量に応じて伸びる */
+.answer-reply-input { flex:1; min-width:0; border:1px solid var(--line); background:#fbf9f3; padding:7px 10px; font-size:13px; font-family:inherit; line-height:1.6; resize:vertical; min-height:36px; max-height:38vh; overflow-y:auto; white-space:pre-wrap; }
 .answer-reply-input:disabled { opacity:.5; }
 
 /* ========== 司令塔タブ(2026-08-16 外部OS v1 / v2で手順・会話を追加) ==========
@@ -1812,11 +1816,13 @@ function isEditingActive() {
 }
 // 入力中か(IME変換中も含む)
 function isTypingNow() {
-  return imeComposing || isEditingActive();
+  return imeComposing || isEditingActive() || window.micRecording === true;
 }
 // 「いま指定した範囲の中で入力している」か。
 // 回答タブのリストを描き直しても、雑メモ欄に入力中なら無害 — という判定に使う。
 function isEditingInside(selector) {
+  // 録音中はどの欄に喋っているか分からないので、範囲を問わず再描画を止める(2026-08-21)
+  if (window.micRecording === true) return true;
   if (!isEditingActive() && !imeComposing) return false;
   const el = document.activeElement;
   if (!el || el === document.body) return false;
@@ -4087,7 +4093,8 @@ function shireiCard(p, cls, rank) {
     const draft = shireiDrafts[p.id] || "";
     h += '<div class="shirei-ask">'
        + '<textarea data-ask="' + p.id + '" placeholder="ここが分からない / こう表示された / 手順を出して — そのまま書いて送ってください">' + escapeHtml(draft) + '</textarea>'
-       + '<div class="row"><button class="shirei-send" data-send="' + p.id + '"' + (shireiSending === p.id ? ' disabled' : '') + '>'
+       + '<div class="row"><button class="mic-btn mini" data-shireimic="' + p.id + '" type="button" title="音声入力" aria-label="音声入力">🎙</button>'
+       + '<button class="shirei-send" data-send="' + p.id + '"' + (shireiSending === p.id ? ' disabled' : '') + '>'
        + (shireiSending === p.id ? '送信中…' : '送る') + '</button>'
        + '<span class="hint">Ctrl+Enter でも送れます</span>'
        + (cls === "done"
@@ -4180,6 +4187,12 @@ function renderShirei() {
      + '</div>';
 
   body.innerHTML = h;
+
+  // 2026-08-21: 開いているカードの入力欄に音声入力を繋ぐ(作り直されるたびに繋ぎ直す)
+  body.querySelectorAll("[data-shireimic]").forEach(mic => {
+    const ta = body.querySelector('[data-ask="' + mic.dataset.shireimic + '"]');
+    if (ta && window.bindMicEl) window.bindMicEl(mic, ta, null);
+  });
 
   const cnt = document.getElementById("count-shirei");
   if (cnt) cnt.textContent = wait.length;
@@ -5667,7 +5680,9 @@ function renderInbox() {
     if (!item.consumed) {
       const rr = document.createElement("div");
       rr.className = "inbox-reply-row";
-      rr.innerHTML = `<input class="inbox-reply-input" type="text" placeholder="この件について聞く・返す(→ 回答タブに届く)"><button class="inbox-btn read" data-ibreply>➤ 送信</button>`;
+      rr.innerHTML = `<textarea class="inbox-reply-input" rows="1" placeholder="この件について聞く・返す(改行OK → 回答タブに届く)"></textarea>`
+        + `<button class="mic-btn mini" data-replymic type="button" title="音声入力" aria-label="音声入力">🎙</button>`
+        + `<button class="inbox-btn read" data-ibreply>➤ 送信</button>`;
       el.appendChild(rr);
       const rb = rr.querySelector("[data-ibreply]");
       const ri = rr.querySelector(".inbox-reply-input");
@@ -5827,6 +5842,25 @@ let threadRows = [];            // thread_id を持つ全行(元の項目・返�
 //           ボタンに data-copy(位置は copy-scope の右上)を付けるだけ。
 //   本文が DOM に無い場合(ノート一覧カードの全文など)は btn._copyText に文字列を持たせる。
 // ============================================================
+// カード内の返信欄(回答タブ・受信箱)に、音声入力・自動リサイズ・Enter=改行を付ける(2026-08-21)
+// これらのカードは描き直されるたびに要素が作り直されるので、描画のたびに呼ぶ。
+function setupReplyBox(rowEl, onSend) {
+  const ta  = rowEl.querySelector("textarea");
+  const mic = rowEl.querySelector("[data-replymic]");
+  if (!ta) return;
+  const grow = () => {
+    if (!ta.value) { ta.style.height = ""; return; }
+    ta.style.height = "0px";
+    ta.style.height = Math.min(ta.scrollHeight, Math.round(window.innerHeight * 0.38)) + "px";
+  };
+  ta.addEventListener("input", grow);
+  // Enter=改行 / Ctrl(⌘)+Enter=送信。スマホは「➤ 送信」ボタンが主動線(アプリ全体の作法に合わせる)
+  ta.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); onSend && onSend(); }
+  });
+  if (mic && window.bindMicEl) window.bindMicEl(mic, ta, null);
+}
+
 function copyBtnHtml(inline) {
   return `<button class="copy-btn${inline ? " inline" : ""}" data-copy type="button" title="この文章をコピー" aria-label="この文章をコピー">📋</button>`;
 }
@@ -6479,10 +6513,12 @@ function renderAnswers() {
     // 一言+ボタン1タップで「▶続き」メモ(☑回答希望付き)を自動生成 → 次回巡回が拾って回答する
     const replyRow = document.createElement("div");
     replyRow.className = "answer-reply-row";
-    replyRow.innerHTML = `<input class="answer-reply-input" type="text" placeholder="一言・続きの依頼(空でもOK)"><button class="answer-btn primary" data-reask>➤ 送信</button>`;
+    replyRow.innerHTML = `<textarea class="answer-reply-input" rows="1" placeholder="一言・続きの依頼(改行OK・空でもOK)"></textarea>`
+      + `<button class="mic-btn mini" data-replymic type="button" title="音声入力" aria-label="音声入力">🎙</button>`
+      + `<button class="answer-btn primary" data-reask>➤ 送信</button>`;
     el.appendChild(replyRow);
     const reaskBtn = replyRow.querySelector("[data-reask]");
-    reaskBtn.addEventListener("click", async () => {
+    const doReask = async () => {
       const word = replyRow.querySelector(".answer-reply-input").value.trim();
       const nextTurn = (a._turns || 1) + 1;
       // 2026-08-06: 雑メモ経由をやめ、DBに返信を1行 INSERT する方式へ。
@@ -6501,25 +6537,9 @@ function renderAnswers() {
         reaskBtn.disabled = false;
         replyRow.querySelector(".answer-reply-input").disabled = false;
       }
-      return;
-      // ↓ 旧方式(雑メモ経由)は無効。しばらく残して問題が無ければ削除する
-      // eslint-disable-next-line no-unreachable
-      const p2 = answerSplit(a.detail);
-      // 2026-07-27: 送信=即応答化(晃良指示)。urgentClaude=true で最優先レーンに載せる。
-      // 巡回が拾う仕組み上、完全な瞬時ではなく「数分以内」が物理限界(巡回は5分間隔)
-      // 2026-07-28: [TH:<key>] を埋めてスレッドを確定させる(次の回答の「> 元メモ」引用から辿れる)。
-      // これで「2回目/3回目」の往復番号がタイトル揺れに関係なく続く。
-      const thKey = a._thread || answerThreadKey(a);
-      state.logs.push(normalizeLog({
-        id: uid(), ts: Date.now(),
-        text: `▶続き:「${(a.title || "").replace(/^💬 回答: /, "")}」[TH:${thKey}] (${nextTurn}回目)\n${word || "(続き・深掘りを希望)"}\n\n> 元回答(抜粋): ${(p2.body || "").slice(0, 120)}…`,
-        projectId: null,
-        wantAnswer: true,
-        urgentClaude: true
-      }));
-      saveState();
-      renderLogs();
-    });
+    };
+    reaskBtn.addEventListener("click", doReask);
+    setupReplyBox(replyRow, doReask);   // Enter=改行 / Ctrl+Enter=送信 / 🎙 / 自動リサイズ
 
     // 「元の内容」の開閉(2026-08-06)
     const originEl = el.querySelector("[data-origin-toggle]");
@@ -6727,9 +6747,13 @@ document.getElementById("inbox-next-modal").addEventListener("click", (e) => {
   }
 
   function bindMic(btnId, targetId, statusId) {
-    const btn = document.getElementById(btnId);
-    const target = document.getElementById(targetId);
-    const statusEl = document.getElementById(statusId);
+    bindMicEl(document.getElementById(btnId), document.getElementById(targetId),
+              document.getElementById(statusId));
+  }
+
+  // 2026-08-21: 回答タブ・受信箱の返信欄はカードごとに作り直されるためIDが使えない。
+  // 要素を直接渡して繋げられるようにし、外からも使えるよう window に出す。
+  function bindMicEl(btn, target, statusEl) {
     if (!btn || !target) return;
 
     if (!SpeechRec) {
@@ -6760,6 +6784,9 @@ document.getElementById("inbox-next-modal").addEventListener("click", (e) => {
       rec.onstart = () => {
         currentRec = rec;
         currentBtn = btn;
+        // 録音中にカードが作り直されると、書き込み先の要素が消えて声が行方不明になる。
+        // 入力中と同じ扱いにして再描画を止める(2026-08-21)
+        window.micRecording = true;
         btn.classList.add("recording");
         btn.textContent = "⏹";
         if (statusEl) statusEl.classList.add("active");
@@ -6785,6 +6812,8 @@ document.getElementById("inbox-next-modal").addEventListener("click", (e) => {
       };
 
       rec.onend = () => {
+        window.micRecording = false;
+        flushDeferredRenders();     // 録音中に溜まった更新をここで反映する
         btn.classList.remove("recording");
         btn.textContent = "🎙";
         if (statusEl) statusEl.classList.remove("active");
@@ -6800,6 +6829,7 @@ document.getElementById("inbox-next-modal").addEventListener("click", (e) => {
     });
   }
 
+  window.bindMicEl = bindMicEl;       // カード内の🎙から使う
   bindMic("moya-mic", "moya-input", "moya-voice-status");
   bindMic("capture-mic", "capture-input", "capture-voice-status");
   bindMic("task-mic", "task-input-title", "task-voice-status");
