@@ -421,6 +421,9 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .inbox-hint { font-size: 11px; color: var(--ink-mute); font-style: italic; }
 .inbox-time { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); letter-spacing: 0.1em; }
 .inbox-title-text { font-size: 15px; font-weight: 500; margin-bottom: 6px; line-height: 1.5; }
+/* 2026-08-22: 録音の文字起こしは長いので、カードが縦に伸び続けないよう高さを抑えて中でスクロールさせる */
+.rec-detail { max-height: 180px; overflow-y: auto; }
+.rec-more { width: 100%; margin-top: 8px; }
 .inbox-detail { font-size: 13px; color: var(--ink-soft); white-space: pre-wrap; line-height: 1.7; margin-bottom: 10px; padding: 8px 10px; background: rgba(159,168,184,0.08); border-left: 2px solid var(--line-soft); }
 .inbox-actions { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--line-soft); }
 .inbox-btn { padding: 6px 12px; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-size: 12px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; transition: all 0.15s; }
@@ -1202,6 +1205,9 @@ html { zoom: var(--ui-zoom, 1); }
     <button class="tab" data-view="tasks">タスク <span class="count" id="count-tasks">0</span></button>
     <button class="tab" data-view="inbox">受信箱 <span class="count" id="count-inbox">0</span></button>
     <button class="tab" data-view="answers">回答 <span class="count" id="count-answers">0</span></button>
+    <!-- 2026-08-22: 録音タブ。音声アプリからの文字起こしを受信箱・雑メモに混ぜず、ここだけに出す。
+         振り分けは kind ではなく cw_id の接頭辞 rec_ で行う(既存の ans_/sys_/req_ と同方式)。 -->
+    <button class="tab" data-view="rec">🎙 録音 <span class="count" id="count-rec">0</span></button>
     <button class="tab" data-view="capture">雑メモ <span class="count" id="count-logs">0</span></button>
     <button class="tab" data-view="notes">ノート <span class="count" id="count-notes">0</span></button>
     <!-- 2026-08-15: タコ足マップを「一望(ホーム)」に置換。
@@ -1291,6 +1297,19 @@ html { zoom: var(--ui-zoom, 1); }
       </div>
       <div id="answers-waiting"></div>
       <div class="answers-list" id="answers-list"></div>
+    </div>
+  </section>
+
+  <!-- 2026-08-22: 録音タブ本体。受信箱のスタイル(.inbox-*)を流用している。 -->
+  <section class="view" id="view-rec">
+    <div class="inbox-wrap">
+      <div class="inbox-title-h">🎙 録音</div>
+      <div class="inbox-sub">音声アプリで文字起こしが終わると、ここに届く。読んだら「✓ 既読」で流す。</div>
+      <div class="inbox-toolbar">
+        <button class="answers-filter-btn active" data-rf="unread">未読のみ</button>
+        <button class="answers-filter-btn" data-rf="all">すべて</button>
+      </div>
+      <div class="inbox-list" id="rec-list"></div>
     </div>
   </section>
 
@@ -2073,6 +2092,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     if (tab.dataset.view === "moya") renderMoyas();
     if (tab.dataset.view === "answers") { renderAnswers(); loadAnswers(); }
     if (tab.dataset.view === "inbox") renderInbox();
+    if (tab.dataset.view === "rec") renderRec();
     if (tab.dataset.view === "notes") renderNotes();
     if (tab.dataset.view === "tasks") renderTasks();
   });
@@ -5555,12 +5575,16 @@ async function pullInbox() {
     updateBackupStatus(data || []);
     // 2026-07-12 v2: Claude自動回答(cw_id='ans_*')は受信箱ではなく回答タブに出す
     // 2026-07-29: sys_* のシステム通知も受信箱カードには出さない
-    inboxItems = (data || []).filter(it => {
+    // 2026-08-22: rec_=音声アプリからの録音。受信箱には出さず、録音タブへ分ける。
+    const rows = data || [];
+    recItems = rows.filter(it => (it.cw_id || "").startsWith("rec_"));
+    inboxItems = rows.filter(it => {
       const c = it.cw_id || "";
-      // ans_=回答タブ / sys_=システム / req_=晃良の返信(会話の一部なので受信箱には出さない)
-      return !c.startsWith("ans_") && !c.startsWith("sys_") && !c.startsWith("req_");
+      // ans_=回答タブ / sys_=システム / req_=晃良の返信(会話の一部なので受信箱には出さない) / rec_=録音タブ
+      return !c.startsWith("ans_") && !c.startsWith("sys_") && !c.startsWith("req_") && !c.startsWith("rec_");
     });
     renderInbox();
+    renderRec();
     loadAnswers(); // 受信箱の更新経路(初期化/realtime/復帰時)に相乗りして回答も更新
   } catch (e) {
     console.error("Inbox pull error:", e);
@@ -5707,7 +5731,10 @@ function renderInbox() {
         }
       };
       rb.addEventListener("click", send);
-      ri.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); send(); } });
+      // 2026-08-23: ここだけ旧来の「Enter=即送信」が残っていて改行できなかった(スマホで特に困る)。
+      // 回答タブ・司令塔と同じ setupReplyBox に寄せる = Enter=改行 / Ctrl(⌘)+Enter=送信 /
+      // 自動リサイズ / 🎙 の紐付け(これまで data-replymic は未接続の飾りだった)。
+      setupReplyBox(rr, send);
     }
     list.appendChild(el);
   });
@@ -5793,6 +5820,141 @@ async function unconsumeInbox(item) {
 }
 
 // 2026-07-14: 受信箱ツールバー(未読のみ/すべて + 全部既読)
+// ========================================================================
+// ===== 🎙 録音レーン (2026-08-22 新設) =====
+// 音声アプリ(voice-recorder)が文字起こし完了時に ichibou_inbox へ
+//   cw_id = "rec_" + 録音id / kind = "recording"
+// で1行入れる。受信箱・雑メモ・回答のどれも汚さないよう pullInbox で rec_ を分離している。
+// 「小出し」: 表示は先頭 REC_PEEK 件だけ。残りは「他 N 件 ▼」で畳んでおく。
+// 1件を既読にすると次が繰り上がるので、画面が縦に伸び続けない。
+// ========================================================================
+let recItems = [];
+let recFilter = "unread";   // 'unread' | 'all'
+let recExpanded = false;    // 「他 N 件」を開いたか
+const REC_PEEK = 3;
+
+function recCard(item) {
+  const el = document.createElement("div");
+  el.className = "inbox-item" + (item.consumed ? " read" : "");
+  const ts = item.created_at ? new Date(item.created_at).getTime() : Date.now();
+  const destHtml = item.consumed && item.dest ? `<span class="inbox-dest-label">✓ ${escapeHtml(item.dest)}</span>` : "";
+  const actionsHtml = item.consumed
+    ? '<button class="inbox-btn" data-act="unread">↩ 未読に戻す</button>'
+    : `<button class="inbox-btn read" data-act="read">✓ 既読</button>
+       <button class="inbox-btn note" data-act="note">→ 雑メモ</button>
+       <button class="inbox-btn discard" data-act="discard">破棄</button>`;
+  el.innerHTML = `
+    <div class="inbox-header">
+      <span class="inbox-kind k-note">🎙 録音</span>${destHtml}
+      <span class="inbox-time">${formatTs(ts)}</span>
+    </div>
+    <div class="inbox-title-text">${escapeHtml(item.title || "(無題の録音)")}</div>
+    ${item.detail ? `<div class="inbox-detail rec-detail">${escapeHtml(item.detail)}</div>` : ""}
+    <div class="inbox-actions">${actionsHtml}</div>
+  `;
+  el.querySelectorAll("[data-act]").forEach(btn => {
+    btn.addEventListener("click", () => handleRecAction(item, btn.dataset.act));
+  });
+  return el;
+}
+
+function renderRec() {
+  const list = document.getElementById("rec-list");
+  if (!list) return;
+
+  const unread = recItems.filter(it => !it.consumed);
+  const countEl = document.getElementById("count-rec");
+  if (countEl) {
+    countEl.textContent = unread.length;
+    countEl.classList.toggle("alert", unread.length > 0);
+  }
+
+  const shown = recFilter === "unread" ? unread : recItems;
+  list.innerHTML = "";
+  if (shown.length === 0) {
+    list.innerHTML = recFilter === "unread"
+      ? '<div class="empty">未読はゼロ。<br>音声アプリで録音すると、ここに届く。</div>'
+      : '<div class="empty">まだ録音は届いていない。</div>';
+    return;
+  }
+
+  const visible = recExpanded ? shown : shown.slice(0, REC_PEEK);
+  visible.forEach(item => list.appendChild(recCard(item)));
+
+  const rest = shown.length - visible.length;
+  if (rest > 0) {
+    const more = document.createElement("button");
+    more.className = "inbox-btn rec-more";
+    more.textContent = `他 ${rest} 件 ▼`;
+    more.addEventListener("click", () => { recExpanded = true; renderRec(); });
+    list.appendChild(more);
+  } else if (recExpanded && shown.length > REC_PEEK) {
+    const less = document.createElement("button");
+    less.className = "inbox-btn rec-more";
+    less.textContent = "▲ 畳む";
+    less.addEventListener("click", () => { recExpanded = false; renderRec(); });
+    list.appendChild(less);
+  }
+}
+
+async function handleRecAction(item, act) {
+  if (act === "note") {
+    // 録音を雑メモへ移す(受信箱の「→ 雑メモ」と同じ挙動)
+    state.logs.push(normalizeLog({ id: uid(), ts: Date.now(), text: `[録音] ${inboxComposeText(item)}`, projectId: null }));
+    saveState();
+    await consumeRec(item, "雑メモ");
+  } else if (act === "discard") {
+    await consumeRec(item, "破棄");
+  } else if (act === "read") {
+    await consumeRec(item, "既読");
+  } else if (act === "unread") {
+    await unconsumeRec(item);
+  }
+}
+
+async function consumeRec(item, dest) {
+  const t = recItems.find(x => x.id === item.id);
+  if (t) { t.consumed = true; t.consumed_at = new Date().toISOString(); t.dest = dest; }
+  renderRec();
+  renderLogs();
+  try {
+    const { error } = await sb.from("ichibou_inbox").update({
+      consumed: true, consumed_at: new Date().toISOString(), dest
+    }).eq("id", item.id);
+    if (error) throw error;
+  } catch (e) {
+    console.error("Rec consume error:", e);
+    alert("録音の更新に失敗。再読込を推奨。");
+    pullInbox();
+  }
+}
+
+async function unconsumeRec(item) {
+  const t = recItems.find(x => x.id === item.id);
+  if (t) { t.consumed = false; t.consumed_at = null; t.dest = null; }
+  renderRec();
+  try {
+    const { error } = await sb.from("ichibou_inbox").update({
+      consumed: false, consumed_at: null, dest: null
+    }).eq("id", item.id);
+    if (error) throw error;
+  } catch (e) {
+    console.error("Rec unconsume error:", e);
+    pullInbox();
+  }
+}
+
+// フィルタ切替([data-rf]。受信箱[data-if]・回答[data-af]と同方式で、セレクタを分けて干渉を防ぐ)
+document.querySelectorAll(".answers-filter-btn[data-rf]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".answers-filter-btn[data-rf]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    recFilter = btn.dataset.rf;
+    recExpanded = false;
+    renderRec();
+  });
+});
+
 document.querySelectorAll("[data-if]").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll("[data-if]").forEach(b => b.classList.remove("active"));
