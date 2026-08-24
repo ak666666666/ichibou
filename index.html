@@ -715,6 +715,27 @@ html { zoom: var(--ui-zoom, 1); }
 .cal-day-kind.moya { background: var(--amber, #c98a2b); }
 .cal-day-text { flex: 1; min-width: 0; color: var(--ink-soft); word-wrap: break-word; white-space: pre-wrap; }
 .cal-day-row.done .cal-day-text { text-decoration: line-through; opacity: 0.6; }
+/* 2026-08-24: カレンダーに「私はどこに書けばいいのか」が無かった(雑メモ x2yb3n3im)。
+   ①日別の行をタップで元の場所へ飛べるようにする ②その日に直接書ける欄を置く ③返事の書き場所を明示する。 */
+.cal-day-row { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--line-soft); font-family: inherit; cursor: pointer; }
+.cal-day-row:hover { background: rgba(0,0,0,0.03); }
+.cal-day-go { flex-shrink: 0; font-size: 10px; color: var(--ink-mute); }
+.cal-write { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.cal-write-h { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+.cal-write-ta { width: 100%; box-sizing: border-box; font-family: inherit; font-size: 13px; line-height: 1.6; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); resize: vertical; min-height: 44px; max-height: 38vh; white-space: pre-wrap; }
+.cal-write-ta:focus { outline: none; border-color: var(--accent); }
+.cal-write-bar { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.cal-write-mic { font-family: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; cursor: pointer; }
+.cal-write-mic.on { background: #a13630; color: #fff; border-color: #a13630; }
+.cal-write-status { font-size: 10px; color: var(--ink-mute); flex: 1; min-width: 0; }
+.cal-write-add { font-family: inherit; font-size: 12px; font-weight: 700; padding: 6px 14px; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 8px; cursor: pointer; }
+.cal-write-add:hover { opacity: 0.85; }
+.cal-hint { margin-top: 10px; font-size: 11.5px; line-height: 1.8; color: var(--ink-soft); background: rgba(255,255,255,0.55); border: 1px dashed var(--line); border-radius: 4px; padding: 8px 10px; }
+.cal-hint b { color: var(--ink); }
+.cal-hint-go { font-family: inherit; font-size: 11px; padding: 3px 9px; margin: 4px 6px 0 0; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); border-radius: 999px; cursor: pointer; font-weight: 600; }
+.cal-hint-go:hover { border-color: var(--accent); color: var(--accent); }
+.task-item.cal-flash { animation: calFlash 1.6s ease-out; }
+@keyframes calFlash { 0% { background: rgba(184,138,46,0.35); } 100% { background: transparent; } }
 @media (max-width: 600px) {
   .cal-cell { min-height: 44px; padding: 2px 3px; }
   .cal-daynum { font-size: 10px; }
@@ -5072,6 +5093,61 @@ function calItemText(it) {
   const lines = raw.split("\n").filter(l => l.trim());
   return lines.length > 1 ? lines[0] + " …" : lines[0];
 }
+// 2026-08-24(雑メモ x2yb3n3im「どこに私が記載すればいいのか書いてない」)
+// カレンダーは今まで“読むだけ”で、書く場所がどこにも無かった。日別パネルの一番下に
+// 「その日に書く」欄と、返事の宛先(回答タブ/受信箱)への案内を常に出す。
+let calWriteDraft = "";      // 月移動・日付切替で消えないように保持する
+function calWriteBoxHtml(ymd, isToday) {
+  const nice = ymd.replace(/-/g, "/");
+  return `
+    <div class="cal-write">
+      <div class="cal-write-h">✍ ${nice}${isToday ? "(今日)" : ""} に書く</div>
+      <textarea class="cal-write-ta" data-calwrite-ta placeholder="この日にやること・予定を書く(Enterで改行 / Ctrl+Enterで追加)">${escapeHtml(calWriteDraft)}</textarea>
+      <div class="cal-write-bar">
+        <button type="button" class="cal-write-mic" data-calwrite-mic title="音声で入力">🎙</button>
+        <span class="cal-write-status" data-calwrite-status></span>
+        <button type="button" class="cal-write-add" data-calwrite-add data-ymd="${ymd}">＋ ${nice} のタスクにする</button>
+      </div>
+      <div class="cal-hint">
+        <b>書く場所の早見表</b><br>
+        ・この日にやること → <b>すぐ上の欄</b><br>
+        ・Claudeの回答への返事・続き → <b>［回答］タブ</b>のカード下の返信欄(➤送信)<br>
+        ・届いたお知らせへの返事 → <b>［受信箱］タブ</b>のカード下の返信欄<br>
+        ・思いついただけのこと → <b>［雑メモ］タブ</b>(☑回答希望を付けるとClaudeが答えます)<br>
+        ・案件ごとの相談 → <b>［司令塔］タブ</b>の会話欄
+        <div>
+          <button type="button" class="cal-hint-go" data-calgoto="answers">→ 回答タブ</button>
+          <button type="button" class="cal-hint-go" data-calgoto="inbox">→ 受信箱</button>
+          <button type="button" class="cal-hint-go" data-calgoto="capture">→ 雑メモ</button>
+          <button type="button" class="cal-hint-go" data-calgoto="shirei">→ 司令塔</button>
+        </div>
+      </div>
+    </div>`;
+}
+// 日別行から、その項目を実際に編集できる場所へ移動する
+function calJumpTo(kind, id) {
+  if (kind === "task") {
+    tasksViewMode = "list";
+    tasksFilter = "all";
+    tasksTypeFilter = "all";
+    tasksHideDone = false;
+    syncTaskFilterButtons();
+    renderTasks();
+    setTimeout(() => {
+      const el = document.querySelector(`.task-item[data-taskid="${id}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("cal-flash");
+      setTimeout(() => el.classList.remove("cal-flash"), 1700);
+    }, 60);
+    return;
+  }
+  // 雑メモ・もやは、それぞれのタブへ移す(もやタブは撤去済みなので雑メモへ寄せる)
+  const view = "capture";
+  const tab = document.querySelector(`.tab[data-view="${view}"]`);
+  if (tab) tab.click();
+}
+
 function renderTaskCalendar() {
   const wrap = document.getElementById("tasks-calendar");
   if (!wrap) return;
@@ -5137,7 +5213,7 @@ function renderTaskCalendar() {
     const label = { task: "タスク", log: "雑メモ", moya: "もや" };
     dayEl.innerHTML = `<div class="cal-day-h">${calSelectedYmd.replace(/-/g, "/")} の予定・記録(${items.length}件)</div>`
       + (items.length === 0
-        ? `<div class="cal-day-empty">この日に紐づくものはありません。</div>`
+        ? `<div class="cal-day-empty">この日に紐づくものはありません。下の欄に書けば、この日のタスクになります。</div>`
         : items.map(it => {
             const isTask = it.kind === "task";
             const timeTxt = (isTask && it.obj.dueHasTime && it.edge === "due") ? taskDueHm(it.obj.dueAt) : "";
@@ -5145,13 +5221,17 @@ function renderTaskCalendar() {
               : it.edge === "start" ? "着手"
               : it.edge === "span" ? "進行中"
               : (it.obj.startAt ? "締切" : "");
-            return `<div class="cal-day-row${isTask && it.obj.completed ? " done" : ""}">`
+            return `<button type="button" class="cal-day-row${isTask && it.obj.completed ? " done" : ""}"`
+              + ` data-caljump="${it.kind}" data-jumpid="${escapeHtml(it.obj.id || "")}" title="タップすると書き込める場所へ移動します">`
               + `<span class="cal-day-kind ${it.kind}">${label[it.kind]}${edgeTxt ? "・" + edgeTxt : ""}</span>`
               + (timeTxt ? `<span class="cal-day-time">${timeTxt}</span>` : "")
-              + `<span class="cal-day-text">${escapeHtml(calItemText(it))}</span></div>`;
-          }).join(""));
+              + `<span class="cal-day-text">${escapeHtml(calItemText(it))}</span>`
+              + `<span class="cal-day-go">✍ 開く ›</span></button>`;
+          }).join(""))
+      + calWriteBoxHtml(calSelectedYmd);
   } else {
-    dayEl.innerHTML = `<div class="cal-day-empty">日付をタップすると、その日のタスク(着手・進行中・締切)が出ます。</div>`;
+    dayEl.innerHTML = `<div class="cal-day-empty">日付をタップすると、その日のタスク(着手・進行中・締切)と、<b>その日に書き足す欄</b>が出ます。</div>`
+      + calWriteBoxHtml(todayYmd, true);
   }
 
   wrap.querySelectorAll("[data-cal]").forEach(btn => {
@@ -5173,6 +5253,50 @@ function renderTaskCalendar() {
       renderTaskCalendar();
     });
   });
+
+  // --- ここから 2026-08-24 追加分(書く場所の導線) ---
+  wrap.querySelectorAll("[data-caljump]").forEach(btn => {
+    btn.addEventListener("click", () => calJumpTo(btn.dataset.caljump, btn.dataset.jumpid));
+  });
+  wrap.querySelectorAll("[data-calgoto]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = document.querySelector(`.tab[data-view="${btn.dataset.calgoto}"]`);
+      if (tab) tab.click();
+    });
+  });
+
+  const ta     = wrap.querySelector("[data-calwrite-ta]");
+  const addBtn = wrap.querySelector("[data-calwrite-add]");
+  const micBtn = wrap.querySelector("[data-calwrite-mic]");
+  const statEl = wrap.querySelector("[data-calwrite-status]");
+  if (ta && addBtn) {
+    const grow = () => {
+      if (!ta.value) { ta.style.height = ""; return; }
+      ta.style.height = "0px";
+      ta.style.height = Math.min(ta.scrollHeight, Math.round(window.innerHeight * 0.38)) + "px";
+    };
+    // 下書きを保持(月移動・日付切替で消えると「書いたのに消えた」になる)
+    ta.addEventListener("input", () => { calWriteDraft = ta.value; grow(); });
+    const submit = () => {
+      const text = (ta.value || "").trim();
+      if (!text) { if (statEl) statEl.textContent = "何か書いてから押してください"; return; }
+      const ymd = addBtn.dataset.ymd;
+      const [yy, mm, dd] = ymd.split("-").map(Number);
+      const dueAt = new Date(yy, mm - 1, dd, 23, 59, 0, 0).getTime();   // 時刻指定なし=その日いっぱい
+      calWriteDraft = "";
+      ta.value = "";
+      grow();
+      // addTask() の中で renderTasks() → renderTaskCalendar() まで走る
+      addTask(text, bucketFromDate(dueAt) || "today", "action", { dueAt, dueHasTime: false });
+    };
+    // Enter=改行 / Ctrl(⌘)+Enter=追加(アプリ全体の入力欄の作法に合わせる)
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
+    });
+    addBtn.addEventListener("click", submit);
+    grow();
+    if (micBtn && window.bindMicEl) window.bindMicEl(micBtn, ta, statEl);
+  }
 }
 
 // ===== タスク期限(2026-07-29 / 雑メモ xl2yqh6c5・xvmgxw1lk / 案A 承認済 xwczhdpv1)=====
@@ -5309,6 +5433,7 @@ if (!window.__taskDueMenuBound) {
 function taskItemEl(t) {
   const item = document.createElement("div");
   item.className = "task-item copy-scope" + (t.completed ? " completed" : "");
+  item.dataset.taskid = t.id;   // カレンダーの日別行から飛んで来るための目印(2026-08-24)
   const badge = t.type === "action"
     ? `<span class="task-type-badge task-type-action">🎯 行動</span>`
     : `<span class="task-type-badge task-type-decision">🤔 判断</span>`;
