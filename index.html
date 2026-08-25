@@ -356,7 +356,13 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .modal.note-edit > .copy-scope { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 .modal.note-edit > .copy-scope > .note-edit-body { flex: 1 1 auto; min-height: 140px; }
 /* ノート編集の道具立て(音声入力) */
-.note-edit-tools { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.note-edit-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.note-hist-btn { border: 1px solid var(--line); background: transparent; color: var(--ink-soft); padding: 6px 12px; font-size: 11.5px; font-family: inherit; cursor: pointer; border-radius: 4px; min-height: 32px; }
+.note-hist-btn:hover { border-color: var(--ink-soft); color: var(--ink); }
+#note-undo-body { border-color: #b88a2e; color: #8a6620; }
+.note-hist { border: 1px dashed var(--line); background: rgba(255,255,255,.5); padding: 8px 12px; margin-bottom: 8px; font-size: 11.5px; color: var(--ink-soft); max-height: 22vh; overflow-y: auto; }
+.note-hist[hidden] { display: none; }
+.note-hist .row { display: flex; gap: 10px; padding: 3px 0; font-family: "JetBrains Mono", monospace; font-size: 11px; }
 .note-edit-tools .voice-status { margin: 0; }
 @media (max-width: 600px) {
   .modal.note-edit { padding: 12px; }
@@ -647,6 +653,9 @@ html { zoom: var(--ui-zoom, 1); }
 .tasks-night-count { font-family:"JetBrains Mono",monospace; }
 .tasks-night-exit { border:1px solid #6b5ea8; background:transparent; padding:4px 10px; font-size:11.5px; cursor:pointer; font-family:inherit; color:#5a4f92; margin-left:auto; }
 /* 2026-08-15: 入力バーの期日パネル */
+.tasks-pc { border:1px solid #6b5ea8; background:#f7f6fc; padding:10px 12px; border-radius:6px; }
+.tasks-pc .tasks-category-title { color:#4a4080; }
+.tasks-pc-hint { font-size:11px; color:var(--ink-mute); margin:-4px 0 8px; }
 .tasks-input-when { border:1px solid var(--line); background:transparent; padding:6px 12px; font-size:12px; cursor:pointer; font-family:inherit; color:var(--ink-soft); border-radius:4px; }
 .tasks-input-when.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
 .tasks-when-panel { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:10px 12px; margin-top:8px; border:1px dashed var(--line); background:rgba(255,255,255,.5); }
@@ -1661,8 +1670,11 @@ html { zoom: var(--ui-zoom, 1); }
     </div>
     <div class="note-edit-tools">
       <button class="mic-btn" id="note-mic" title="音声入力" aria-label="音声入力">🎙</button>
+      <button class="note-hist-btn" id="note-undo-body" type="button" hidden>↩ 1つ前の本文に戻す</button>
+      <button class="note-hist-btn" id="note-hist-toggle" type="button">🕘 更新履歴</button>
       <div class="voice-status" id="note-voice-status">🎙 聞いています… もう一度タップで停止</div>
     </div>
+    <div class="note-hist" id="note-hist" hidden></div>
     <div class="copy-scope"><textarea class="note-edit-body" id="note-edit-body" data-copy-src placeholder="本文(改行・空白自由。長文OK。マークダウン記法の表示対応は段階的に拡充予定)"></textarea><button class="copy-btn" data-copy type="button" title="本文をコピー" aria-label="本文をコピー">📋</button></div>
   </div>
 </div>
@@ -1704,6 +1716,10 @@ function normalizeLog(l) {
 }
 function normalizeNote(n) {
   return {
+    // 2026-08-24 案C: 更新履歴(最大20件)と直前の本文1版
+    history: Array.isArray(n.history) ? n.history.slice(-20) : [],
+    prevBody: typeof n.prevBody === "string" ? n.prevBody : null,
+    prevSavedAt: typeof n.prevSavedAt === "number" ? n.prevSavedAt : null,
     id: n.id || uid(),
     folderId: n.folderId ?? null,
     title: n.title || "",
@@ -3811,12 +3827,52 @@ function renderNoteAttachRow(note) {
   });
 })();
 
+// 2026-08-24 案C: 更新履歴の表示と「1つ前の本文に戻す」
+function renderNoteHistory() {
+  const note = state.notes.find(n => n.id === editingNoteId);
+  const box = document.getElementById("note-hist");
+  const undoBtn = document.getElementById("note-undo-body");
+  if (!note || !box) return;
+  if (undoBtn) undoBtn.hidden = !(typeof note.prevBody === "string" && note.prevBody !== note.body);
+  const h = Array.isArray(note.history) ? note.history.slice().reverse() : [];
+  box.innerHTML = `<div style="margin-bottom:6px;">作成 ${formatTs(note.createdAt)} / 最終更新 ${formatTs(note.updatedAt)}</div>`
+    + (h.length === 0
+      ? '<div>まだ更新履歴はありません(次の保存から記録します)。</div>'
+      : h.map(x => `<div class="row"><span>${formatTs(x.ts)}</span><span>${x.len}字</span></div>`).join("")
+        + '<div style="margin-top:6px;color:var(--ink-mute);">記録は直近20件まで。本文そのものは直前の1版だけ保持しています(容量を抑えるため)。</div>');
+}
+
+(function bindNoteHistory() {
+  const t = document.getElementById("note-hist-toggle");
+  const u = document.getElementById("note-undo-body");
+  if (t) t.addEventListener("click", () => {
+    const box = document.getElementById("note-hist");
+    if (!box) return;
+    box.hidden = !box.hidden;
+    if (!box.hidden) renderNoteHistory();
+  });
+  if (u) u.addEventListener("click", () => {
+    const note = state.notes.find(n => n.id === editingNoteId);
+    if (!note || typeof note.prevBody !== "string") return;
+    const cur = document.getElementById("note-edit-body").value;
+    // 入れ替える(戻した直後にもう一度押せば元に戻せる)
+    document.getElementById("note-edit-body").value = note.prevBody;
+    note.prevBody = cur;
+    saveNoteEditNow();
+    renderNoteHistory();
+    showCopyToast("1つ前の本文に戻しました(もう一度押すと元に戻ります)");
+  });
+})();
+
 function openNoteEdit(id) {
   const note = state.notes.find(n => n.id === id);
   if (!note) return;
   editingNoteId = id;
   document.getElementById("note-edit-title").value = note.title || "";
   document.getElementById("note-edit-body").value = note.body || "";
+  const histBox = document.getElementById("note-hist");
+  if (histBox) histBox.hidden = true;
+  renderNoteHistory();
   const wantEl = document.getElementById("note-edit-want-answer");
   const urgentEl = document.getElementById("note-edit-urgent");
   const urgentWrap = document.getElementById("note-edit-urgent-wrap");
@@ -3896,6 +3952,18 @@ function saveNoteEditNow() {
   const newUrgent = newWantAnswer && !!(urgentEl && urgentEl.checked);
   const newAlways = !!(alwaysEl2 && alwaysEl2.checked); // ♻常時(2026-07-26)
   if (note.title === newTitle && note.body === newBody && note.folderId === newFolderId && note.projectId === newProjectId && note.wantAnswer === newWantAnswer && note.urgentClaude === newUrgent && note.alwaysAnswer === newAlways) return;
+  // 2026-08-21 承認「案C」→ 2026-08-24 実装。
+  //   ・いつ更新したかの記録を最大20件だけ持つ(容量を抑えるため本文は入れない)
+  //   ・直前の本文を「1版だけ」持ち、誤って上書きした時に1タップで戻せるようにする
+  // 全版を持つと同期が重くなるので、戻せるのは1つ前まで。ここが案Cの肝。
+  if (note.body !== newBody) {
+    note.prevBody = note.body || "";
+    note.prevSavedAt = note.updatedAt || note.createdAt || Date.now();
+  }
+  if (!Array.isArray(note.history)) note.history = [];
+  note.history.push({ ts: Date.now(), len: (newBody || "").length });
+  if (note.history.length > 20) note.history = note.history.slice(-20);
+
   note.title = newTitle;
   note.body = newBody;
   note.folderId = newFolderId;
@@ -5061,11 +5129,31 @@ function renderTasks() {
   const includeIdx = TASK_BUCKETS.indexOf(tasksFilter);
   const includeBuckets = tasksFilter === "all" ? TASK_BUCKETS : TASK_BUCKETS.slice(0, includeIdx + 1);
 
+  // 2026-08-19 提案 → 8/21承認の②「PC側: [PC]案件を上部に固定表示」(2026-08-24 実装)
+  // 回答タブから 🖥 PCでやる で積んだものを、時間軸に関係なく先頭にまとめる。
+  // PCを開いた瞬間に「PCでしかできない用事」が目に入るのが目的。
+  const pcTasks = all.filter(t => !t.completed && /^🖥/.test(t.title || ""));
+  if (pcTasks.length) {
+    pcTasks.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    const pcEl = document.createElement("div");
+    pcEl.className = "tasks-category tasks-pc";
+    pcEl.innerHTML = `
+      <div class="tasks-category-h">
+        <div class="tasks-category-title">🖥 PCでやる</div>
+        <div class="tasks-category-count">${pcTasks.length}</div>
+      </div>
+      <div class="tasks-pc-hint">回答タブから積んだもの。時間軸に関係なくここに出ます。</div>
+    `;
+    pcTasks.forEach(t => pcEl.appendChild(taskItemEl(t)));
+    listEl.appendChild(pcEl);
+  }
+
   let renderedAny = false;
   includeBuckets.forEach(bucket => {
     const meta = TASK_BUCKET_META[bucket];
     const filtered = all.filter(t => {
       if (taskBucketOf(t) !== bucket) return false;
+      if (!t.completed && /^🖥/.test(t.title || "")) return false;   // 上の「PCでやる」に出しているので重複させない
       if (tasksTypeFilter !== "all" && t.type !== tasksTypeFilter) return false;
       if (tasksHideDone && t.completed) return false;
       return true;
@@ -6847,6 +6935,7 @@ function renderAnswers() {
           ? '<button class="answer-btn" data-aact="unread">↩ 未読に戻す</button>'
           : '<button class="answer-btn primary" data-aact="read" title="この回答カードを一覧から隠すだけ。話が終わるわけではないので、あとで ➤ 送信で続けられる">✓ 読んだ(この回答を隠す)</button>'}
         <button class="answer-btn" data-aact="tonote">${answerSourceNote(a) ? "→ 元のノートに控えを残す" : "→ 雑メモに控えを残す"}</button>
+        <button class="answer-btn" data-aact="topc" title="PCで手を動かす必要がある時に。タスクに積んで、この回答は一覧から隠します">🖥 PCでやる</button>
         <button class="answer-btn" data-copy data-cowork type="button" title="この会話まるごと(元の内容・自分の返信・回答)をコピー。CoworkやClaude Codeに貼れば、そのまま続きから話せる">🖥 Coworkへ持っていく</button>
         ${multi ? '<button class="answer-btn" data-aact="settle" title="上の状態表示に関係なく、晃良の判断でこのテーマを閉じる操作。スレッドの全回答を隠す">✓✓ このテーマを閉じる(自分で判断)</button>' : ""}
       </div>
@@ -6966,6 +7055,37 @@ async function handleAnswerAction(a, act) {
       alert("スレッド一括既読に失敗。再読込を推奨。");
       loadAnswers();
     }
+  } else if (act === "topc") {
+    // 2026-08-19 提案 → 8/21 承認 → 8/22 実装(晃良指示)。
+    // スマホで回答を読んで「これはPCで手を動かす必要がある」と分かった時に、1タップでタスクへ積む。
+    // タスクは全端末で同期されるので、次にPCを開いた時にタスクタブで拾える。
+    const parts = answerSplit(a.detail);
+    const cleanTitle = (a.title || "").replace(/^💬 回答: /, "");
+    const body = answerStripMarks(parts.body);
+    const newTaskId = uid();
+    tasksArr().push(normalizeTask({
+      id: newTaskId,
+      title: "🖥 " + cleanTitle,
+      bucket: "today",
+      type: "action",
+      // あとで「何の話だったか」を思い出せるように、回答の要点と辿り先を残す
+      note: body.slice(0, 500)
+        + (body.length > 500 ? "…" : "")
+        + "\n\n(一望の回答タブから / " + (a.cw_id || "") + ")"
+    }));
+    saveState();
+    renderTasks();
+    // 回答側はタスクに引き継いだので一覧から隠す(未読のまま二重管理しない)
+    await setAnswerConsumed(a, true, "to_pc");
+    offerUndo("PCでやるタスクに積みました", async () => {
+      const arr = tasksArr();
+      const i = arr.findIndex(x => x && x.id === newTaskId);
+      if (i !== -1) arr.splice(i, 1);
+      saveState();
+      renderTasks();
+      await setAnswerConsumed(a, false, null);
+      return { msg: "取り消しました" };
+    });
   } else if (act === "tonote") {
     // 回答を控えとして残す(同時に既読化)
     // 2026-07-29: 元がノートの回答は「元のノート」に追記する(晃良要望 xr90ckxk4)。
