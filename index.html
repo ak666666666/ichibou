@@ -1885,6 +1885,59 @@ function flushDeferredRenders() {
   deferredRenders.clear();
   fns.forEach(fn => { try { fn(); } catch (e) { console.error("deferred render error:", e); } });
 }
+
+// ===== 書きかけの保持(2026-08-25) =====
+// 別タブへ移って戻る / 一覧が描き直される / アプリを開き直す —
+// どれでも「途中まで書いた文章」が消えないようにする。
+// 晃良報告:「途中記載していた記載欄のまま別タブに行って戻ると記載がリセットされている」
+// 主因は受信箱・回答タブの返信欄で、タブを押すと renderInbox()/renderAnswers() が
+// カードごと作り直すため、文章を持っている場所が DOM しか無かった。
+// 入力保護(deferRender)は「打っている最中」しか守れないので、値そのものを外に出す。
+const DRAFTS_KEY = "ichibou_drafts_v1";
+let draftStore = {};
+try { draftStore = JSON.parse(localStorage.getItem(DRAFTS_KEY) || "{}") || {}; } catch (e) { draftStore = {}; }
+let draftSaveTimer = null;
+function draftsPersist() {
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(() => {
+    try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(draftStore)); } catch (e) { /* 容量超過等は無視 */ }
+  }, 400);
+}
+function getDraft(key) {
+  const d = key && draftStore[key];
+  return d ? (d.v || "") : "";
+}
+function setDraft(key, val) {
+  if (!key) return;
+  if (val && val.trim()) draftStore[key] = { v: val, t: Date.now() };
+  else delete draftStore[key];
+  draftsPersist();
+}
+function clearDraft(key) { setDraft(key, ""); }
+// 30日さわっていない下書きは捨てる(localStorage を無限に太らせない)
+(function pruneDrafts() {
+  const cutoff = Date.now() - 30 * 86400000;
+  let changed = false;
+  Object.keys(draftStore).forEach(k => {
+    if (!draftStore[k] || (draftStore[k].t || 0) < cutoff) { delete draftStore[k]; changed = true; }
+  });
+  if (changed) draftsPersist();
+})();
+// textarea / input に「書きかけの保持」を付ける。
+// 描き直しのたびに呼んでよい(同じ欄に二重で付かないようにしてある)。
+function bindDraft(el, key) {
+  if (!el || !key) return;
+  if (el.dataset.draftKey === key) return;   // 二重bind防止
+  el.dataset.draftKey = key;
+  const saved = getDraft(key);
+  if (saved && !el.value) {
+    el.value = saved;
+    // 自動リサイズしている欄は高さも合わせ直す(input を1回流すだけで済む)
+    requestAnimationFrame(() => { try { el.dispatchEvent(new Event("input", { bubbles: true })); } catch (e) {} });
+  }
+  el.addEventListener("input", () => setDraft(key, el.value));
+}
+window.bindDraft = bindDraft;
 function safeRenderAll(source) {
   if (isEditingActive()) {
     deferredRender = true;
@@ -2334,6 +2387,7 @@ function saveMoya() {
   saveState();
   offerUndo("もやを置きました", undoStateItem("moyas", newMoyaId, renderMoyas));
   input.value = "";
+  clearDraft("moya");
   if (wantEl) wantEl.checked = false;
   renderMoyas();
 }
@@ -2920,6 +2974,7 @@ function saveLog() {
   offerUndo(wantAnswer ? "雑メモを記録(☑回答希望つき)" : "雑メモを記録しました",
             undoStateItem("logs", newLogId, renderLogs));
   input.value = "";
+  clearDraft("capture");
   if (wantAnswerEl) wantAnswerEl.checked = false; // 記録後はチェックをリセット(次のメモに引きずらない)
   autoGrowCapture(); // 記録後は既定の高さに戻す
   renderLogs();
@@ -4131,7 +4186,8 @@ function shireiCard(p, cls, rank) {
       h += '<div class="shirei-msg pend"><div class="bub">送信しました。PCが起動していれば1〜2分で回答が届きます。この画面は開いたまま待てます。</div></div>';
     }
 
-    const draft = shireiDrafts[p.id] || "";
+    // 2026-08-25: メモリ上の下書きが無ければ保存済みの書きかけを出す(アプリ再起動でも残る)
+    const draft = shireiDrafts[p.id] || getDraft("shirei:" + p.id) || "";
     h += '<div class="shirei-ask">'
        + '<textarea data-ask="' + p.id + '" placeholder="ここが分からない / こう表示された / 手順を出して — そのまま書いて送ってください">' + escapeHtml(draft) + '</textarea>'
        + '<div class="row"><button class="mic-btn mini" data-shireimic="' + p.id + '" type="button" title="音声入力" aria-label="音声入力">🎙</button>'
@@ -4304,7 +4360,7 @@ function renderShirei() {
 
   root.addEventListener("input", (ev) => {
     const ta = ev.target.closest("[data-ask]");
-    if (ta) shireiDrafts[ta.dataset.ask] = ta.value;
+    if (ta) { shireiDrafts[ta.dataset.ask] = ta.value; setDraft("shirei:" + ta.dataset.ask, ta.value); }
   });
 
   root.addEventListener("keydown", async (ev) => {
@@ -4377,15 +4433,17 @@ async function shireiToggleStep(stepId) {
 // 質問を送る
 async function shireiSend(pid) {
   const p = shireiProjects.find(x => x.id === pid);
-  const text = (shireiDrafts[pid] || "").trim();
+  const ta = document.querySelector('[data-ask="' + pid + '"]');
+  // 2026-08-25: 復元した書きかけ(メモリに無い)でも送れるように、欄の実値→保存分の順で拾う
+  const text = ((ta && ta.value) || shireiDrafts[pid] || getDraft("shirei:" + pid) || "").trim();
   if (!p || !text) return;
   shireiSending = pid;
-  const ta = document.querySelector('[data-ask="' + pid + '"]');
   if (ta) ta.blur();
   renderShirei();
   try {
     await shireiPost(p, text, false);
     shireiDrafts[pid] = "";
+    clearDraft("shirei:" + pid);
   } catch (e) {
     console.error("shirei send error:", e);
     alert("送信できませんでした。通信を確認してください。");
@@ -5096,7 +5154,7 @@ function calItemText(it) {
 // 2026-08-24(雑メモ x2yb3n3im「どこに私が記載すればいいのか書いてない」)
 // カレンダーは今まで“読むだけ”で、書く場所がどこにも無かった。日別パネルの一番下に
 // 「その日に書く」欄と、返事の宛先(回答タブ/受信箱)への案内を常に出す。
-let calWriteDraft = "";      // 月移動・日付切替で消えないように保持する
+let calWriteDraft = getDraft("cal-write");   // 月移動・日付切替・タブ往復・再起動でも消えないように保持する
 function calWriteBoxHtml(ymd, isToday) {
   const nice = ymd.replace(/-/g, "/");
   return `
@@ -5276,7 +5334,7 @@ function renderTaskCalendar() {
       ta.style.height = Math.min(ta.scrollHeight, Math.round(window.innerHeight * 0.38)) + "px";
     };
     // 下書きを保持(月移動・日付切替で消えると「書いたのに消えた」になる)
-    ta.addEventListener("input", () => { calWriteDraft = ta.value; grow(); });
+    ta.addEventListener("input", () => { calWriteDraft = ta.value; setDraft("cal-write", ta.value); grow(); });
     const submit = () => {
       const text = (ta.value || "").trim();
       if (!text) { if (statEl) statEl.textContent = "何か書いてから押してください"; return; }
@@ -5284,6 +5342,7 @@ function renderTaskCalendar() {
       const [yy, mm, dd] = ymd.split("-").map(Number);
       const dueAt = new Date(yy, mm - 1, dd, 23, 59, 0, 0).getTime();   // 時刻指定なし=その日いっぱい
       calWriteDraft = "";
+      clearDraft("cal-write");
       ta.value = "";
       grow();
       // addTask() の中で renderTasks() → renderTaskCalendar() まで走る
@@ -5640,6 +5699,7 @@ function taskInputAdd() {
   if (nightMode && !when.dueAt) when = { ...when, dueAt: tomorrowTs(), dueHasTime: false };
   if (addTask(titleEl.value, bucketEl.value, typeEl.value, when)) {
     titleEl.value = "";
+    clearDraft("task-title");
     autoGrowTaskInput();           // 伸びた入力欄を1行に戻す
     taskInputWhenClear();          // 次のタスクに期日を引きずらない
     if (nightMode) {               // ただし明日の準備中は「明日」を保ったまま連続入力できるようにする
@@ -5835,6 +5895,7 @@ function renderInbox() {
       el.appendChild(rr);
       const rb = rr.querySelector("[data-ibreply]");
       const ri = rr.querySelector(".inbox-reply-input");
+      const ibDraftKey = "ib:" + (item.cw_id || item.id);   // 2026-08-25: 書きかけの保持キー
       const send = async () => {
         const word = ri.value.trim();
         if (!word) { ri.focus(); return; }
@@ -5842,6 +5903,7 @@ function renderInbox() {
         try {
           const hadThread = !!item.thread_id;
           const r = await postThreadReply(item, word);
+          clearDraft(ibDraftKey);   // 送れたら書きかけは用済み
           // 返信したら受信箱からは消す(晃良確定: 同じ話が2タブに並ばないように)
           await consumeInbox(item, "回答タブで会話中");
           switchToAnswersTab();
@@ -5860,6 +5922,9 @@ function renderInbox() {
       // 回答タブ・司令塔と同じ setupReplyBox に寄せる = Enter=改行 / Ctrl(⌘)+Enter=送信 /
       // 自動リサイズ / 🎙 の紐付け(これまで data-replymic は未接続の飾りだった)。
       setupReplyBox(rr, send);
+      // 2026-08-25: 別タブへ移動→戻ると renderInbox() でカードごと作り直されるため、
+      // 書きかけを外に持たせておく(タブ往復でもアプリ再起動でも残る)
+      bindDraft(ri, ibDraftKey);
     }
     list.appendChild(el);
   });
@@ -6805,6 +6870,7 @@ function renderAnswers() {
       + `<button class="answer-btn primary" data-reask>➤ 送信</button>`;
     el.appendChild(replyRow);
     const reaskBtn = replyRow.querySelector("[data-reask]");
+    const ansDraftKey = "ans:" + (a.cw_id || a.id);   // 2026-08-25: 書きかけの保持キー
     const doReask = async () => {
       const word = replyRow.querySelector(".answer-reply-input").value.trim();
       const nextTurn = (a._turns || 1) + 1;
@@ -6814,6 +6880,7 @@ function renderAnswers() {
       replyRow.querySelector(".answer-reply-input").disabled = true;
       try {
         const r = await postThreadReply(a, word || "(続き・深掘りを希望)");
+        clearDraft(ansDraftKey);   // 送れたら書きかけは用済み
         reaskBtn.textContent = `✓ 送信(${nextTurn}回目)`;
         startAnswerWait(`${nextTurn}回目を送信。PCで回答を生成しています…`, 10);
         offerUndo(`${nextTurn}回目を送信しました`, undoThreadReply(r.replyCwId, null, true));
@@ -6827,6 +6894,8 @@ function renderAnswers() {
     };
     reaskBtn.addEventListener("click", doReask);
     setupReplyBox(replyRow, doReask);   // Enter=改行 / Ctrl+Enter=送信 / 🎙 / 自動リサイズ
+    // 2026-08-25: タブを移ると renderAnswers() でカードごと作り直されるので書きかけを外に持たせる
+    bindDraft(replyRow.querySelector(".answer-reply-input"), ansDraftKey);
 
     // 「元の内容」の開閉(2026-08-06)
     const originEl = el.querySelector("[data-origin-toggle]");
@@ -7147,6 +7216,12 @@ document.getElementById("inbox-next-modal").addEventListener("click", (e) => {
     btn.addEventListener("click", () => applyFontSize(btn.dataset.size));
   });
 })();
+
+// 2026-08-25: 主要な入力欄の書きかけを保持する。
+// これらはタブ切替では消えないが、アプリを閉じて開き直す・スマホがPWAを破棄すると消えていた。
+bindDraft(document.getElementById("capture-input"), "capture");
+bindDraft(document.getElementById("moya-input"), "moya");
+bindDraft(document.getElementById("task-input-title"), "task-title");
 
 // 初期化
 renderDate();
