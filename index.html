@@ -5835,22 +5835,49 @@ document.getElementById("task-input-title").addEventListener("input", autoGrowTa
 // ========================================================================
 let inboxItems = [];
 
+// 2026-08-28 修正: 録音を「別枠」で取得する。
+// これまでは1本のクエリ(直近150件)から rec_ を振り分けていたが、音声アプリは
+// 溜まっていた文字起こしを一度にまとめて送ってくる(実測: 8/28 06:25 に68件が同時到着)。
+// その結果 150件枠の大半を録音が占め、受信箱カード・回答・返信が枠から押し出されて
+// アプリの画面から消えていた(実測: 未読35件のうち10件が取得できていなかった)。
+// → 「録音以外」と「録音」で取得枠を分け、互いに食い合わないようにする。
 async function pullInbox() {
   if (!navigator.onLine) return;
   try {
-    // 2026-07-14 既読管理: 既読も含めて取得(未読/すべて切替のため。直近150件)
-    const { data, error } = await sb.from("ichibou_inbox")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(150);
-    if (error) throw error;
+    // 2026-07-14 既読管理: 既読も含めて取得(未読/すべて切替のため)
+    let rows = null, recRows = null;
+    try {
+      const [mainRes, recRes] = await Promise.all([
+        // cw_id が NULL の古い行も落とさないよう or() で明示的に拾う
+        sb.from("ichibou_inbox").select("*")
+          .or("cw_id.is.null,cw_id.not.like.rec_%")
+          .order("created_at", { ascending: false }).limit(150),
+        sb.from("ichibou_inbox").select("*")
+          .like("cw_id", "rec_%")
+          .order("created_at", { ascending: false }).limit(100)
+      ]);
+      if (mainRes.error) throw mainRes.error;
+      if (recRes.error) throw recRes.error;
+      rows = mainRes.data || [];
+      recRows = recRes.data || [];
+    } catch (splitErr) {
+      // 分割取得が使えない環境では従来どおり1本で取り、クライアント側で振り分ける(退避経路)
+      console.warn("pullInbox split query failed, falling back:", splitErr);
+      const { data, error } = await sb.from("ichibou_inbox")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(250);
+      if (error) throw error;
+      const all = data || [];
+      recRows = all.filter(it => (it.cw_id || "").startsWith("rec_"));
+      rows = all.filter(it => !(it.cw_id || "").startsWith("rec_"));
+    }
     // 2026-07-29: PCウォッチャーのバックアップ通知(cw_id='sys_backup_*')をヘッダのバッジに反映
-    updateBackupStatus(data || []);
+    updateBackupStatus(rows);
     // 2026-07-12 v2: Claude自動回答(cw_id='ans_*')は受信箱ではなく回答タブに出す
     // 2026-07-29: sys_* のシステム通知も受信箱カードには出さない
     // 2026-08-22: rec_=音声アプリからの録音。受信箱には出さず、録音タブへ分ける。
-    const rows = data || [];
-    recItems = rows.filter(it => (it.cw_id || "").startsWith("rec_"));
+    recItems = recRows;
     inboxItems = rows.filter(it => {
       const c = it.cw_id || "";
       // ans_=回答タブ / sys_=システム / req_=晃良の返信(会話の一部なので受信箱には出さない) / rec_=録音タブ
