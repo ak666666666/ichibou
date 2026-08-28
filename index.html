@@ -2167,8 +2167,26 @@ function renderDate() {
   document.getElementById("today-weekday").textContent = weekdays[d.getDay()] + "曜日";
 }
 
+// ===== 最後に開いていたタブを覚える(2026-08-25 晃良要望)=====
+// アプリを閉じて開き直した時に、毎回いちばん左(司令塔)へ戻されるのが手間だった。
+// 端末ごとの都合なので localStorage に持つ(同期しない=スマホとPCで別々に覚える)。
+const LAST_TAB_KEY = "ichibou_last_tab";
+function rememberTab(view) {
+  try { localStorage.setItem(LAST_TAB_KEY, view); } catch (e) { /* 保存できなくても動作に影響させない */ }
+}
+function restoreLastTab() {
+  let view = null;
+  try { view = localStorage.getItem(LAST_TAB_KEY); } catch (e) { return; }
+  if (!view) return;
+  const tab = document.querySelector('.tab[data-view="' + view + '"]');
+  // タブが無くなっている場合(改修で撤去された等)は既定のまま
+  if (!tab || tab.classList.contains("active")) return;
+  tab.click();
+}
+
 document.querySelectorAll(".tab").forEach(tab => {
   tab.addEventListener("click", () => {
+    rememberTab(tab.dataset.view);
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
     tab.classList.add("active");
@@ -2187,6 +2205,11 @@ document.querySelectorAll(".tab").forEach(tab => {
     if (tab.dataset.view === "tasks") renderTasks();
   });
 });
+
+// 起動直後に、前回開いていたタブへ戻す
+// スクリプト全体の評価が終わってから実行する(let 宣言の TDZ 回避)
+if (document.readyState === "complete") { setTimeout(restoreLastTab, 0); }
+else { window.addEventListener("load", () => setTimeout(restoreLastTab, 0)); }
 
 // ===== プロジェクト =====
 function renderProjects() {
