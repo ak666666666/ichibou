@@ -170,6 +170,9 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .log-item.completed { border-left-color: var(--green); background: #f0ede4; opacity: 0.65; }
 .log-item.completed .log-text { text-decoration: line-through; color: var(--ink-mute); cursor: default; }
 .log-complete-btn { padding: 4px 10px; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
+/* 案C(2026-09-08): 直前の本文に戻す */
+.log-revert-btn { padding: 4px 10px; background: transparent; border: 1px dashed var(--line); color: var(--ink-mute); font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
+.log-revert-btn:hover { color: var(--ink); border-color: var(--ink-soft); }
 .log-complete-btn:hover { border-color: var(--green); color: var(--green); background: rgba(74,107,58,0.05); }
 .log-item.completed .log-complete-btn { border-color: var(--green); color: var(--green); background: rgba(74,107,58,0.08); }
 .log-filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 0 6px; margin-top: 16px; border-bottom: 1px dashed var(--line-soft); font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); letter-spacing: 0.1em; }
@@ -1711,8 +1714,45 @@ let state = loadLocalState();
 let syncTimer = null;
 let lastSyncedData = null;
 
+// ===== 更新履歴(案C)の共通ヘルパ(2026-09-08) =====
+// 2026-08-24 にノートだけへ入れた仕組みを、雑メモ・タスク・もやにも広げる。
+//   ・history  … 「いつ更新したか」の点だけを最大20件。本文は入れない(容量と同期の重さのため)
+//   ・prevBody … 直前の本文を1版だけ保持。誤って上書きした時に1手で戻せる
+// 全版を持つと state 丸ごと同期が重くなるので、戻せるのは1つ前まで。ここが案Cの肝。
+const EDIT_HIST_MAX = 20;
+
+function normalizeEditHistory(o) {
+  o.history = Array.isArray(o.history) ? o.history.slice(-EDIT_HIST_MAX) : [];
+  if (typeof o.prevBody !== "string") o.prevBody = null;
+  if (typeof o.prevSavedAt !== "number") o.prevSavedAt = null;
+  return o;
+}
+
+/** 本文を書き換える直前に呼ぶ。oldBody を1版だけ退避し、更新の点を1つ積む。 */
+function recordEdit(o, oldBody, newBody) {
+  const now = Date.now();
+  if (typeof oldBody === "string" && oldBody !== newBody) {
+    o.prevBody = oldBody;
+    o.prevSavedAt = o.updatedAt || o.createdAt || o.ts || now;
+  }
+  if (!Array.isArray(o.history)) o.history = [];
+  o.history.push({ ts: now, len: (newBody || "").length });
+  if (o.history.length > EDIT_HIST_MAX) o.history = o.history.slice(-EDIT_HIST_MAX);
+  o.updatedAt = now;
+}
+
+/** 直前の1版に戻す。戻した本文をさらに prevBody に入れるので、もう一度押せば元に戻る。 */
+function revertToPrev(o, field) {
+  if (!o || typeof o.prevBody !== "string") return false;
+  const cur = o[field] || "";
+  o[field] = o.prevBody;
+  o.prevBody = cur;
+  o.updatedAt = Date.now();
+  return true;
+}
+
 function normalizeLog(l) {
-  return { completed: false, completedAt: null, tags: [], wantAnswer: false, urgentClaude: false, ...l };
+  return normalizeEditHistory({ completed: false, completedAt: null, tags: [], wantAnswer: false, urgentClaude: false, ...l });
 }
 function normalizeNote(n) {
   return {
@@ -1813,7 +1853,11 @@ function normalizeTask(t) {
     wantAnswer: t.wantAnswer === true,
     urgentClaude: t.urgentClaude === true,
     createdAt: t.createdAt || Date.now(),
-    updatedAt: t.updatedAt || t.createdAt || Date.now()
+    updatedAt: t.updatedAt || t.createdAt || Date.now(),
+    // 2026-09-08 案C: 更新履歴(最大20件)と直前の本文1版
+    history: Array.isArray(t.history) ? t.history.slice(-EDIT_HIST_MAX) : [],
+    prevBody: typeof t.prevBody === "string" ? t.prevBody : null,
+    prevSavedAt: typeof t.prevSavedAt === "number" ? t.prevSavedAt : null
   };
 }
 function normalizeState(s) {
@@ -1825,6 +1869,8 @@ function normalizeState(s) {
   s.noteFolders = s.noteFolders.map(normalizeNoteFolder);
   if (!Array.isArray(s.tasks)) s.tasks = [];
   s.tasks = s.tasks.map(normalizeTask);
+  // 2026-09-08 案C: もやにも更新履歴の器だけ用意しておく(編集UIは今のところ無い)
+  if (Array.isArray(s.moyas)) s.moyas = s.moyas.map(normalizeEditHistory);
   return s;
 }
 function loadLocalState() {
@@ -2621,8 +2667,8 @@ function renderInsightsModal() {
           return;
         }
         if (newText === log.text) return;
+        recordEdit(log, log.text, newText);   // 案C
         log.text = newText;
-        log.updatedAt = Date.now();
         saveState();
         renderLogs();
       });
@@ -2842,6 +2888,10 @@ function renderLogs() {
         ? `<button class="log-tag" data-retag>📎 ${escapeHtml(project.name || "無題")}<span class="remove">✕</span></button>`
         : `<button class="log-assign-btn" data-assign>＋ プロジェクトに紐付け</button>`;
       const completeHtml = `<button class="log-complete-btn" data-complete>${log.completed ? "↩ 未完了に戻す" : "✓ 完了"}</button>`;
+      // 案C(2026-09-08): 直前の本文が残っている雑メモだけ「戻す」を出す
+      const revertHtml = (!log.completed && typeof log.prevBody === "string" && log.prevBody !== log.text)
+        ? `<button class="log-revert-btn" data-revert title="直前の本文に戻す(もう一度押すと元に戻る)">↩ 1つ前</button>`
+        : "";
       const wantBtn = !log.completed
         ? `<button class="log-want-toggle ${log.wantAnswer ? "on" : ""}" data-wantanswer title="タップでClaude回答&実行の希望を切替">${log.wantAnswer ? "☑ 回答希望" : "☐ 回答希望"}</button>`
         : (log.wantAnswer ? `<span class="log-want-badge">☑ 回答希望済</span>` : "");
@@ -2861,7 +2911,7 @@ function renderLogs() {
         <div class="log-time">${timeStr}${editedLabel}${completedLabel}</div>
         <div class="log-text" ${editableAttr} data-copy-src data-id="${log.id}">${escapeHtml(log.text)}</div>
         ${tagsRowHtml}
-        <div class="log-actions">${tagHtml}${wantBtn}${urgentBtn}${completeHtml}<button class="log-attach-btn" data-attach title="URLリンクを添付">📎</button><button class="log-delete">削除</button></div>
+        <div class="log-actions">${tagHtml}${wantBtn}${urgentBtn}${revertHtml}${completeHtml}<button class="log-attach-btn" data-attach title="URLリンクを添付">📎</button><button class="log-delete">削除</button></div>
       `;
 
       // 📎 リンク添付(機能H① 2026-07-23)
@@ -2879,12 +2929,21 @@ function renderLogs() {
             state.logs = state.logs.filter(l => l.id !== log.id);
             saveState(); renderLogs();
           } else if (newText !== log.text) {
+            recordEdit(log, log.text, newText);   // 案C: 直前の1版を退避 + 更新の点を記録
             log.text = newText;
-            log.updatedAt = Date.now();
             saveState();
+            renderLogs();                          // ↩ 戻すボタンを出すため描き直す
           }
         });
       }
+
+      const revertBtn = item.querySelector("[data-revert]");
+      if (revertBtn) revertBtn.addEventListener("click", () => {
+        if (!revertToPrev(log, "text")) return;
+        saveState();
+        renderLogs();
+        showCopyToast("1つ前の本文に戻しました(もう一度押すと元に戻ります)");
+      });
 
       const assignBtn = item.querySelector("[data-assign]");
       if (assignBtn) assignBtn.addEventListener("click", () => openPickModal(log));
@@ -4649,7 +4708,7 @@ function shireiTaskSection() {
 // 司令塔は「これから」、履歴は「これまで」。役割で分けたので、司令塔からは撤去した。
 // ========================================================================
 let shireiDeploys = [];
-let historyFilter = "all";   // all / claude / akira
+let historyFilter = "all";   // all / claude / akira / edit(2026-09-08 案C: 更新履歴)
 
 async function loadHistory() {
   if (!navigator.onLine) { renderHistory(); return; }
@@ -4687,16 +4746,38 @@ function historyItems() {
   return historyFilter === "all" ? out : out.filter(x => x.who === historyFilter);
 }
 
+// ===== 更新履歴(案C 2026-09-08)=====
+// 各項目が持っている history(いつ更新したかの点)を横断して並べるだけ。追加保存はゼロ。
+function editHistoryItems() {
+  const out = [];
+  const push = (o, label, text, icon) => {
+    (o.history || []).forEach(h => {
+      if (!h || !h.ts) return;
+      out.push({ at: new Date(h.ts).toISOString(), label, icon, len: h.len,
+                 text: (text || "").replace(/\s+/g, " ").slice(0, 60) });
+    });
+  };
+  (state.logs  || []).forEach(l => push(l, "雑メモ", l.text,  "📝"));
+  (state.notes || []).forEach(n => push(n, "ノート", n.title || n.body, "📔"));
+  (state.tasks || []).forEach(t => push(t, "タスク", t.title, "✅"));
+  (state.moyas || []).forEach(m => push(m, "もや",   m.text,  "🌫"));
+  out.sort((a, b) => new Date(b.at) - new Date(a.at));
+  return out;
+}
+
 function renderHistory() {
   const body = document.getElementById("history-body");
   if (!body) return;
   if (deferRender("history", renderHistory, "#view-history")) return;
 
-  const items = historyItems();
+  const isEdit = historyFilter === "edit";
+  const items = isEdit ? editHistoryItems() : historyItems();
   const sub = document.getElementById("history-sub");
-  if (sub) sub.textContent = items.length
-    ? items.length + "件 — 新しい順。司令塔が「これから」、ここが「これまで」"
-    : "まだ記録がありません。";
+  if (sub) sub.textContent = !items.length
+    ? (isEdit ? "まだ更新履歴はありません(次の編集から記録します)。" : "まだ記録がありません。")
+    : isEdit
+      ? items.length + "件 — いつ何を書き直したか。記録は1項目あたり直近20件まで"
+      : items.length + "件 — 新しい順。司令塔が「これから」、ここが「これまで」";
 
   const KIND = {
     do:     { i: "・", l: "作業" },
@@ -4708,12 +4789,34 @@ function renderHistory() {
   };
 
   let h = '<div class="hist-filter">'
-    + ["all", "claude", "akira"].map(f =>
+    + ["all", "claude", "akira", "edit"].map(f =>
         '<button type="button" class="hf' + (historyFilter === f ? " on" : "") + '" data-hf="' + f + '">'
-        + ({ all: "全部", claude: "私", akira: "晃良" })[f] + '</button>').join("")
+        + ({ all: "全部", claude: "私", akira: "晃良", edit: "更新" })[f] + '</button>').join("")
     + '</div>';
 
-  if (!items.length) { body.innerHTML = h + '<div class="shirei-empty">記録がありません。</div>'; return; }
+  if (!items.length) {
+    body.innerHTML = h + '<div class="shirei-empty">'
+      + (isEdit ? "まだ更新履歴はありません。" : "記録がありません。") + '</div>';
+    return;
+  }
+
+  // 更新履歴は「いつ・どれを・何字にしたか」の一覧
+  if (isEdit) {
+    let lastDayE = "";
+    items.forEach(x => {
+      const day = shireiYmd(x.at);
+      if (day !== lastDayE) { h += '<div class="hist-day">' + day + '</div>'; lastDayE = day; }
+      h += '<div class="hist-row akira">'
+         + '<span class="hm">' + shireiHm(x.at).slice(6) + '</span>'
+         + '<span class="hw">' + x.icon + '</span>'
+         + '<span class="hk" title="' + x.label + '">' + x.label.slice(0, 1) + '</span>'
+         + '<span class="hx">' + escapeHtml(x.text || "(空)")
+         + (typeof x.len === "number" ? ' <span style="color:var(--ink-mute);">' + x.len + '字</span>' : "")
+         + '</span></div>';
+    });
+    body.innerHTML = h;
+    return;
+  }
 
   let lastDay = "";
   items.forEach(x => {
@@ -5077,6 +5180,10 @@ function syncTaskFilterButtons() {
 function updateTask(id, patch) {
   const t = tasksArr().find(x => x.id === id);
   if (!t) return;
+  // 案C: 本文(title)が変わる時だけ、直前の1版を退避して更新の点を積む
+  if (typeof patch.title === "string" && patch.title !== t.title) {
+    recordEdit(t, t.title, patch.title);
+  }
   Object.assign(t, patch, { updatedAt: Date.now() });
   saveState();
 }
