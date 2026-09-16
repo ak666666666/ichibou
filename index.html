@@ -291,6 +291,15 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .stock-head h3 { margin-bottom: 0; }
 .stock-count { font-size: 12px; color: var(--ink-mute); letter-spacing: 0.05em; }
 .stock-guide { font-size: 12.5px; line-height: 1.8; color: var(--ink-soft); border-left: 2px solid var(--line); padding-left: 10px; }
+/* 範囲・順番の切替と「古いのは一括で閉じる」(2026-09-17 晃良要望: 昔のから始まると最後まで回らない) */
+.stock-filter { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px dashed var(--line-soft); }
+.stock-filter-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.stock-filter-label { font-size: 11px; color: var(--ink-mute); letter-spacing: 0.1em; min-width: 32px; }
+.stock-chip { padding: 5px 11px; font-size: 12px; border: 1px solid var(--line); background: #fbf9f3; color: var(--ink-soft); cursor: pointer; font-family: inherit; letter-spacing: 0.05em; transition: all 0.15s; }
+.stock-chip:hover { border-color: var(--accent); color: var(--accent); }
+.stock-chip.on { border-color: var(--accent); color: var(--accent); background: rgba(200,80,46,0.06); font-weight: 600; }
+.stock-bulk { width: 100%; text-align: center; font-size: 12px; }
+.stock-bulk[disabled] { opacity: 0.4; cursor: default; }
 .stock-body { font-size: 15px; line-height: 1.9; white-space: pre-wrap; word-break: break-word; max-height: 40vh; overflow-y: auto; padding: 14px; border: 1px solid var(--line); background: var(--bg-soft, transparent); }
 .stock-when { font-size: 11px; color: var(--ink-mute); margin-bottom: 8px; letter-spacing: 0.05em; }
 .stock-actions { display: flex; flex-direction: column; gap: 8px; }
@@ -1625,6 +1634,21 @@ html { zoom: var(--ui-zoom, 1); }
     <div class="stock-head">
       <h3>棚卸し</h3>
       <div class="stock-count" id="stock-count"></div>
+    </div>
+    <div class="stock-filter">
+      <div class="stock-filter-row">
+        <span class="stock-filter-label">範囲</span>
+        <button type="button" class="stock-chip" data-stock-range="14">直近2週間</button>
+        <button type="button" class="stock-chip" data-stock-range="30">直近1ヶ月</button>
+        <button type="button" class="stock-chip" data-stock-range="90">直近3ヶ月</button>
+        <button type="button" class="stock-chip" data-stock-range="0">すべて</button>
+      </div>
+      <div class="stock-filter-row">
+        <span class="stock-filter-label">順番</span>
+        <button type="button" class="stock-chip" data-stock-order="new">新しい順</button>
+        <button type="button" class="stock-chip" data-stock-order="old">古い順</button>
+      </div>
+      <button type="button" class="btn ghost stock-bulk" id="stock-bulk"></button>
     </div>
     <div class="stock-guide">
       1回で終わるなら<b>タスク</b>へ。ずっと抱えているなら<b>司令塔</b>へ(状態を持たせて、終わったら終わりにできる)。
@@ -5320,17 +5344,117 @@ function tasksArr() {
 let stockQueue = [];
 let stockIdx = 0;
 let stockHandled = 0;
+// 2026-09-17 晃良要望: 古い順で全件を回す作りだと、もう意味のない昔のメモから始まって
+// 本命の最近のぶんに辿り着く前に力尽きる。既定を「直近1ヶ月・新しい順」にし、
+// 範囲より古いぶんは1タップでまとめて閉じられるようにした(=一括チェック)。
+const STOCK_RANGE_KEY = "ichibou_stock_range_v1";
+const STOCK_ORDER_KEY = "ichibou_stock_order_v1";
+let stockRangeDays = 30;
+let stockOrder = "new";
+try {
+  const r = localStorage.getItem(STOCK_RANGE_KEY);
+  if (r !== null && !isNaN(parseInt(r, 10))) stockRangeDays = parseInt(r, 10);
+  const o = localStorage.getItem(STOCK_ORDER_KEY);
+  if (o === "new" || o === "old") stockOrder = o;
+} catch (e) { /* localStorage が使えなくても既定値で動く */ }
 
-function stockOpen() {
-  // 古いものから順に。溜まった順に片付くほうが、頭の中の順番と合う。
+/** 範囲の境目(これより古いものは棚卸しの列に入れない)。0 = すべて */
+function stockCutoff() {
+  return stockRangeDays > 0 ? Date.now() - stockRangeDays * 86400000 : 0;
+}
+
+/** 範囲より古い未完了の雑メモ(=まとめて閉じる対象) */
+function stockOlderLogs() {
+  const cut = stockCutoff();
+  if (!cut) return [];
+  return (state.logs || []).filter(l => l && !l.completed && (l.ts || 0) < cut);
+}
+
+function stockBuildQueue() {
+  const cut = stockCutoff();
   stockQueue = (state.logs || [])
-    .filter(l => !l.completed)
-    .sort((a, b) => (a.ts || 0) - (b.ts || 0))
+    .filter(l => l && !l.completed && (l.ts || 0) >= cut)
+    .sort((a, b) => stockOrder === "new" ? (b.ts || 0) - (a.ts || 0) : (a.ts || 0) - (b.ts || 0))
     .map(l => l.id);
   stockIdx = 0;
+}
+
+/** チップの選択状態と「まとめて閉じる」ボタンの文言を today の状態に合わせる */
+function stockSyncUi() {
+  document.querySelectorAll("#stock-modal [data-stock-range]").forEach(b => {
+    b.classList.toggle("on", parseInt(b.dataset.stockRange, 10) === stockRangeDays);
+  });
+  document.querySelectorAll("#stock-modal [data-stock-order]").forEach(b => {
+    b.classList.toggle("on", b.dataset.stockOrder === stockOrder);
+  });
+  const bulk = document.getElementById("stock-bulk");
+  if (!bulk) return;
+  const n = stockOlderLogs().length;
+  if (!stockRangeDays) {
+    bulk.textContent = "すべてを見ています(まとめて閉じる対象なし)";
+    bulk.disabled = true;
+  } else if (!n) {
+    bulk.textContent = "この範囲より古い未完了はありません";
+    bulk.disabled = true;
+  } else {
+    bulk.textContent = "🧹 この範囲より古い " + n + "件 をまとめて閉じる";
+    bulk.disabled = false;
+  }
+}
+
+function stockOpen() {
+  stockBuildQueue();
   stockHandled = 0;
   document.getElementById("stock-modal").classList.add("open");
+  stockSyncUi();
   stockRender();
+}
+
+function stockSetRange(days) {
+  stockRangeDays = days;
+  try { localStorage.setItem(STOCK_RANGE_KEY, String(days)); } catch (e) {}
+  stockBuildQueue();
+  stockSyncUi();
+  stockRender();
+}
+
+function stockSetOrder(order) {
+  stockOrder = order;
+  try { localStorage.setItem(STOCK_ORDER_KEY, order); } catch (e) {}
+  stockBuildQueue();
+  stockSyncUi();
+  stockRender();
+}
+
+/** 範囲より古い未完了をまとめて閉じる。削除ではないので後から読み返せる + 15秒間は取り消せる */
+function stockBulkClose() {
+  const targets = stockOlderLogs();
+  if (!targets.length) return;
+  const cut = stockCutoff();
+  const ok = confirm(formatTs(cut) + " より古い未完了の雑メモ " + targets.length + "件 をまとめて閉じます。\n\n"
+                   + "削除ではありません。雑メモタブの「完了済みも表示」で読み返せますし、15秒は取り消せます。");
+  if (!ok) return;
+  const now = Date.now();
+  const snapshot = targets.map(l => ({ id: l.id, completed: l.completed, completedAt: l.completedAt, trackDone: l.trackDone }));
+  targets.forEach(l => { l.trackDone = true; l.completed = true; l.completedAt = now; });
+  saveState();
+  stockBuildQueue();
+  stockSyncUi();
+  stockRender();
+  offerUndo(targets.length + "件をまとめて閉じました", () => {
+    snapshot.forEach(s => {
+      const l = (state.logs || []).find(x => x && x.id === s.id);
+      if (!l) return;
+      l.completed = s.completed;
+      l.completedAt = s.completedAt;
+      l.trackDone = s.trackDone;
+    });
+    saveState();
+    stockBuildQueue();
+    stockSyncUi();
+    stockRender();
+    return { msg: "戻しました" };
+  });
 }
 
 function stockClose() {
@@ -5359,10 +5483,16 @@ function stockRender() {
   if (doneEl) doneEl.textContent = stockHandled ? "この回で " + stockHandled + "件 片付けた" : "";
 
   if (!log) {
+    const older = stockOlderLogs().length;
+    const rangeNote = stockRangeDays
+      ? '<br><span class="stock-when">この範囲の外に未完了が ' + older + "件 あります。"
+        + (older ? "上の「まとめて閉じる」か、範囲を広げてください。" : "") + "</span>"
+      : "";
     body.innerHTML = '<div class="stock-empty">'
       + (stockHandled
           ? "ここまで。" + stockHandled + "件 片付きました。<br>残りはまた今度で大丈夫です。"
-          : "未完了の雑メモはありません。<br>頭の中にあるものを先に雑メモへ吐き出してから、もう一度どうぞ。")
+          : "この範囲に未完了の雑メモはありません。<br>頭の中にあるものを先に雑メモへ吐き出してから、もう一度どうぞ。")
+      + rangeNote
       + "</div>";
     if (countEl) countEl.textContent = "";
     acts.forEach(b => b.disabled = true);
@@ -5428,6 +5558,14 @@ function stockDecide(action) {
     const b = document.getElementById(id);
     if (b) b.addEventListener("click", () => stockDecide(map[id]));
   });
+  document.querySelectorAll("#stock-modal [data-stock-range]").forEach(b => {
+    b.addEventListener("click", () => stockSetRange(parseInt(b.dataset.stockRange, 10)));
+  });
+  document.querySelectorAll("#stock-modal [data-stock-order]").forEach(b => {
+    b.addEventListener("click", () => stockSetOrder(b.dataset.stockOrder));
+  });
+  const bulk = document.getElementById("stock-bulk");
+  if (bulk) bulk.addEventListener("click", stockBulkClose);
   const quit = document.getElementById("stock-quit");
   if (quit) quit.addEventListener("click", stockClose);
   const bg = document.getElementById("stock-modal");
