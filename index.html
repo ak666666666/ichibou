@@ -170,6 +170,9 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .log-item.completed { border-left-color: var(--green); background: #f0ede4; opacity: 0.65; }
 .log-item.completed .log-text { text-decoration: line-through; color: var(--ink-mute); cursor: default; }
 .log-complete-btn { padding: 4px 10px; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
+/* 完了チェックの付け外し(2026-09-16) */
+.log-track-btn { padding: 4px 8px; background: transparent; border: 1px dashed var(--line); color: var(--ink-mute); font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
+.log-track-btn:hover { color: var(--ink); border-color: var(--ink-soft); }
 /* 案C(2026-09-08): 直前の本文に戻す */
 .log-revert-btn { padding: 4px 10px; background: transparent; border: 1px dashed var(--line); color: var(--ink-mute); font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
 .log-revert-btn:hover { color: var(--ink); border-color: var(--ink-soft); }
@@ -1433,6 +1436,10 @@ html { zoom: var(--ui-zoom, 1); }
           <label class="capture-want-answer" title="チェックで Claude が読んで回答・実行を検討します(次回スキャン時)">
             <input type="checkbox" id="capture-want-answer" /> ☑ 回答&実行希望
           </label>
+          <!-- 2026-09-16 晃良要望: 既定では完了を持たせない。やることを含むメモの時だけ自分で付ける -->
+          <label class="capture-want-answer" title="チェックすると、このメモに「✓ 完了」が付きます。ただの記録なら外したままでOK">
+            <input type="checkbox" id="capture-track-done" /> ✓ 完了チェックをつける
+          </label>
           <span class="capture-hint">⌘/Ctrl + ENTER で保存</span>
           <div class="action-right">
             <button class="mic-btn" id="capture-mic" title="音声入力" aria-label="音声入力">🎙</button>
@@ -1830,7 +1837,14 @@ function revertToPrev(o, field) {
 }
 
 function normalizeLog(l) {
-  return normalizeEditHistory({ completed: false, completedAt: null, tags: [], wantAnswer: false, urgentClaude: false, ...l });
+  // trackDone(2026-09-16): このメモが「完了」を持つかどうか。記録時に自分で選ぶ。
+  // 未定義の古いメモは今までどおり完了を持たせる(既にある140件の挙動を変えないため)。
+  const src = l || {};
+  const o = normalizeEditHistory({
+    completed: false, completedAt: null, tags: [], wantAnswer: false, urgentClaude: false, ...src
+  });
+  o.trackDone = src.trackDone === undefined ? true : src.trackDone === true;
+  return o;
 }
 function normalizeNote(n) {
   return {
@@ -2965,7 +2979,12 @@ function renderLogs() {
       const tagHtml = project
         ? `<button class="log-tag" data-retag>📎 ${escapeHtml(project.name || "無題")}<span class="remove">✕</span></button>`
         : `<button class="log-assign-btn" data-assign>＋ プロジェクトに紐付け</button>`;
-      const completeHtml = `<button class="log-complete-btn" data-complete>${log.completed ? "↩ 未完了に戻す" : "✓ 完了"}</button>`;
+      // 2026-09-16: 完了を持たないメモには「✓ 完了」を出さない。ただの記録として置いておくため。
+      // 後から必要になったら「✓を付ける」で足せる(付け外しはいつでもできる)。
+      const completeHtml = log.trackDone
+        ? `<button class="log-complete-btn" data-complete>${log.completed ? "↩ 未完了に戻す" : "✓ 完了"}</button>`
+           + `<button class="log-track-btn" data-untrack title="このメモから完了チェックを外す">✓を外す</button>`
+        : `<button class="log-track-btn" data-track title="このメモに完了チェックを付ける">✓を付ける</button>`;
       // 案C(2026-09-08): 直前の本文が残っている雑メモだけ「戻す」を出す
       const revertHtml = (!log.completed && typeof log.prevBody === "string" && log.prevBody !== log.text)
         ? `<button class="log-revert-btn" data-revert title="直前の本文に戻す(もう一度押すと元に戻る)">↩ 1つ前</button>`
@@ -3015,6 +3034,14 @@ function renderLogs() {
         });
       }
 
+      const trackBtn = item.querySelector("[data-track], [data-untrack]");
+      if (trackBtn) trackBtn.addEventListener("click", () => {
+        log.trackDone = !log.trackDone;
+        if (!log.trackDone) { log.completed = false; log.completedAt = null; }
+        saveState();
+        renderLogs();
+      });
+
       const revertBtn = item.querySelector("[data-revert]");
       if (revertBtn) revertBtn.addEventListener("click", () => {
         if (!revertToPrev(log, "text")) return;
@@ -3027,7 +3054,9 @@ function renderLogs() {
       if (assignBtn) assignBtn.addEventListener("click", () => openPickModal(log));
       const retagBtn = item.querySelector("[data-retag]");
       if (retagBtn) retagBtn.addEventListener("click", () => openPickModal(log));
-      item.querySelector("[data-complete]").addEventListener("click", () => {
+      // 完了チェックを持たないメモにはボタンが無い(2026-09-16)
+      const completeBtn = item.querySelector("[data-complete]");
+      if (completeBtn) completeBtn.addEventListener("click", () => {
         if (log.completed) {
           log.completed = false;
           log.completedAt = null;
@@ -3144,14 +3173,17 @@ function saveLog() {
   if (!text) return;
   const wantAnswerEl = document.getElementById("capture-want-answer");
   const wantAnswer = !!(wantAnswerEl && wantAnswerEl.checked);
+  const trackEl = document.getElementById("capture-track-done");
+  const trackDone = !!(trackEl && trackEl.checked);   // 既定は「持たせない」
   const newLogId = uid();
-  state.logs.push(normalizeLog({ id: newLogId, ts: Date.now(), text, projectId: null, wantAnswer }));
+  state.logs.push(normalizeLog({ id: newLogId, ts: Date.now(), text, projectId: null, wantAnswer, trackDone }));
   saveState();
   offerUndo(wantAnswer ? "雑メモを記録(☑回答希望つき)" : "雑メモを記録しました",
             undoStateItem("logs", newLogId, renderLogs));
   input.value = "";
   clearDraft("capture");
   if (wantAnswerEl) wantAnswerEl.checked = false; // 記録後はチェックをリセット(次のメモに引きずらない)
+  if (trackEl) trackEl.checked = false;
   autoGrowCapture(); // 記録後は既定の高さに戻す
   renderLogs();
 }
@@ -5352,6 +5384,7 @@ function stockDecide(action) {
     // 雑メモの本文をそのままタスクにする。長いものは頭だけ。
     const title = (log.text || "").replace(/\s+/g, " ").trim().slice(0, 120);
     addTask(title, action === "today" ? "today" : "thisWeek", "action", {});
+    log.trackDone = true;
     log.completed = true;
     log.completedAt = Date.now();
     stockHandled++;
@@ -5371,10 +5404,12 @@ function stockDecide(action) {
       showCopyToast("司令塔に置きました");
       loadShirei();
     });
+    log.trackDone = true;
     log.completed = true;
     log.completedAt = Date.now();
     stockHandled++;
   } else if (action === "close") {
+    log.trackDone = true;   // 片付けた事実が読み返せるように、完了チェックを持たせる
     log.completed = true;
     log.completedAt = Date.now();
     stockHandled++;
