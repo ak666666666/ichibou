@@ -274,6 +274,13 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .modal h3 { font-family: "Shippori Mincho", serif; font-size: 18px; margin-bottom: 12px; letter-spacing: 0.05em; }
 .modal p { color: var(--ink-soft); font-size: 14px; margin-bottom: 20px; line-height: 1.7; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+/* 司令塔: 気がかりを置く(2026-09-16) */
+.shirei-add { margin: 10px 0 4px; }
+.shirei-add-box { margin-top: 8px; border: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.shirei-add-input { width: 100%; min-height: 76px; resize: vertical; border: 1px solid var(--line); background: transparent; color: var(--ink); font-family: inherit; font-size: 14px; line-height: 1.8; padding: 10px 34px 10px 10px; }
+.shirei-add-input:focus { outline: none; border-color: var(--ink-soft); }
+.shirei-add-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.shirei-ended { font-size: 11px; color: var(--ink-mute); letter-spacing: 0.05em; margin-left: 8px; }
 /* 棚卸しモード(2026-09-16) */
 .capture-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .modal.stock { max-width: 560px; display: flex; flex-direction: column; gap: 14px; }
@@ -1282,6 +1289,28 @@ html { zoom: var(--ui-zoom, 1); }
     <div class="shirei-wrap">
       <div class="shirei-title">司令塔</div>
       <div class="shirei-sub" id="shirei-sub">読み込み中…</div>
+
+      <!-- 2026-09-16 晃良要望: 頭に居座っているものを、状態を持つ「案件」として置く入口。
+           雑メモ(出来事)ではなく、案件(いま自分が抱えているもの)の粒度で持つ。 -->
+      <div class="shirei-add">
+        <button class="btn ghost" id="shirei-add-toggle">＋ 気がかりを置く</button>
+        <div class="shirei-add-box" id="shirei-add-box" hidden>
+          <div class="copy-scope">
+            <textarea id="shirei-add-input" class="shirei-add-input" data-copy-src
+              placeholder="頭に居座っているものを1つ。1行目が名前、2行目から先は補足。&#10;例) 兄と現場の話&#10;　　　役割と今後をはっきりさせたい"></textarea>
+            <button class="copy-btn" data-copy type="button" title="この文章をコピー" aria-label="この文章をコピー">📋</button>
+          </div>
+          <div class="voice-status" id="shirei-add-voice-status">🎙 聞いています… もう一度タップで停止</div>
+          <div class="shirei-add-actions">
+            <span class="capture-hint">⌘/Ctrl + ENTER で置く</span>
+            <div class="action-right">
+              <button class="mic-btn" id="shirei-add-mic" title="音声入力" aria-label="音声入力">🎙</button>
+              <button class="btn" id="shirei-add-save">置く</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="shirei-body"></div>
     </div>
   </section>
@@ -1591,13 +1620,14 @@ html { zoom: var(--ui-zoom, 1); }
       <div class="stock-count" id="stock-count"></div>
     </div>
     <div class="stock-guide">
-      手があるか、だけ見る。<b>ある</b>ならタスクにして頭から降ろす。<b>ない</b>なら閉じる(天気判定)。
-      迷ったら「あとで」。考え込まないのがコツ。
+      1回で終わるなら<b>タスク</b>へ。ずっと抱えているなら<b>司令塔</b>へ(状態を持たせて、終わったら終わりにできる)。
+      手がないなら<b>閉じる</b>(天気判定)。迷ったら「まだ置く」。考え込まないのがコツ。
     </div>
     <div class="stock-body" id="stock-body"></div>
     <div class="stock-actions">
       <button class="btn" id="stock-today">いま動かす → 今日</button>
       <button class="btn ghost" id="stock-week">あとで → 今週</button>
+      <button class="btn ghost" id="stock-shirei">ずっと抱えてる → 司令塔へ</button>
       <button class="btn ghost" id="stock-close">手がない → 閉じる</button>
       <button class="btn ghost" id="stock-skip">まだ置く</button>
     </div>
@@ -4305,6 +4335,10 @@ function shireiCard(p, cls, rank) {
   if (p.owner_wait && p.minutes) badges.push('<span class="mins">約' + p.minutes + '分</span>');
   // 週次レビューの代わりに、放置を常時見せる(2026-08-16)。
   // 週に1度たまたま気づく、ではなく、開くたびに日数が目に入る形にする。
+  // 終わったものは「いつ終わったか」を出す。読んだときに「これは片付いている」と自分で確認できるように(2026-09-16)
+  if (cls === "done" && p.updated_at) {
+    badges.push('<span class="shirei-ended">' + shireiYmd(p.updated_at) + ' 終わり</span>');
+  }
   if (cls !== "frozen" && cls !== "done") {
     const stuck = shireiDaysSince(p.stalled_since);
     if (stuck !== null && stuck >= 3) {
@@ -4492,6 +4526,74 @@ function renderShirei() {
   const cnt = document.getElementById("count-shirei");
   if (cnt) cnt.textContent = wait.length;
 }
+
+// ===== 気がかりを司令塔に置く(2026-09-16 晃良要望)=====
+// 雑メモは「出来事」、司令塔は「いま自分が抱えているもの」。
+// 頭が重いのは出来事の量ではなく、状態の分からない案件が居座るからなので、
+// 状態(動いている/止まっている/凍結/終わった)を持てる側へ直接置けるようにする。
+async function shireiAddConcern() {
+  const el = document.getElementById("shirei-add-input");
+  const btn = document.getElementById("shirei-add-save");
+  if (!el || !btn) return;
+  const raw = (el.value || "").trim();
+  if (!raw) return;
+
+  const lines = raw.split("\n");
+  const name = (lines[0] || "").trim().slice(0, 80);
+  const purpose = lines.slice(1).join("\n").trim().slice(0, 400);
+  if (!name) return;
+
+  btn.disabled = true;
+  const row = {
+    id: "c_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name, purpose,
+    dept: "気がかり",
+    status: "active",
+    sort: 50   // 既定100より前。自分で置いたものが埋もれないように
+  };
+  try {
+    const { error } = await sb.from("ichibou_projects").insert(row);
+    if (error) throw error;
+    el.value = "";
+    el.dispatchEvent(new Event("input"));
+    // 入力欄にフォーカスが残っていると deferRender が司令塔の再描画を保留してしまい、
+    // 置いたばかりのカードがすぐ出てこない。先に外す。
+    el.blur();
+    document.getElementById("shirei-add-box").hidden = true;
+    shireiProjects = [row, ...(shireiProjects || [])];   // 待たずに画面へ出す
+    renderShirei();
+    showCopyToast("司令塔に置きました");
+    loadShirei();                                        // 正は Supabase 側で取り直す
+  } catch (e) {
+    console.error("shirei add error:", e);
+    alert("置けませんでした。通信を確認してもう一度お試しください。");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+(function bindShireiAdd() {
+  const toggle = document.getElementById("shirei-add-toggle");
+  const box = document.getElementById("shirei-add-box");
+  const el = document.getElementById("shirei-add-input");
+  const save = document.getElementById("shirei-add-save");
+  if (!toggle || !box || !el || !save) return;
+
+  toggle.addEventListener("click", () => {
+    box.hidden = !box.hidden;
+    if (!box.hidden) el.focus();
+  });
+  save.addEventListener("click", () => { void shireiAddConcern(); });
+  // Enter は改行。確定は ⌘/Ctrl + Enter(他の入力欄と揃える)
+  el.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); void shireiAddConcern(); }
+  });
+  el.addEventListener("input", () => {
+    if (!el.value) { el.style.height = ""; return; }
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 320) + "px";
+  });
+})();
 
 // ---------- 操作(イベント委譲。再描画してもハンドラが外れない) ----------
 (function bindShirei() {
@@ -5253,6 +5355,25 @@ function stockDecide(action) {
     log.completed = true;
     log.completedAt = Date.now();
     stockHandled++;
+  } else if (action === "shirei") {
+    // 1回で終わらない・ずっと頭に居座っているものは、状態を持てる司令塔へ移す(2026-09-16)
+    const lines = (log.text || "").split("\n");
+    const name = (lines[0] || "").trim().slice(0, 80);
+    const purpose = lines.slice(1).join("\n").trim().slice(0, 400);
+    if (!name) return;
+    const row = {
+      id: "c_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name, purpose, dept: "気がかり", status: "active", sort: 50
+    };
+    sb.from("ichibou_projects").insert(row).then(({ error }) => {
+      if (error) { console.error("stock->shirei error:", error); alert("司令塔へ移せませんでした。通信を確認してください。"); return; }
+      shireiProjects = [row, ...(shireiProjects || [])];
+      showCopyToast("司令塔に置きました");
+      loadShirei();
+    });
+    log.completed = true;
+    log.completedAt = Date.now();
+    stockHandled++;
   } else if (action === "close") {
     log.completed = true;
     log.completedAt = Date.now();
@@ -5267,7 +5388,7 @@ function stockDecide(action) {
 (function bindStock() {
   const start = document.getElementById("stock-start");
   if (start) start.addEventListener("click", stockOpen);
-  const map = { "stock-today": "today", "stock-week": "week", "stock-close": "close", "stock-skip": "skip" };
+  const map = { "stock-today": "today", "stock-week": "week", "stock-shirei": "shirei", "stock-close": "close", "stock-skip": "skip" };
   Object.keys(map).forEach(id => {
     const b = document.getElementById(id);
     if (b) b.addEventListener("click", () => stockDecide(map[id]));
@@ -7615,6 +7736,7 @@ document.getElementById("inbox-next-modal").addEventListener("click", (e) => {
   bindMic("capture-mic", "capture-input", "capture-voice-status");
   bindMic("task-mic", "task-input-title", "task-voice-status");
   bindMic("note-mic", "note-edit-body", "note-voice-status");     // 2026-08-16 追加   // 2026-08-15 追加
+  bindMic("shirei-add-mic", "shirei-add-input", "shirei-add-voice-status");   // 2026-09-16 気がかりを置く
 })();
 
 // ===== 全体の文字サイズ切替 =====
