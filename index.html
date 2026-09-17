@@ -277,8 +277,14 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .modal h3 { font-family: "Shippori Mincho", serif; font-size: 18px; margin-bottom: 12px; letter-spacing: 0.05em; }
 .modal p { color: var(--ink-soft); font-size: 14px; margin-bottom: 20px; line-height: 1.7; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+/* 司令塔: PCでやる(2026-09-17) */
+.shirei-topc { margin-top: 8px; padding: 5px 10px; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-size: 11.5px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
+.shirei-topc:hover { border-color: var(--accent); color: var(--accent); }
+.shirei-topc.on { border-style: dashed; color: var(--ink-mute); cursor: default; }
+.shirei-topc.on:hover { border-color: var(--line); color: var(--ink-mute); }
 /* 司令塔: 気がかりを置く(2026-09-16) */
 .shirei-add { margin: 10px 0 4px; }
+.shirei-add-box[hidden] { display: none; }
 .shirei-add-box { margin-top: 8px; border: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .shirei-add-input { width: 100%; min-height: 76px; resize: vertical; border: 1px solid var(--line); background: transparent; color: var(--ink); font-family: inherit; font-size: 14px; line-height: 1.8; padding: 10px 34px 10px 10px; }
 .shirei-add-input:focus { outline: none; border-color: var(--ink-soft); }
@@ -988,8 +994,17 @@ html { zoom: var(--ui-zoom, 1); }
 .shirei-nm .stale { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--amber); border: 1px solid var(--amber); border-radius: 99px; padding: 0 6px; font-weight: 400; }
 .shirei-nm .ping { font-family: "JetBrains Mono", monospace; font-size: 10px; color: #fff; background: var(--green); border-radius: 99px; padding: 1px 7px; font-weight: 400; }
 .shirei-nm .caret { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-mute); font-weight: 400; }
-.shirei-purpose { font-size: 12.5px; color: var(--ink-mute); margin-top: 2px; }
-.shirei-next { font-size: 14px; margin-top: 8px; }
+.shirei-purpose { font-size: 12.5px; color: var(--ink-mute); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 2026-09-17: 長文をそのまま出すと1枚で1画面を超える。既定は畳んで、必要な時だけ開く */
+.clamp { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp.c2 { -webkit-line-clamp: 2; }
+.clamp.c3 { -webkit-line-clamp: 3; }
+.shirei-more { display: inline-block; margin-top: 4px; padding: 2px 8px; background: transparent; border: 1px solid var(--line); color: var(--ink-mute); font-size: 10.5px; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; cursor: pointer; }
+.shirei-more:hover { color: var(--ink); border-color: var(--ink-soft); }
+/* 次の一手は太字をやめる。数百字が太字で並ぶと、画面が真っ黒に見えて読む気が失せる */
+.shirei-next { font-size: 14px; margin-top: 8px; line-height: 1.85; }
+.shirei-next b { font-weight: 500; }
+.shirei-hist { font-size: 12.5px; color: var(--ink-soft); line-height: 1.8; margin-top: 4px; white-space: pre-wrap; }
 .shirei-next b { color: var(--ink); }
 .shirei-next .arrow { color: var(--accent); font-family: "JetBrains Mono", monospace; margin-right: 6px; }
 .shirei-blk { font-size: 12.5px; color: var(--ink-soft); margin-top: 5px; padding-left: 2px; }
@@ -4378,6 +4393,26 @@ function shireiMsgHtml(r) {
 }
 
 // ---------- 描画 ----------
+// 2026-09-17: 司令塔が「37画面ぶんの高さ」になっていた。原因は表示側ではなくデータ側で、
+// next_action に最大1036字、progress に最大13,494字が入っていた(実測)。
+// 書き込みルールは watcher_prompt.md 側で締めたうえで、表示側でも必ず畳む二重の防波堤にする。
+const shireiLongOpen = new Set();
+
+
+/** 長い本文を既定で畳んで出す。短いものはそのまま(ボタンを出さない)。 */
+function shireiLongBlock(text, key, cls, lines, limit) {
+  const t = (text || "").trim();
+  if (!t) return "";
+  const open = shireiLongOpen.has(key);
+  const long = t.length > limit;
+  let h = '<div class="' + cls + (long && !open ? " clamp c" + lines : "") + '">' + escapeHtml(t) + "</div>";
+  if (long) {
+    h += '<button class="shirei-more" data-more="' + escapeHtml(key) + '">'
+       + (open ? "▴ 畳む" : "▾ 続き(あと" + (t.length - limit) + "字)") + "</button>";
+  }
+  return h;
+}
+
 function shireiCard(p, cls, rank) {
   const steps = shireiStepsOf(p.id);
   const doneN = steps.filter(s => s.done).length;
@@ -4417,27 +4452,50 @@ function shireiCard(p, cls, rank) {
   h += '<span class="caret">' + (open ? "閉じる ▲" : (steps.length ? "やり方 ▼" : "開く ▼")) + '</span>';
   h += '</div>';
   if (p.purpose)     h += '<div class="shirei-purpose">' + escapeHtml(p.purpose) + '</div>';
-  if (p.next_action) h += '<div class="shirei-next"><span class="arrow">▶</span><b>' + escapeHtml(p.next_action) + '</b></div>';
+  if (p.next_action) {
+    const nOpen = shireiLongOpen.has("next:" + p.id);
+    const nLong = p.next_action.length > 60;
+    h += '<div class="shirei-next' + (nLong && !nOpen ? ' clamp c2' : '') + '">'
+       + '<span class="arrow">▶</span><b>' + escapeHtml(p.next_action) + '</b></div>';
+    if (nLong) {
+      h += '<button class="shirei-more" data-more="next:' + p.id + '">'
+         + (nOpen ? "▴ 畳む" : "▾ 続き(あと" + (p.next_action.length - 60) + "字)") + "</button>";
+    }
+  }
   if (p.blocker && p.blocker !== "none") {
-    h += '<div class="shirei-blk"><span class="tag">' + escapeHtml(SHIREI_BLOCKER_LABEL[p.blocker] || p.blocker) + '</span>'
-       + escapeHtml(p.blocker_note || "") + '</div>';
+    const note = (p.blocker_note || "").trim();
+    h += '<div class="shirei-blk' + (note.length > 40 ? ' clamp c2' : '') + '">'
+       + '<span class="tag">' + escapeHtml(SHIREI_BLOCKER_LABEL[p.blocker] || p.blocker) + '</span>'
+       + escapeHtml(note) + '</div>';
   }
   if (steps.length) {
     const pct = Math.round(doneN / steps.length * 100);
     h += '<div class="shirei-prog"><div class="bar"><i style="width:' + pct + '%"></i></div>'
        + '<span class="txt">' + doneN + '/' + steps.length + ' 完了</span></div>';
   }
-  const meta = [];
-  if (p.progress)   meta.push(p.progress);
-  if (p.last_touch) meta.push("実体の最終更新 " + shireiYmd(p.last_touch));
-  if (meta.length)  h += '<div class="shirei-meta">' + escapeHtml(meta.join(" · ")) + '</div>';
+  // 2026-09-17 晃良要望: 回答タブにしかなかった「🖥 PCでやる」を司令塔にも。
+  // スマホで読んで「これはPCで手を動かす」と分かった時に、開かずに1タップで積めるようにする。
+  if (cls !== "done" && cls !== "frozen") {
+    const stacked = shireiPcStacked(p);
+    h += '<button class="shirei-topc' + (stacked ? ' on' : '') + '" data-topc="' + p.id + '"'
+       + (stacked ? ' disabled title="すでにタスクに積んであります"' : ' title="タスクへ積みます。次にPCを開いた時にタスクタブで拾えます"')
+       + '>' + (stacked ? '🖥 積んである' : '🖥 PCでやる') + '</button>';
+  }
+
+  // progress(最大13,494字)は見出しに出さない。開いた時に「これまで」として畳んで出す
+  if (p.last_touch) h += '<div class="shirei-meta">最終更新 ' + shireiYmd(p.last_touch) + '</div>';
   h += '</div>';
 
   // --- 展開部 ---
   if (open) {
     h += '<div class="shirei-body">';
 
-    h += '<div class="shirei-sech">やり方</div>';
+    if (p.progress) {
+      h += '<div class="shirei-sech">これまで</div>';
+      h += shireiLongBlock(p.progress, "prog:" + p.id, "shirei-hist", 3, 140);
+    }
+
+    h += '<div class="shirei-sech' + (p.progress ? ' mt' : '') + '">やり方</div>';
     if (!steps.length) {
       h += '<div class="shirei-empty">手順はまだ書いていません。下の入力欄で「手順を出して」と送れば、私が調べて並べます。</div>';
     } else {
@@ -4494,6 +4552,44 @@ function shireiCard(p, cls, rank) {
   return h;
 }
 
+// 同じ案件を二重に積まないための判定。タスク側のタイトルと突き合わせる(2026-09-17)
+function shireiPcTitle(p) { return "🖥 " + (p.name || "無題"); }
+function shireiPcStacked(p) {
+  const want = shireiPcTitle(p);
+  return (tasksArr() || []).some(t => t && !t.completed && t.title === want);
+}
+
+/** 司令塔の案件を「PCでやる」タスクとして積む。案件自体は司令塔に残す(まだ終わっていないため)。 */
+function shireiToPc(pid) {
+  const p = (shireiProjects || []).find(x => x.id === pid);
+  if (!p) return;
+  if (shireiPcStacked(p)) { showCopyToast("すでに積んであります"); return; }
+
+  const note = [
+    p.next_action ? "次の一手: " + p.next_action : "",
+    p.purpose || "",
+    p.blocker && p.blocker !== "none" ? "詰まり: " + (SHIREI_BLOCKER_LABEL[p.blocker] || p.blocker) + " " + (p.blocker_note || "") : "",
+    "(一望の司令塔から / " + p.id + ")"
+  ].filter(Boolean).join("\n").slice(0, 600);
+
+  const newTaskId = uid();
+  tasksArr().push(normalizeTask({
+    id: newTaskId, title: shireiPcTitle(p), bucket: "today", type: "action", note
+  }));
+  saveState();
+  renderTasks();
+  renderShirei();
+  offerUndo("PCでやるタスクに積みました", () => {
+    const arr = tasksArr();
+    const i = arr.findIndex(x => x && x.id === newTaskId);
+    if (i !== -1) arr.splice(i, 1);
+    saveState();
+    renderTasks();
+    renderShirei();
+    return { msg: "取り消しました" };
+  });
+}
+
 function shireiSection(title, hint, items, cls, headCls, ranked) {
   if (!items.length) return "";
   let h = '<div class="shirei-sec"><div class="shirei-h ' + (headCls || "") + '">' + escapeHtml(title);
@@ -4527,11 +4623,11 @@ function renderShirei() {
   const now = new Date();
   const dow = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
   if (subEl) {
-    subEl.innerHTML = (now.getMonth() + 1) + "月" + now.getDate() + "日(" + dow + ") — "
+    subEl.innerHTML = (now.getMonth() + 1) + "/" + now.getDate() + "(" + dow + ")　"
       + (wait.length
-          ? '<span class="warn">あなた待ち ' + wait.length + '件' + (waitMins ? '(約' + waitMins + '分)' : '') + '</span> / '
-          : 'あなた待ちなし / ')
-      + '動いている ' + active.length + ' / 止まっている ' + stall.length + ' / 凍結 ' + frozen.length;
+          ? '<span class="warn">あなた待ち ' + wait.length + (waitMins ? '・約' + waitMins + '分' : '') + '</span>'
+          : 'あなた待ち 0')
+      + '　動 ' + active.length + '　止 ' + stall.length + '　凍 ' + frozen.length;
   }
 
   let h = "";
@@ -4542,19 +4638,19 @@ function renderShirei() {
   h += shireiStrip(wait.length);
 
   if (wait.length) {
-    h += shireiSection("あなたを待っている", "この順にやると速い — 上ほど短い", wait, "wait", "wait", true);
+    h += shireiSection("あなたを待っている", "上ほど早く終わる", wait, "wait", "wait", true);
   } else {
     h += '<div class="shirei-sec"><div class="shirei-h">あなたを待っている<span class="n">なし</span></div>'
        + '<div class="shirei-empty">あなたが手を動かさないと進まないものは、いまありません。</div></div>';
   }
   h += shireiTaskSection();
-  h += shireiSection("動いている", "ここに集中する", active, "active");
+  h += shireiSection("動いている", "", active, "active");
   h += shireiSection("止まっている", "", stall, "stall");
 
   if (frozen.length) {
     h += '<div class="shirei-sec"><div class="shirei-h shirei-fold" data-fold="frozen">'
        + '<span class="caret">' + (shireiFrozenOpen ? "▾" : "▸") + '</span>凍結'
-       + '<span class="n">' + frozen.length + '件 — 見なくてよい</span></div>';
+       + '<span class="n">' + frozen.length + '件</span></div>';
     if (shireiFrozenOpen) h += frozen.map(p => shireiCard(p, "frozen", 0)).join("");
     h += '</div>';
   }
@@ -4565,11 +4661,7 @@ function renderShirei() {
   }
 
   h += '<div class="shirei-sec"><div class="shirei-h shirei-fold" data-goto2="history">'
-     + '私と晃良がやったこと<span class="n">履歴タブで見る →</span></div></div>';
-
-  h += '<div class="shirei-meta" style="margin-top:18px;">'
-     + 'この画面は開くたびに Supabase へ問い合わせて組み立てています。保存された文章ではないので、古くなりません。'
-     + '</div>';
+     + 'これまでの記録<span class="n">履歴タブ →</span></div></div>';
 
   body.innerHTML = h;
 
@@ -4662,6 +4754,19 @@ async function shireiAddConcern() {
 
     const fold = ev.target.closest("[data-fold]");
     if (fold) { shireiFrozenOpen = !shireiFrozenOpen; renderShirei(); return; }
+
+    const more = ev.target.closest("[data-more]");
+    if (more) {
+      ev.stopPropagation();
+      const k = more.dataset.more;
+      if (shireiLongOpen.has(k)) shireiLongOpen.delete(k); else shireiLongOpen.add(k);
+      renderShirei();
+      return;
+    }
+
+    // 見出しの中に置いてあるので、カードの開閉より先に拾って止める(2026-09-17)
+    const topc = ev.target.closest("[data-topc]");
+    if (topc) { ev.stopPropagation(); shireiToPc(topc.dataset.topc); return; }
 
     // 2026-08-19: 会話の折りたたみ。古いやりとり / 長い1件、どちらもタップで開閉する
     const thmore = ev.target.closest("[data-thmore]");
