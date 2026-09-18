@@ -2200,6 +2200,22 @@ function captureEditingNote() {
   const n = state.notes.find(x => x.id === editingNoteId);
   return n ? JSON.parse(JSON.stringify(n)) : null;
 }
+// 雑メモのインライン編集も同じように守る(2026-09-18)。
+// state を丸ごと差し替えると、打っている途中の文字は DOM にしか無いので消える。
+function captureEditingLog() {
+  const el = document.activeElement;
+  const box = el && el.closest && el.closest(".log-text[data-id]");
+  if (!box) return null;
+  return { id: box.dataset.id, text: box.innerText };
+}
+function restoreEditingLog(snap) {
+  if (!snap || !snap.id) return;
+  if (!Array.isArray(state.logs)) state.logs = [];
+  const l = state.logs.find(x => x && x.id === snap.id);
+  if (l) l.text = snap.text;          // 打っていた側を残す(まだ保存前なので、こちらが新しい)
+  setDraft("log:" + snap.id, snap.text);
+}
+
 function restoreEditingNote(snapshot) {
   if (!snapshot) return;
   if (!Array.isArray(state.notes)) state.notes = [];
@@ -2262,6 +2278,7 @@ async function pullFromCloud() {
       const localStr = JSON.stringify(state);
       if (remoteStr !== localStr) {
         const editingSnap = captureEditingNote();
+      const editingLog = captureEditingLog();
         state = data.data;
         if (!state.projects) state.projects = [];
         if (!state.logs) state.logs = [];
@@ -2271,6 +2288,8 @@ async function pullFromCloud() {
         if (!state.tasks) state.tasks = [];
         normalizeState(state);
         restoreEditingNote(editingSnap);
+      restoreEditingLog(editingLog);
+        restoreEditingLog(editingLog);
         saveLocal();
         lastSyncedData = remoteStr;
         safeRenderAll("pullFromCloud");
@@ -2290,6 +2309,7 @@ function subscribeRealtime() {
       if (newStr === lastSyncedData) return;
       if (newStr === JSON.stringify(state)) return;
       const editingSnap = captureEditingNote();
+      const editingLog = captureEditingLog();
       state = newData;
       if (!state.projects) state.projects = [];
       if (!state.logs) state.logs = [];
@@ -2299,6 +2319,7 @@ function subscribeRealtime() {
       if (!state.tasks) state.tasks = [];
       normalizeState(state);
       restoreEditingNote(editingSnap);
+      restoreEditingLog(editingLog);
       saveLocal();
       lastSyncedData = newStr;
       safeRenderAll("realtime");
@@ -2909,8 +2930,21 @@ function isSystemLog(l) {
   return /^▶続き\s*[:：]/.test((l && l.text) || "");
 }
 
+/** 書きかけが残っていればそちらを出す。保存前に描き直されても文字を失わない(2026-09-18) */
+function logDisplayText(log) {
+  if (log.completed) return log.text || "";
+  const d = getDraft("log:" + log.id);
+  return (d && d.trim() && d !== log.text) ? d : (log.text || "");
+}
+
 function renderLogs() {
   const list = document.getElementById("log-list");
+  if (!list) return;
+  // 2026-09-18 晃良報告:「記録済みの雑メモに追記して別の所をタップすると、書いた内容が全部消える」
+  // 原因: 描き直し系のうち renderLogs だけ編集中ガードが付いていなかった。
+  // 別端末やウォッチャーが state を更新 → realtime → renderLogs → list.innerHTML="" で、
+  // 打っていた文字が(DOMにしか無いので)そのまま消えていた。
+  if (deferRender("logs", renderLogs, "#view-capture")) return;
   list.innerHTML = "";
   const visibleLogs = state.logs.filter(l => !isSystemLog(l));
   const hiddenCount = state.logs.length - visibleLogs.length;
@@ -3067,7 +3101,7 @@ function renderLogs() {
       item.innerHTML = `
         ${copyBtnHtml(false)}
         <div class="log-time">${timeStr}${editedLabel}${completedLabel}</div>
-        <div class="log-text" ${editableAttr} data-copy-src data-id="${log.id}">${escapeHtml(log.text)}</div>
+        <div class="log-text" ${editableAttr} data-copy-src data-id="${log.id}">${escapeHtml(logDisplayText(log))}</div>
         ${tagsRowHtml}
         <div class="log-actions">${tagHtml}${wantBtn}${urgentBtn}${revertHtml}${completeHtml}<button class="log-attach-btn" data-attach title="URLリンクを添付">📎</button><button class="log-delete">削除</button></div>
       `;
@@ -3081,16 +3115,24 @@ function renderLogs() {
       // ===== 雑メモ後編集: blurで保存、空なら削除(完了済みは編集不可なので発火しない) =====
       const textEl = item.querySelector(".log-text");
       if (!log.completed) {
+        // 打つそばから下書きに逃がす。DOMが作り直されても文字が残るようにする(2026-09-18)
+        textEl.addEventListener("input", () => {
+          setDraft("log:" + log.id, textEl.innerText);
+        });
         textEl.addEventListener("blur", () => {
           const newText = textEl.innerText.trim();
           if (!newText) {
+            clearDraft("log:" + log.id);
             state.logs = state.logs.filter(l => l.id !== log.id);
             saveState(); renderLogs();
           } else if (newText !== log.text) {
             recordEdit(log, log.text, newText);   // 案C: 直前の1版を退避 + 更新の点を記録
             log.text = newText;
+            clearDraft("log:" + log.id);          // 保存できたので下書きは捨てる
             saveState();
             renderLogs();                          // ↩ 戻すボタンを出すため描き直す
+          } else {
+            clearDraft("log:" + log.id);
           }
         });
       }
