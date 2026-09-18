@@ -1988,6 +1988,8 @@ function normalizeTask(t) {
     urgentClaude: t.urgentClaude === true,
     createdAt: t.createdAt || Date.now(),
     updatedAt: t.updatedAt || t.createdAt || Date.now(),
+    // 2026-09-18: 司令塔から積んだタスクは、どの案件のものかを覚えておく(完了を双方向で同期する)
+    shireiPid: typeof t.shireiPid === "string" ? t.shireiPid : null,
     // 2026-09-08 案C: 更新履歴(最大20件)と直前の本文1版
     history: Array.isArray(t.history) ? t.history.slice(-EDIT_HIST_MAX) : [],
     prevBody: typeof t.prevBody === "string" ? t.prevBody : null,
@@ -4589,13 +4591,68 @@ function shireiPcStacked(p) {
   return (tasksArr() || []).some(t => t && !t.completed && t.title === want);
 }
 
+/**
+ * タスク側の完了を司令塔へ返す(2026-09-18 晃良要望)。
+ *
+ * 「PCでやった場合にタスクタブの方も司令塔の方も終了チェックされていてほしい」。
+ * ただし案件そのものを done にはしない。案件はPCの一手だけで終わるとは限らず、
+ * 勝手に閉じると「終わった」に紛れて見失う。代わりに:
+ *   ・owner_wait を下ろす → 「あなたを待っている」から外れる(晃良の側の手は終わったので)
+ *   ・do_now を「✓ PC分は完了」にして、カードを見た瞬間に済んだと分かるようにする
+ * 案件ごと終わらせたい時は、今までどおりカードの「✓ この件は終わり」を押す。
+ */
+async function shireiSyncFromTask(pid, done) {
+  const p = (shireiProjects || []).find(x => String(x.id) === String(pid));
+  if (!p) return;
+  const patch = done
+    ? { owner_wait: false, do_now: "✓ PCでやる分は完了(" + formatTsShort(Date.now()) + ")" }
+    : { owner_wait: true,  do_now: "" };
+  const before = { owner_wait: p.owner_wait, do_now: p.do_now };
+  Object.assign(p, patch);
+  renderShirei();
+  try {
+    const { error } = await sb.from("ichibou_projects").update(patch).eq("id", p.id);
+    if (error) throw error;
+    if (done) {
+      await sb.from("ichibou_activity").insert({
+        project_id: p.id, kind: "do",
+        what: "「PCでやる」タスクを完了(一望のタスクタブから)"
+      });
+    }
+  } catch (e) {
+    console.error("shirei sync error:", e);
+    Object.assign(p, before);
+    renderShirei();
+    showCopyToast("司令塔側を更新できませんでした(通信)");
+  }
+}
+
+/** PCに貼り付けるための文面。やること → 背景 → 出どころ の順。 */
+function shireiPcClipText(p) {
+  return [
+    "【一望・司令塔から】" + (p.name || "無題"),
+    "",
+    "やること: " + ((p.do_now || "").trim() || "(未記入)"),
+    "",
+    (p.next_action || "").trim(),
+    (p.blocker && p.blocker !== "none" ? "\n詰まり: " + (SHIREI_BLOCKER_LABEL[p.blocker] || p.blocker) + " " + (p.blocker_note || "") : ""),
+    "",
+    "(project_id = " + p.id + ")"
+  ].filter(x => x !== null && x !== undefined).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 /** 司令塔の案件を「PCでやる」タスクとして積む。案件自体は司令塔に残す(まだ終わっていないため)。 */
 function shireiToPc(pid) {
   const p = (shireiProjects || []).find(x => x.id === pid);
   if (!p) return;
   // 既に積んであるなら、積み直さずに現物を見せる。
   // 押せない灰色のボタンにしていたら「ボタンが無い」と読まれた(2026-09-18 晃良指摘)
-  if (shireiPcStacked(p)) { shireiGoTab("tasks"); showCopyToast("タスクに積んであります"); return; }
+  if (shireiPcStacked(p)) {
+    void writeClipboard(shireiPcClipText(p));   // もう一度押したら、貼り直せるようにコピーだけし直す
+    shireiGoTab("tasks");
+    showCopyToast("コピーしました(タスクにも積んであります)");
+    return;
+  }
 
   const note = [
     p.next_action ? "次の一手: " + p.next_action : "",
@@ -4604,14 +4661,20 @@ function shireiToPc(pid) {
     "(一望の司令塔から / " + p.id + ")"
   ].filter(Boolean).join("\n").slice(0, 600);
 
+  // PCに貼れる形をその場でクリップボードへ(2026-09-18 晃良要望)。
+  // タスクタブへ行ってコピーし直す二度手間をなくす。クリック直後に呼ぶ(ユーザー操作の中でないと弾かれる)
+  void writeClipboard(shireiPcClipText(p));
+
   const newTaskId = uid();
   tasksArr().push(normalizeTask({
-    id: newTaskId, title: shireiPcTitle(p), bucket: "today", type: "action", note
+    id: newTaskId, title: shireiPcTitle(p), bucket: "today", type: "action",
+    shireiPid: p.id,   // 完了したときに司令塔側も動かすための紐(2026-09-18)
+    note
   }));
   saveState();
   renderTasks();
   renderShirei();
-  offerUndo("PCでやるタスクに積みました", () => {
+  offerUndo("コピーしました。タスクにも積んであります", () => {
     const arr = tasksArr();
     const i = arr.findIndex(x => x && x.id === newTaskId);
     if (i !== -1) arr.splice(i, 1);
@@ -4872,6 +4935,17 @@ async function shireiSetStatus(projectId, next, label) {
   const before = p.status;
   p.status = next;
   if (next === "done") p.owner_wait = false;
+  // 司令塔で閉じたら、積んである「PCでやる」タスクも閉じる(逆方向の同期 / 2026-09-18)
+  const linked = (tasksArr() || []).filter(x => x && (x.shireiPid === p.id || x.title === shireiPcTitle(p)));
+  if (linked.length) {
+    linked.forEach(x => {
+      if (next === "done") { x.completed = true; x.completedAt = x.completedAt || Date.now(); }
+      else if (before === "done") { x.completed = false; x.completedAt = null; }
+      x.updatedAt = Date.now();
+    });
+    saveState();
+    renderTasks();
+  }
   renderShirei();
   try {
     const patch = { status: next };
@@ -6324,6 +6398,8 @@ function taskItemEl(t) {
       ? { completed: true, completedAt: Date.now() }
       : { completed: false, completedAt: null });
     renderTasks();
+    // 司令塔から積んだタスクなら、向こう側も同じ状態にする(2026-09-18 晃良要望)
+    if (t.shireiPid) void shireiSyncFromTask(t.shireiPid, e.target.checked);
   });
 
   // タイトル編集(完了済みは編集不可 = 雑メモ Phase B と同じ仕様)
