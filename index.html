@@ -280,8 +280,8 @@ nav.tabs::-webkit-scrollbar { display: none; }
 /* 司令塔: PCでやる(2026-09-17) */
 .shirei-topc { margin-top: 8px; padding: 5px 10px; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-size: 11.5px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
 .shirei-topc:hover { border-color: var(--accent); color: var(--accent); }
-.shirei-topc.on { border-style: dashed; color: var(--ink-mute); cursor: default; }
-.shirei-topc.on:hover { border-color: var(--line); color: var(--ink-mute); }
+.shirei-topc.on { border-style: dashed; color: var(--ink-mute); }
+.shirei-topc.on:hover { border-color: var(--ink-soft); color: var(--ink); }
 /* 司令塔: 気がかりを置く(2026-09-16) */
 .shirei-add { margin: 10px 0 4px; }
 .shirei-add-box[hidden] { display: none; }
@@ -4508,8 +4508,8 @@ function shireiCard(p, cls, rank) {
   if (cls !== "done" && cls !== "frozen") {
     const stacked = shireiPcStacked(p);
     h += '<button class="shirei-topc' + (stacked ? ' on' : '') + '" data-topc="' + p.id + '"'
-       + (stacked ? ' disabled title="すでにタスクに積んであります"' : ' title="タスクへ積みます。次にPCを開いた時にタスクタブで拾えます"')
-       + '>' + (stacked ? '🖥 積んである' : '🖥 PCでやる') + '</button>';
+       + ' title="' + (stacked ? 'タスクタブの現物へ移動します' : 'タスクへ積みます。次にPCを開いた時にタスクタブで拾えます') + '"'
+       + '>' + (stacked ? '🖥 タスクにある →' : '🖥 PCでやる') + '</button>';
   }
 
   // progress(最大13,494字)は見出しに出さない。開いた時に「これまで」として畳んで出す
@@ -4593,7 +4593,9 @@ function shireiPcStacked(p) {
 function shireiToPc(pid) {
   const p = (shireiProjects || []).find(x => x.id === pid);
   if (!p) return;
-  if (shireiPcStacked(p)) { showCopyToast("すでに積んであります"); return; }
+  // 既に積んであるなら、積み直さずに現物を見せる。
+  // 押せない灰色のボタンにしていたら「ボタンが無い」と読まれた(2026-09-18 晃良指摘)
+  if (shireiPcStacked(p)) { shireiGoTab("tasks"); showCopyToast("タスクに積んであります"); return; }
 
   const note = [
     p.next_action ? "次の一手: " + p.next_action : "",
