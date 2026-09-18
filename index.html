@@ -277,6 +277,23 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .modal h3 { font-family: "Shippori Mincho", serif; font-size: 18px; margin-bottom: 12px; letter-spacing: 0.05em; }
 .modal p { color: var(--ink-soft); font-size: 14px; margin-bottom: 20px; line-height: 1.7; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+/* 司令塔: 決めたことの置き場(2026-09-18) */
+.shirei-dec-last { display: flex; align-items: baseline; gap: 6px; margin-top: 7px; font-size: 12.5px; color: var(--ink-soft); }
+.shirei-dec-last .mk { color: var(--accent); font-weight: 700; }
+.shirei-dec-last .wh { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); white-space: nowrap; }
+.shirei-decs { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.shirei-decs .dec { display: flex; align-items: baseline; gap: 8px; font-size: 13px; line-height: 1.8; }
+.shirei-decs .dec .mk { font-weight: 700; width: 1em; flex: none; }
+.shirei-decs .dec .mk.decide { color: var(--accent); }
+.shirei-decs .dec .mk.drop { color: var(--ink-mute); }
+.shirei-decs .dec .mk.find { color: var(--green, #4a6b3a); }
+.shirei-decs .dec .tx { flex: 1; min-width: 0; }
+.shirei-decs .dec .wh { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); white-space: nowrap; }
+.shirei-decs .dec.more { color: var(--ink-mute); font-size: 11.5px; }
+.dec-kinds { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+.dec-kind { padding: 4px 10px; background: transparent; border: 1px solid var(--line); color: var(--ink-mute); font-size: 11.5px; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; cursor: pointer; transition: all 0.15s; }
+.dec-kind:hover { color: var(--ink); border-color: var(--ink-soft); }
+.dec-kind.on { border-color: var(--accent); color: var(--accent); background: rgba(200,80,46,0.06); font-weight: 500; }
 /* 司令塔: PCでやる(2026-09-17) */
 .shirei-topc { margin-top: 8px; padding: 5px 10px; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-size: 11.5px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; transition: all 0.15s; }
 .shirei-topc:hover { border-color: var(--accent); color: var(--accent); }
@@ -4514,6 +4531,14 @@ function shireiCard(p, cls, rank) {
        + '>' + (stacked ? '🖥 タスクにある →' : '🖥 PCでやる') + '</button>';
   }
 
+  // 自分が最後に決めたことを1行。読んだ瞬間に「ここまでは決まっている」と分かるように(2026-09-18)
+  const decs = shireiDecisionsOf(p.id);
+  if (decs.length) {
+    const d = decs[0];
+    h += '<div class="shirei-dec-last"><span class="mk">' + DECIDE_KINDS[d.kind].mark + '</span>'
+       + escapeHtml(d.what) + '<span class="wh">' + shireiYmd(d.created_at) + '</span></div>';
+  }
+
   // progress(最大13,494字)は見出しに出さない。開いた時に「これまで」として畳んで出す
   if (p.last_touch) h += '<div class="shirei-meta">最終更新 ' + shireiYmd(p.last_touch) + '</div>';
   h += '</div>';
@@ -4547,6 +4572,34 @@ function shireiCard(p, cls, rank) {
            + '</div>';
       }
     }
+
+    // --- 決めたこと(2026-09-18) ---
+    h += '<div class="shirei-sech mt">決めたこと</div>';
+    if (decs.length) {
+      h += '<div class="shirei-decs">';
+      decs.slice(0, 5).forEach(d => {
+        h += '<div class="dec"><span class="mk ' + d.kind + '">' + DECIDE_KINDS[d.kind].mark + '</span>'
+           + '<span class="tx">' + escapeHtml(d.what) + '</span>'
+           + '<span class="wh">' + shireiYmd(d.created_at) + '</span></div>';
+      });
+      if (decs.length > 5) h += '<div class="dec more">ほか ' + (decs.length - 5) + ' 件(履歴タブの「決めた」で全部読めます)</div>';
+      h += '</div>';
+    } else {
+      h += '<div class="shirei-empty">まだありません。決めた・やめた・わかった を1行で置くと、その分だけ頭から降ります。</div>';
+    }
+    const decDraft = getDraft("decide:" + p.id) || "";
+    h += '<div class="shirei-ask dec-ask">'
+       + '<div class="dec-kinds">'
+       + Object.keys(DECIDE_KINDS).map(k =>
+           '<button type="button" class="dec-kind' + (decideKind === k ? " on" : "") + '" data-deckind="' + k + '">'
+           + DECIDE_KINDS[k].mark + ' ' + DECIDE_KINDS[k].label + '</button>').join("")
+       + '</div>'
+       + '<textarea data-dec="' + p.id + '" placeholder="例) 9/21は休業にする / この総称ページは作らない / 画像の404は直っていた">' + escapeHtml(decDraft) + '</textarea>'
+       + '<div class="row"><button class="mic-btn mini" data-decmic="' + p.id + '" type="button" title="音声入力" aria-label="音声入力">🎙</button>'
+       + '<button class="shirei-send" data-decsend="' + p.id + '"' + (decideSending === p.id ? ' disabled' : '') + '>'
+       + (decideSending === p.id ? '残しています…' : '残す') + '</button>'
+       + '<span class="hint">Ctrl+Enter でも残せます</span>'
+       + '</div></div>';
 
     // --- 会話 ---
     h += '<div class="shirei-sech mt">分からないとき・状況を伝えるとき</div>';
@@ -4624,6 +4677,56 @@ async function shireiSyncFromTask(pid, done) {
     Object.assign(p, before);
     renderShirei();
     showCopyToast("司令塔側を更新できませんでした(通信)");
+  }
+}
+
+// ===== 決めたことの置き場(2026-09-18 晃良要望)=====
+// 「判断を外部に出して脳をクリアに保ちたい」。
+// 実測: ichibou_activity 446行のうち晃良が書いた行は2行だけだった。欄はあったが、書く口が無かった。
+// 頭に居座り続けるのは「まだ決まっていないこと」なので、決めた/やめた を外に出した時点で降りる。
+// 新しいテーブルもタブも作らない。既存の ichibou_activity に actor='akira' で1行積むだけ。
+const DECIDE_KINDS = {
+  decide: { label: "決めた",  mark: "◆" },
+  drop:   { label: "やめた",  mark: "×" },
+  find:   { label: "わかった", mark: "!" }
+};
+let decideKind = "decide";     // 選択中の動詞(カード共通)
+let decideSending = null;      // 送信中の project_id
+
+/** その案件で晃良自身が残した行(新しい順) */
+function shireiDecisionsOf(pid) {
+  return (shireiActivity || [])
+    .filter(a => a && a.actor === "akira" && String(a.project_id) === String(pid) && DECIDE_KINDS[a.kind])
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+async function shireiAddDecision(pid) {
+  const ta = document.querySelector('[data-dec="' + pid + '"]');
+  if (!ta) return;
+  const what = (ta.value || "").trim();
+  if (!what || decideSending) return;
+
+  // 入力欄にフォーカスが残っていると deferRender が再描画を保留し、
+  // 残した行がカードに出てこない(気がかり欄と同じ落とし穴 / 2026-09-18)
+  ta.blur();
+  decideSending = pid;
+  renderShirei();
+  const row = { project_id: pid, what: what.slice(0, 300), kind: decideKind, actor: "akira" };
+  try {
+    const { error } = await sb.from("ichibou_activity").insert(row);
+    if (error) throw error;
+    // 待たずに画面へ出す。正は次の loadShirei で揃う
+    shireiActivity = [{ ...row, created_at: new Date().toISOString() }, ...(shireiActivity || [])];
+    clearDraft("decide:" + pid);
+    showCopyToast(DECIDE_KINDS[decideKind].label + "を残しました");
+  } catch (e) {
+    console.error("decision insert error:", e);
+    alert("残せませんでした。通信を確認してもう一度お試しください。");
+  } finally {
+    decideSending = null;
+    const t2 = document.querySelector('[data-dec="' + pid + '"]');
+    if (t2) t2.value = "";
+    renderShirei();
   }
 }
 
@@ -4765,6 +4868,18 @@ function renderShirei() {
     const ta = body.querySelector('[data-ask="' + mic.dataset.shireimic + '"]');
     if (ta && window.bindMicEl) window.bindMicEl(mic, ta, null);
   });
+  // 決めたこと欄(2026-09-18): 音声・下書き保存・Ctrl+Enter
+  body.querySelectorAll("[data-decmic]").forEach(mic => {
+    const ta = body.querySelector('[data-dec="' + mic.dataset.decmic + '"]');
+    if (ta && window.bindMicEl) window.bindMicEl(mic, ta, null);
+  });
+  body.querySelectorAll("[data-dec]").forEach(ta => {
+    const pid = ta.dataset.dec;
+    ta.addEventListener("input", () => setDraft("decide:" + pid, ta.value));
+    ta.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); void shireiAddDecision(pid); }
+    });
+  });
 
   const cnt = document.getElementById("count-shirei");
   if (cnt) cnt.textContent = wait.length;
@@ -4849,6 +4964,11 @@ async function shireiAddConcern() {
 
     const fold = ev.target.closest("[data-fold]");
     if (fold) { shireiFrozenOpen = !shireiFrozenOpen; renderShirei(); return; }
+
+    const dk = ev.target.closest("[data-deckind]");
+    if (dk) { ev.stopPropagation(); decideKind = dk.dataset.deckind; renderShirei(); return; }
+    const ds = ev.target.closest("[data-decsend]");
+    if (ds) { ev.stopPropagation(); await shireiAddDecision(ds.dataset.decsend); return; }
 
     const more = ev.target.closest("[data-more]");
     if (more) {
@@ -5163,6 +5283,22 @@ function historyItems() {
   return historyFilter === "all" ? out : out.filter(x => x.who === historyFilter);
 }
 
+// ===== 決めたこと(2026-09-18)=====
+// 晃良が自分で残した行だけを横断で並べる。自分が何を決めてきたかを読み返すための面。
+function decisionItems() {
+  const pname = (pid) => {
+    const p = (shireiProjects || []).find(x => String(x.id) === String(pid));
+    return p ? p.name : "";
+  };
+  return (shireiActivity || [])
+    .filter(a => a && a.actor === "akira" && DECIDE_KINDS[a.kind])
+    .map(a => ({
+      at: a.created_at, proj: pname(a.project_id), text: a.what || "",
+      mark: DECIDE_KINDS[a.kind].mark, label: DECIDE_KINDS[a.kind].label
+    }))
+    .sort((a, b) => new Date(b.at) - new Date(a.at));
+}
+
 // ===== 更新履歴(案C 2026-09-08)=====
 // 各項目が持っている history(いつ更新したかの点)を横断して並べるだけ。追加保存はゼロ。
 function editHistoryItems() {
@@ -5188,10 +5324,13 @@ function renderHistory() {
   if (deferRender("history", renderHistory, "#view-history")) return;
 
   const isEdit = historyFilter === "edit";
-  const items = isEdit ? editHistoryItems() : historyItems();
+  const isDec  = historyFilter === "decided";
+  const items = isEdit ? editHistoryItems() : (isDec ? decisionItems() : historyItems());
   const sub = document.getElementById("history-sub");
   if (sub) sub.textContent = !items.length
-    ? (isEdit ? "まだ更新履歴はありません(次の編集から記録します)。" : "まだ記録がありません。")
+    ? (isDec ? "まだありません。司令塔のカードで「決めた・やめた・わかった」を残すとここに並びます。"
+             : isEdit ? "まだ更新履歴はありません(次の編集から記録します)。" : "まだ記録がありません。")
+    : isDec ? items.length + "件 — 晃良が自分で決めたことだけ。新しい順"
     : isEdit
       ? items.length + "件 — いつ何を書き直したか。記録は1項目あたり直近20件まで"
       : items.length + "件 — 新しい順。司令塔が「これから」、ここが「これまで」";
@@ -5206,14 +5345,31 @@ function renderHistory() {
   };
 
   let h = '<div class="hist-filter">'
-    + ["all", "claude", "akira", "edit"].map(f =>
+    + ["all", "claude", "akira", "decided", "edit"].map(f =>
         '<button type="button" class="hf' + (historyFilter === f ? " on" : "") + '" data-hf="' + f + '">'
-        + ({ all: "全部", claude: "私", akira: "晃良", edit: "更新" })[f] + '</button>').join("")
+        + ({ all: "全部", claude: "私", akira: "晃良", decided: "決めた", edit: "更新" })[f] + '</button>').join("")
     + '</div>';
 
   if (!items.length) {
     body.innerHTML = h + '<div class="shirei-empty">'
-      + (isEdit ? "まだ更新履歴はありません。" : "記録がありません。") + '</div>';
+      + (isDec ? "まだありません。" : isEdit ? "まだ更新履歴はありません。" : "記録がありません。") + '</div>';
+    return;
+  }
+
+  // 決めたこと: 何を決めたかだけを縦に並べる(2026-09-18)
+  if (isDec) {
+    let lastDayD = "";
+    items.forEach(x => {
+      const day = shireiYmd(x.at);
+      if (day !== lastDayD) { h += '<div class="hist-day">' + day + '</div>'; lastDayD = day; }
+      h += '<div class="hist-row akira">'
+         + '<span class="hm">' + shireiHm(x.at).slice(6) + '</span>'
+         + '<span class="hw">' + x.mark + '</span>'
+         + '<span class="hk" title="' + x.label + '">' + x.label + '</span>'
+         + '<span class="hx">' + (x.proj ? '<b>' + escapeHtml(x.proj) + '</b> ' : "") + escapeHtml(x.text) + '</span>'
+         + '</div>';
+    });
+    body.innerHTML = h;
     return;
   }
 
