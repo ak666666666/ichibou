@@ -1002,7 +1002,10 @@ html { zoom: var(--ui-zoom, 1); }
 .shirei-more { display: inline-block; margin-top: 4px; padding: 2px 8px; background: transparent; border: 1px solid var(--line); color: var(--ink-mute); font-size: 10.5px; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; cursor: pointer; }
 .shirei-more:hover { color: var(--ink); border-color: var(--ink-soft); }
 /* 次の一手は太字をやめる。数百字が太字で並ぶと、画面が真っ黒に見えて読む気が失せる */
-.shirei-next { font-size: 14px; margin-top: 8px; line-height: 1.85; }
+.shirei-next { font-size: 14px; margin-top: 8px; line-height: 1.85; display: flex; gap: 6px; align-items: baseline; }
+.shirei-next b { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* do_now が書かれておらず、本文から拾ってきた見出し。正確でない可能性があるので弱く出す */
+.shirei-next.guessed b { font-weight: 400; color: var(--ink-soft); }
 .shirei-next b { font-weight: 500; }
 .shirei-hist { font-size: 12.5px; color: var(--ink-soft); line-height: 1.8; margin-top: 4px; white-space: pre-wrap; }
 .shirei-next b { color: var(--ink); }
@@ -4398,6 +4401,28 @@ function shireiMsgHtml(r) {
 // 書き込みルールは watcher_prompt.md 側で締めたうえで、表示側でも必ず畳む二重の防波堤にする。
 const shireiLongOpen = new Set();
 
+/**
+ * 「結局なにをすればいいのか」の1行(2026-09-18 晃良指摘)。
+ *
+ * next_action の頭に 【今日 9/18(金) の前提 ※書き直し】前版は…4日連続の同型。 のような
+ * 経緯・訂正の説明が乗っていて、畳んだ2行がまるごとメタ説明で埋まっていた。
+ * 表示側で本文から抜き出すことも試したが、**文章の中にやること自体が書かれていない**ケースがあり、
+ * 推測すると誤った見出しを出してしまう(実測で失敗)。そこで `do_now` 欄をDBに新設し、
+ * 「やること1行」はそこから読む。空なら空と分かるようにして、書き手側(巡回)の責任を可視化する。
+ * 代用の抜き出しは 【…】 を剥がして最初の1文を取るだけに留める(推測しない)。
+ */
+function shireiHeadline(p) {
+  const explicit = String((p && p.do_now) || "").trim();
+  if (explicit) return { text: explicit, guessed: false };
+  let t = String((p && p.next_action) || "").trim();
+  let guard = 0;
+  while (/^【[^】]*】/.test(t) && guard++ < 5) t = t.replace(/^【[^】]*】/, "").trim();
+  const end = t.search(/[。\n]/);
+  let head = (end >= 0 ? t.slice(0, end + (t[end] === "。" ? 1 : 0)) : t).trim();
+  if (head.length > 72) head = head.slice(0, 72) + "…";
+  return { text: head, guessed: true };
+}
+
 
 /** 長い本文を既定で畳んで出す。短いものはそのまま(ボタンを出さない)。 */
 function shireiLongBlock(text, key, cls, lines, limit) {
@@ -4452,14 +4477,19 @@ function shireiCard(p, cls, rank) {
   h += '<span class="caret">' + (open ? "閉じる ▲" : (steps.length ? "やり方 ▼" : "開く ▼")) + '</span>';
   h += '</div>';
   if (p.purpose)     h += '<div class="shirei-purpose">' + escapeHtml(p.purpose) + '</div>';
-  if (p.next_action) {
+  if (p.next_action || p.do_now) {
     const nOpen = shireiLongOpen.has("next:" + p.id);
-    const nLong = p.next_action.length > 60;
-    h += '<div class="shirei-next' + (nLong && !nOpen ? ' clamp c2' : '') + '">'
-       + '<span class="arrow">▶</span><b>' + escapeHtml(p.next_action) + '</b></div>';
-    if (nLong) {
+    const head = shireiHeadline(p);
+    const detail = String(p.next_action || "").trim();
+    // 見出しは常に1行。読んだ瞬間に手が動く分だけ出す
+    if (head.text) {
+      h += '<div class="shirei-next' + (head.guessed ? ' guessed' : '') + '">'
+         + '<span class="arrow">▶</span><b>' + escapeHtml(head.text) + '</b></div>';
+    }
+    if (detail && detail !== head.text) {
+      if (nOpen) h += '<div class="shirei-hist">' + escapeHtml(detail) + '</div>';
       h += '<button class="shirei-more" data-more="next:' + p.id + '">'
-         + (nOpen ? "▴ 畳む" : "▾ 続き(あと" + (p.next_action.length - 60) + "字)") + "</button>";
+         + (nOpen ? "▴ 畳む" : "▾ くわしく(" + detail.length + "字)") + "</button>";
     }
   }
   if (p.blocker && p.blocker !== "none") {
