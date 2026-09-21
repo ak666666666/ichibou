@@ -661,6 +661,14 @@ html { zoom: var(--ui-zoom, 1); }
 .tasks-filter-btn:hover { border-color: var(--accent); }
 .tasks-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .tasks-filter-sep { color: var(--ink-mute); padding: 0 4px; }
+/* 並び順(2026-09-22 雑メモ xinen3911「時系列とか、自分で並び替えられるように」) */
+.tasks-sort { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; background: var(--bg-2); border-radius: 6px; margin: -12px 0 18px; }
+.tasks-sort-label { font-size: 12px; color: var(--ink-mute); margin-right: 2px; }
+.tasks-sort-hint { font-size: 11px; color: var(--ink-mute); width: 100%; }
+.task-move { display: inline-flex; gap: 2px; margin-left: auto; }
+.task-move button { font-family: inherit; font-size: 12px; line-height: 1; padding: 4px 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); border-radius: 10px; cursor: pointer; }
+.task-move button:disabled { opacity: .3; cursor: default; }
+.task-item.just-moved { outline: 2px solid var(--accent); outline-offset: 2px; transition: outline-color .6s; }
 .tasks-hide-done { font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
 .tasks-list { display: flex; flex-direction: column; gap: 22px; }
 .tasks-category { background: rgba(255,255,255,0.4); border-radius: 8px; padding: 14px 16px; box-shadow: var(--paper-shadow); }
@@ -1594,6 +1602,15 @@ html { zoom: var(--ui-zoom, 1); }
         <button class="tasks-filter-btn" data-typefilter="decision" id="tf-decision">🤔 判断するだけ</button>
         <span class="tasks-filter-sep">|</span>
         <label class="tasks-hide-done"><input type="checkbox" id="tasks-hide-done"> 完了は隠す</label>
+      </div>
+      <div class="tasks-sort" id="tasks-sort">
+        <span class="tasks-sort-label">並び:</span>
+        <button class="tasks-filter-btn" data-sort="created" title="書いた順(古いものが上)">古い順</button>
+        <button class="tasks-filter-btn" data-sort="newest" title="書いた順(新しいものが上)">新しい順</button>
+        <button class="tasks-filter-btn" data-sort="due" title="期限が近いものが上(期限なしは下)">期限順</button>
+        <button class="tasks-filter-btn" data-sort="updated" title="最近さわったものが上">更新順</button>
+        <button class="tasks-filter-btn" data-sort="manual" title="▲▼で自分で並べる">✋ 手動</button>
+        <span class="tasks-sort-hint" id="tasks-sort-hint" style="display:none;">各タスクの ▲▼ で上下に動かせます(同じ枠の中で)。この並びは覚えておきます。</span>
       </div>
       <div class="tasks-list" id="tasks-list"></div>
       <div class="tasks-empty" id="tasks-empty" style="display:none;">フィルタ条件に該当するタスクはありません。</div>
@@ -5826,6 +5843,40 @@ function renderAll() {
 let tasksFilter = "today";        // today / thisWeek / all(時間軸フィルタ)
 let tasksTypeFilter = "all";       // all / action / decision
 let tasksHideDone = false;
+// 並び順(2026-09-22 雑メモ xinen3911)。created=古い順(従来どおり既定) / newest / due / updated / manual
+const TASKS_SORT_KEY = "ichibou_tasks_sort_v1";
+let tasksSort = "created";
+try { const v = localStorage.getItem(TASKS_SORT_KEY); if (["created","newest","due","updated","manual"].includes(v)) tasksSort = v; } catch (_) {}
+function taskSortValue(t) {
+  // 手動の並び位置。未設定なら作成時刻(=これまでの並びと同じ場所に出る)
+  return typeof t.order === "number" ? t.order : (t.createdAt || 0);
+}
+function taskCompare(a, b) {
+  switch (tasksSort) {
+    case "newest":  return (b.createdAt || 0) - (a.createdAt || 0);
+    case "updated": return (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
+    case "due": {
+      const ad = a.dueAt || Infinity, bd = b.dueAt || Infinity;
+      if (ad !== bd) return ad - bd;
+      return (a.createdAt || 0) - (b.createdAt || 0);
+    }
+    case "manual":  return taskSortValue(a) - taskSortValue(b) || (a.createdAt || 0) - (b.createdAt || 0);
+    default:        return (a.createdAt || 0) - (b.createdAt || 0);
+  }
+}
+// 手動並びで ▲▼ を押した時: 同じ枠(表示中の並び)の隣と order を入れ替える
+function moveTaskManual(id, dir, siblings) {
+  const idx = siblings.findIndex(t => t.id === id);
+  const j = idx + dir;
+  if (idx < 0 || j < 0 || j >= siblings.length) return false;
+  const a = siblings[idx], b = siblings[j];
+  let va = taskSortValue(a), vb = taskSortValue(b);
+  if (va === vb) { vb = va + (dir > 0 ? 1 : -1); }   // 同値だと入れ替えても動かないので少しずらす
+  a.order = vb; b.order = va;
+  a.updatedAt = b.updatedAt = Date.now();
+  saveState();
+  return true;
+}
 // 月グリッドカレンダー(2026-07-31)。タブ数は8で上限のため新規タブは作らず、タスクタブ内の表示切替として実装
 let tasksViewMode = "list";        // list / calendar
 let calAnchor = null;              // 表示中の月(その月の1日 / null = 今月)
@@ -6175,6 +6226,8 @@ function renderTasks() {
   const isCal = tasksViewMode === "calendar";
   if (calEl) calEl.style.display = isCal ? "block" : "none";
   if (filterEl) filterEl.style.display = isCal ? "none" : "flex";
+  const sortEl = document.getElementById("tasks-sort");
+  if (sortEl) sortEl.style.display = isCal ? "none" : "flex";
   listEl.style.display = isCal ? "none" : "flex";
   document.querySelectorAll("#view-tasks .tasks-viewmode-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.tvm === tasksViewMode);
@@ -6206,7 +6259,7 @@ function renderTasks() {
   // PCを開いた瞬間に「PCでしかできない用事」が目に入るのが目的。
   const pcTasks = all.filter(t => !t.completed && /^🖥/.test(t.title || ""));
   if (pcTasks.length) {
-    pcTasks.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    pcTasks.sort(taskCompare);
     const pcEl = document.createElement("div");
     pcEl.className = "tasks-category tasks-pc";
     pcEl.innerHTML = `
@@ -6216,7 +6269,7 @@ function renderTasks() {
       </div>
       <div class="tasks-pc-hint">回答タブから積んだもの。時間軸に関係なくここに出ます。</div>
     `;
-    pcTasks.forEach(t => pcEl.appendChild(taskItemEl(t)));
+    pcTasks.forEach(t => pcEl.appendChild(taskItemEl(t, pcTasks)));
     listEl.appendChild(pcEl);
   }
 
@@ -6232,8 +6285,8 @@ function renderTasks() {
     });
     if (filtered.length === 0) return;
 
-    // 未完了 → 完了 の順。同じ群の中では作成順(古いものが上)
-    filtered.sort((a, b) => (a.completed - b.completed) || (a.createdAt - b.createdAt));
+    // 未完了 → 完了 の順。同じ群の中では選んだ並び順(既定=作成順・古いものが上)
+    filtered.sort((a, b) => (a.completed - b.completed) || taskCompare(a, b));
 
     const catEl = document.createElement("div");
     catEl.className = "tasks-category";
@@ -6244,12 +6297,16 @@ function renderTasks() {
         <div class="tasks-category-count">${remainingInCat} / ${filtered.length}</div>
       </div>
     `;
-    filtered.forEach(t => catEl.appendChild(taskItemEl(t)));
+    filtered.forEach(t => catEl.appendChild(taskItemEl(t, filtered)));
     listEl.appendChild(catEl);
     renderedAny = true;
   });
 
   if (!renderedAny) emptyEl.style.display = "block";
+  // 並び順チップの表示状態
+  document.querySelectorAll('#tasks-sort [data-sort]').forEach(b => b.classList.toggle("active", b.dataset.sort === tasksSort));
+  const sortHint = document.getElementById("tasks-sort-hint");
+  if (sortHint) sortHint.style.display = tasksSort === "manual" ? "block" : "none";
   renderNightCount();
   renderTasksCount();
 }
@@ -6649,7 +6706,7 @@ if (!window.__taskDueMenuBound) {
 }
 
 // 1タスク分の DOM(完了 / タイトル編集 / 時間軸・タイプ変更 / メモ / 削除)
-function taskItemEl(t) {
+function taskItemEl(t, siblings) {
   const item = document.createElement("div");
   item.className = "task-item copy-scope" + (t.completed ? " completed" : "");
   item.dataset.taskid = t.id;   // カレンダーの日別行から飛んで来るための目印(2026-08-24)
@@ -6674,6 +6731,7 @@ function taskItemEl(t) {
         <button class="log-want-toggle ${t.wantAnswer ? 'on' : ''}" data-act="want" title="タップでClaude回答&実行希望を切替">${t.wantAnswer ? '☑ 回答希望' : '☐ 回答希望'}</button>
         ${t.wantAnswer ? `<button class="log-urgent-btn ${t.urgentClaude ? 'on' : ''}" data-act="urgent">${t.urgentClaude ? '🚀 起動待ち…' : '🚀 今すぐ'}</button>` : ''}
         <button class="task-del" data-act="del">🗑 削除</button>
+        ${tasksSort === "manual" && Array.isArray(siblings) ? `<span class="task-move"><button type="button" data-move="-1" title="上へ">▲</button><button type="button" data-move="1" title="下へ">▼</button></span>` : ""}
       </div>
       <textarea class="task-note-input" placeholder="メモ(任意)" style="display:${hasNote ? "block" : "none"};">${escapeHtml(t.note || "")}</textarea>
       ${t.completed && t.completedAt ? `<div class="task-meta">✓ 完了 ${new Date(t.completedAt).toLocaleString("ja-JP")}</div>` : ""}
@@ -6734,6 +6792,21 @@ function taskItemEl(t) {
     });
   });
 
+  // ✋手動並び: ▲▼(同じ枠の中で隣と入れ替え。端では効かない)
+  if (tasksSort === "manual" && Array.isArray(siblings)) {
+    const idx = siblings.findIndex(x => x.id === t.id);
+    item.querySelectorAll("[data-move]").forEach(b => {
+      const dir = parseInt(b.dataset.move, 10);
+      if (idx + dir < 0 || idx + dir >= siblings.length) b.disabled = true;
+      b.addEventListener("click", () => {
+        if (!moveTaskManual(t.id, dir, siblings)) return;
+        renderTasks();
+        const moved = document.querySelector(`.task-item[data-taskid="${t.id}"]`);
+        if (moved) { moved.classList.add("just-moved"); setTimeout(() => moved.classList.remove("just-moved"), 700); }
+      });
+    });
+  }
+
   // メモ保存(再描画せず、チップの表示だけ更新)
   const noteEl = item.querySelector(".task-note-input");
   noteEl.addEventListener("blur", () => {
@@ -6775,6 +6848,14 @@ document.querySelectorAll('#view-tasks .tasks-viewmode-btn').forEach(btn => {
 document.getElementById("tasks-hide-done").addEventListener("change", (e) => {
   tasksHideDone = e.target.checked;
   renderTasks();
+});
+// 並び順(2026-09-22)。選んだ並びは localStorage に残す
+document.querySelectorAll('#tasks-sort [data-sort]').forEach(btn => {
+  btn.addEventListener("click", () => {
+    tasksSort = btn.dataset.sort;
+    try { localStorage.setItem(TASKS_SORT_KEY, tasksSort); } catch (_) {}
+    renderTasks();
+  });
 });
 
 // 入力バー: タイトル + Enter を最速動線に(「＋ 追加」ボタンでも同じ)
