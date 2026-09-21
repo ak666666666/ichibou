@@ -277,6 +277,25 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .modal h3 { font-family: "Shippori Mincho", serif; font-size: 18px; margin-bottom: 12px; letter-spacing: 0.05em; }
 .modal p { color: var(--ink-soft); font-size: 14px; margin-bottom: 20px; line-height: 1.7; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+/* 司令塔: 全体マップ(2026-09-21) — 1画面で全部見える札 */
+.shirei-map { border: 1px solid var(--line); padding: 10px 12px; margin: 10px 0 14px; display: flex; flex-direction: column; gap: 9px; }
+.map-row { display: flex; flex-direction: column; gap: 5px; }
+.map-h { display: flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-mute); font-family: "Zen Kaku Gothic New", sans-serif; }
+.map-h .n { font-family: "JetBrains Mono", monospace; font-size: 10px; }
+.map-h .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.map-h .dot.wait { background: var(--accent); }
+.map-h .dot.active { background: var(--green, #4a6b3a); }
+.map-h .dot.stall { background: #b08540; }
+.map-h .dot.frozen { background: var(--ink-mute); }
+.map-h .dot.done { background: var(--line); border: 1px solid var(--ink-mute); }
+.map-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.map-chip { padding: 4px 9px; font-size: 11.5px; line-height: 1.4; font-family: "Zen Kaku Gothic New", sans-serif; border: 1px solid var(--line); background: transparent; color: var(--ink-soft); cursor: pointer; transition: all 0.12s; max-width: 100%; text-align: left; }
+.map-chip:hover { border-color: var(--ink-soft); color: var(--ink); }
+.map-chip.wait { border-color: var(--accent); color: var(--accent); background: rgba(200,80,46,0.06); font-weight: 500; }
+.map-chip.active { border-color: var(--green, #4a6b3a); color: var(--green, #4a6b3a); }
+.map-chip.stall { border-color: #b08540; color: #b08540; }
+.map-chip.frozen, .map-chip.done { color: var(--ink-mute); border-style: dashed; }
+.map-chip.done { text-decoration: line-through; }
 /* 司令塔: 決めたことの置き場(2026-09-18) */
 .shirei-dec-last { display: flex; align-items: baseline; gap: 6px; margin-top: 7px; font-size: 12.5px; color: var(--ink-soft); }
 .shirei-dec-last .mk { color: var(--accent); font-weight: 700; }
@@ -4346,6 +4365,7 @@ let shireiOpen     = new Set();   // 展開中のプロジェクトid
 let shireiDrafts   = {};          // 入力途中の質問(再描画で消さないため)
 let shireiSending  = null;
 let shireiFrozenOpen = false;
+let shireiDoneOpen = false;   // 終わったものは既定で畳む(2026-09-21)
 let shireiPollTimer = null;
 // 2026-08-19: 会話が長くなると1枚のカードが縦に伸びすぎて、入力欄まで延々スクロールする状態だった。
 // 既定では「最近の数件」だけ出し、古い分と長文はタップで開く。
@@ -4830,6 +4850,47 @@ function shireiToPc(pid) {
   });
 }
 
+// ===== 全体マップ(2026-09-21 晃良要望)=====
+// 「動いている・凍結・終わったがスクロールしないと分からない。カレンダーみたいに全体が見えるのがいい」。
+// 23案件を縦に積むと5画面ぶんになる。状態を色、案件を1個の札にして、1画面で全部見えるようにする。
+// 札を押すとその案件のカードへ飛んで開く(一覧は下にそのまま残す)。
+const SHIREI_MAP_GROUPS = [
+  { key: "wait",   label: "あなた待ち" },
+  { key: "active", label: "動いている" },
+  { key: "stall",  label: "止まっている" },
+  { key: "frozen", label: "凍結" },
+  { key: "done",   label: "終わった" }
+];
+
+function shireiMap(wait, active, stall, frozen, done) {
+  const byKey = { wait, active, stall, frozen, done };
+  const total = wait.length + active.length + stall.length + frozen.length + done.length;
+  if (!total) return "";
+
+  let h = '<div class="shirei-map">';
+  SHIREI_MAP_GROUPS.forEach(g => {
+    const items = byKey[g.key] || [];
+    if (!items.length) return;
+    h += '<div class="map-row">'
+       + '<div class="map-h"><span class="dot ' + g.key + '"></span>' + g.label
+       + '<span class="n">' + items.length + '</span></div>'
+       + '<div class="map-chips">'
+       + items.map(p =>
+           '<button type="button" class="map-chip ' + g.key + '" data-jump="' + p.id + '"'
+           + ' title="' + escapeHtml(p.name || "") + '">'
+           + escapeHtml(shireiShortName(p.name)) + '</button>').join("")
+       + '</div></div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+/** 札に入る長さへ。文章のような名前は頭だけ取る */
+function shireiShortName(name) {
+  const t = String(name || "無題").replace(/\s+/g, " ").trim();
+  return t.length > 12 ? t.slice(0, 12) + "…" : t;
+}
+
 function shireiSection(title, hint, items, cls, headCls, ranked) {
   if (!items.length) return "";
   let h = '<div class="shirei-sec"><div class="shirei-h ' + (headCls || "") + '">' + escapeHtml(title);
@@ -4876,6 +4937,7 @@ function renderShirei() {
   // 旧「一望(ホーム)」タブの中身をここへ吸収(2026-08-16)。
   // 司令塔とホームは「いま気にすべきことを出す」という同じ仕事をしていて、入口が2つある状態だった。
   h += shireiStrip(wait.length);
+  h += shireiMap(wait, active, stall, frozen, done);
 
   if (wait.length) {
     h += shireiSection("あなたを待っている", "上ほど早く終わる", wait, "wait", "wait", true);
@@ -4895,8 +4957,11 @@ function renderShirei() {
     h += '</div>';
   }
   if (done.length) {
-    h += '<div class="shirei-sec"><div class="shirei-h">終わった<span class="n">' + done.length + '件</span></div>';
-    h += done.map(p => shireiCard(p, "done", 0)).join("");
+    // 13件あると画面が終わったものだけで埋まる。既定は畳んでおく(2026-09-21)
+    h += '<div class="shirei-sec"><div class="shirei-h shirei-fold" data-fold="done">'
+       + '<span class="caret">' + (shireiDoneOpen ? "▾" : "▸") + '</span>終わった'
+       + '<span class="n">' + done.length + '件</span></div>';
+    if (shireiDoneOpen) h += done.map(p => shireiCard(p, "done", 0)).join("");
     h += '</div>';
   }
 
@@ -5005,7 +5070,29 @@ async function shireiAddConcern() {
     if (goto2) { shireiGoTab(goto2.dataset.goto2); return; }
 
     const fold = ev.target.closest("[data-fold]");
-    if (fold) { shireiFrozenOpen = !shireiFrozenOpen; renderShirei(); return; }
+    if (fold) {
+      if (fold.dataset.fold === "done") shireiDoneOpen = !shireiDoneOpen;
+      else shireiFrozenOpen = !shireiFrozenOpen;
+      renderShirei();
+      return;
+    }
+
+    // 全体マップの札 → その案件のカードへ飛んで開く(2026-09-21)
+    const jump = ev.target.closest("[data-jump]");
+    if (jump) {
+      ev.stopPropagation();
+      const pid = jump.dataset.jump;
+      const pj = (shireiProjects || []).find(x => String(x.id) === String(pid));
+      if (pj && pj.status === "done") shireiDoneOpen = true;
+      if (pj && pj.status === "frozen") shireiFrozenOpen = true;
+      shireiOpen.add(pid);
+      renderShirei();
+      requestAnimationFrame(() => {
+        const card = document.querySelector('.shirei-card[data-pid="' + pid + '"]');
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return;
+    }
 
     const dk = ev.target.closest("[data-deckind]");
     if (dk) { ev.stopPropagation(); decideKind = dk.dataset.deckind; renderShirei(); return; }
@@ -5095,8 +5182,9 @@ async function shireiSetStatus(projectId, next, label) {
   const p = shireiProjects.find(x => String(x.id) === String(projectId));
   if (!p) return;
   const before = p.status;
+  const beforeNext = p.next_action, beforeDo = p.do_now;
   p.status = next;
-  if (next === "done") p.owner_wait = false;
+  if (next === "done") { p.owner_wait = false; p.next_action = ""; p.do_now = ""; }
   // 司令塔で閉じたら、積んである「PCでやる」タスクも閉じる(逆方向の同期 / 2026-09-18)
   const linked = (tasksArr() || []).filter(x => x && (x.shireiPid === p.id || x.title === shireiPcTitle(p)));
   if (linked.length) {
@@ -5111,12 +5199,15 @@ async function shireiSetStatus(projectId, next, label) {
   renderShirei();
   try {
     const patch = { status: next };
-    if (next === "done") patch.owner_wait = false;
+    // 終わりにするなら、次の一手も一緒に畳む(2026-09-21)。
+    // DB側のガードが「next_action が生きたまま done は不可」で status を差し戻していて、
+    // 押しても閉じない状態になっていた。ガードは消す方式に直したうえで、アプリ側も明示的に送る
+    if (next === "done") { patch.owner_wait = false; patch.next_action = ""; patch.do_now = ""; }
     const { error } = await sb.from("ichibou_projects").update(patch).eq("id", p.id);
     if (error) throw error;
   } catch (e) {
     console.error("shirei status error:", e);
-    p.status = before; renderShirei();
+    p.status = before; p.next_action = beforeNext; p.do_now = beforeDo; renderShirei();
     alert("状態を保存できませんでした。通信を確認してください。");
     return;
   }
