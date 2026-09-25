@@ -2231,10 +2231,24 @@ document.addEventListener("focusout", () => {
 // ②既存ノートでも、まだ push されていないローカル編集がリモート版で巻き戻る。
 // 対策: 差し替えの直前に編集中ノートを退避し、差し替え後に「消えていたら復元 /
 // ローカルの方が新しければローカル優先」でマージする。
+// 2026-09-25 晃良報告:「既存メモを再編集して保存した直後に本文が消える/保存されない(スマホ)」
+// 原因: ここが state から退避していたため、**まだ保存されていない打ちかけの文字が退避に入らなかった**。
+// 別端末やウォッチャーの更新で state が丸ごと差し替わると、打っていた分だけが無かったことになる。
+// 画面(入力欄)から取るように変える。画面が唯一その文字を持っている場所なので。
 function captureEditingNote() {
   if (!editingNoteId || !Array.isArray(state.notes)) return null;
   const n = state.notes.find(x => x.id === editingNoteId);
-  return n ? JSON.parse(JSON.stringify(n)) : null;
+  if (!n) return null;
+  const snap = JSON.parse(JSON.stringify(n));
+  const modal = document.getElementById("note-edit-modal");
+  if (modal && modal.classList.contains("open")) {
+    const t = document.getElementById("note-edit-title");
+    const b = document.getElementById("note-edit-body");
+    if (t) snap.title = t.value;
+    if (b) snap.body = b.value;
+    snap.updatedAt = Date.now();   // 打ちかけの方を勝たせる
+  }
+  return snap;
 }
 // 雑メモのインライン編集も同じように守る(2026-09-18)。
 // state を丸ごと差し替えると、打っている途中の文字は DOM にしか無いので消える。
@@ -3864,6 +3878,8 @@ let editingNoteId = null;
 let noteEditSaveTimer = null;
 
 function renderNotes() {
+  // 2026-09-25: renderLogs と同じ理由で、編集中は描き直しを保留する
+  if (deferRender("notes", renderNotes, "#view-notes, #note-edit-modal")) return;
   const breadcrumb = document.getElementById("notes-breadcrumb");
   const folderEl = document.getElementById("notes-folders");
   const listEl = document.getElementById("notes-list");
@@ -4201,6 +4217,18 @@ function openNoteEdit(id) {
   editingNoteId = id;
   document.getElementById("note-edit-title").value = note.title || "";
   document.getElementById("note-edit-body").value = note.body || "";
+  // 前回、保存しきれずに終わった書きかけが残っていれば拾う(2026-09-25)
+  try {
+    const raw = getDraft("note:" + note.id);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && typeof d.b === "string" && d.b !== (note.body || "")) {
+        document.getElementById("note-edit-body").value = d.b;
+        if (typeof d.t === "string") document.getElementById("note-edit-title").value = d.t;
+        showCopyToast("書きかけが残っていたので復元しました");
+      }
+    }
+  } catch (e) { /* 壊れた下書きは無視 */ }
   const histBox = document.getElementById("note-hist");
   if (histBox) histBox.hidden = true;
   renderNoteHistory();
@@ -4303,10 +4331,20 @@ function saveNoteEditNow() {
   note.urgentClaude = newUrgent;
   note.alwaysAnswer = newAlways;
   note.updatedAt = Date.now();
+  clearDraft("note:" + note.id);   // 保存できたので下書きは捨てる
   saveState();
 }
 
+/** 打つそばから下書きへ逃がす。何が起きても文字が残るようにする(2026-09-25) */
+function noteDraftSave() {
+  if (!editingNoteId) return;
+  const t = document.getElementById("note-edit-title");
+  const b = document.getElementById("note-edit-body");
+  setDraft("note:" + editingNoteId, JSON.stringify({ t: t ? t.value : "", b: b ? b.value : "" }));
+}
+
 function saveNoteEditDebounced() {
+  noteDraftSave();
   if (noteEditSaveTimer) clearTimeout(noteEditSaveTimer);
   noteEditSaveTimer = setTimeout(saveNoteEditNow, 500);
 }
@@ -6213,6 +6251,8 @@ function renderTasksCount() {
 }
 
 function renderTasks() {
+  // 2026-09-25: タスク名も contenteditable なので、雑メモと同じ消え方をする
+  if (deferRender("tasks", renderTasks, "#view-tasks")) return;
   const listEl = document.getElementById("tasks-list");
   const metaEl = document.getElementById("tasks-meta");
   const emptyEl = document.getElementById("tasks-empty");
