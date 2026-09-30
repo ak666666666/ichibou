@@ -686,6 +686,10 @@ html { zoom: var(--ui-zoom, 1); }
 .tasks-sort { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; background: var(--bg-2); border-radius: 6px; margin: -12px 0 18px; }
 .tasks-sort-label { font-size: 12px; color: var(--ink-mute); margin-right: 2px; }
 .tasks-sort-hint { font-size: 11px; color: var(--ink-mute); width: 100%; }
+/* 2026-10-01 x1qaj4uow: □やチェックの意味を、その場で開ける説明箱 */
+.help-box { width: 100%; font-size: 12px; line-height: 1.7; color: var(--ink-soft); background: var(--bg); border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; margin-top: 4px; }
+.help-box b { color: var(--ink); }
+.help-toggle { cursor: pointer; }
 .task-move { display: inline-flex; gap: 2px; margin-left: auto; }
 .task-move button { font-family: inherit; font-size: 12px; line-height: 1; padding: 4px 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); border-radius: 10px; cursor: pointer; }
 .task-move button:disabled { opacity: .3; cursor: default; }
@@ -729,6 +733,11 @@ html { zoom: var(--ui-zoom, 1); }
 .task-title[contenteditable="true"]:hover { background: rgba(255,255,255,0.75); }
 .task-title[contenteditable="true"]:focus { background: #fff; box-shadow: inset 0 0 0 1px var(--accent); }
 .task-actions { display: flex; gap: 6px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
+.task-item.prio-high { border-left: 3px solid var(--accent); }
+.task-item.prio-low .task-title { color: var(--ink-mute); }
+.task-prio-chip.prio-high { background: rgba(200,80,46,0.10); border-color: var(--accent); color: var(--accent); }
+.task-prio-chip.prio-low { color: var(--ink-mute); border-style: dashed; }
+.tasks-done .tasks-category-title { color: var(--ink-mute); }
 .task-chip { font-family: inherit; font-size: 10px; padding: 2px 7px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); cursor: pointer; font-weight: 600; letter-spacing: 0.04em; }
 .task-chip:hover { border-color: var(--accent); color: var(--accent); }
 /* ===== 一望(ホーム)2026-08-15 ===== */
@@ -1532,7 +1541,15 @@ html { zoom: var(--ui-zoom, 1); }
           <label class="capture-want-answer" title="チェックすると、このメモに「✓ 完了」が付きます。ただの記録なら外したままでOK">
             <input type="checkbox" id="capture-track-done" /> ✓ 完了チェックをつける
           </label>
+          <button class="help-toggle capture-want-answer" type="button" data-help="help-logs" title="チェックの意味">❓ 意味</button>
           <span class="capture-hint">⌘/Ctrl + ENTER で保存</span>
+          <div class="help-box" id="help-logs" style="display:none;">
+            <b>☑ 回答&実行希望</b> = Claude に読んで答えてほしい合図。5分以内に巡回が拾い、回答タブに返す。付けなければただの記録。<br>
+            <b>✓ 完了チェックをつける</b> = このメモに「済んだ/まだ」の印を持たせる。やることが書いてある時だけ。ただの記録・日記なら付けない。<br>
+            <b>✓ 完了</b>(メモの下) = 済んだ印。打ち消し線になり、棚卸しの対象から外れる。「↩ 未完了に戻す」でいつでも戻る。<br>
+            <b>🚀 今すぐ</b> = 回答希望の急ぎ版。1〜2分でPCが返す。<br>
+            <b>保存</b> = 「記録する」で端末に保存(上部の「💾 保存 hh:mm」)、0.5秒後にクラウドへ(「同期済 hh:mm」)。本文の編集は欄の外をタップした時に保存。
+          </div>
           <div class="action-right">
             <button class="mic-btn" id="capture-mic" title="音声入力" aria-label="音声入力">🎙</button>
             <button class="btn" id="capture-save">記録する</button>
@@ -1632,6 +1649,14 @@ html { zoom: var(--ui-zoom, 1); }
         <button class="tasks-filter-btn" data-sort="updated" title="最近さわったものが上">更新順</button>
         <button class="tasks-filter-btn" data-sort="manual" title="▲▼で自分で並べる">✋ 手動</button>
         <span class="tasks-sort-hint" id="tasks-sort-hint" style="display:none;">各タスクの ▲▼ で上下に動かせます(同じ枠の中で)。この並びは覚えておきます。</span>
+        <button class="tasks-filter-btn help-toggle" type="button" data-help="help-tasks" title="□やチェックの意味">❓ 意味</button>
+        <div class="help-box" id="help-tasks" style="display:none;">
+          <b>□(左の四角)</b> = 「済んだ」印。付けると下の「✓ 完了」にまとまり、外せば元の枠に戻る。<br>
+          <b>☑ 回答希望</b> = Claude に読んで答えてほしい合図。5分以内に巡回が拾って回答タブに返す。押さなければ Claude は何もしない。<br>
+          <b>🚀 今すぐ</b> = 回答希望の急ぎ版。1〜2分でPCが返す。<br>
+          <b>🔥高 / 普通 / 低</b> = 優先度。高いものが枠の上に来る。<br>
+          <b>保存</b> = 書いたそばから端末に保存(画面上部の「💾 保存 hh:mm」)、0.5秒後にクラウドへ(「同期済 hh:mm」)。
+        </div>
       </div>
       <div class="tasks-list" id="tasks-list"></div>
       <div class="tasks-empty" id="tasks-empty" style="display:none;">フィルタ条件に該当するタスクはありません。</div>
@@ -1898,6 +1923,13 @@ const STORAGE_KEY = "ichibou_v3";
 //    これらの const は DEFAULT_STATE より前に置く(後ろに置くと TDZ で ReferenceError)。
 const TASK_BUCKETS = ["today", "tomorrow", "thisWeek", "thisMonth", "future"];
 const TASK_TYPES = ["action", "decision"];
+// 2026-10-01 雑メモ xy85jltqm: タスクの優先度。high=🔥高 / normal=普通(既定) / low=低
+const TASK_PRIORITIES = ["high", "normal", "low"];
+const TASK_PRIORITY_META = {
+  high:   { label: "🔥 高",  rank: 0 },
+  normal: { label: "－ 普通", rank: 1 },
+  low:    { label: "↓ 低",   rank: 2 }
+};
 const TASK_BUCKET_META = {
   today:     { label: "本日", icon: "🔥" },
   tomorrow:  { label: "明日", icon: "☀" },
@@ -2064,6 +2096,7 @@ function normalizeTask(t) {
     startAt: typeof t.startAt === "number" ? t.startAt : null,
     completed: !!t.completed,
     completedAt: t.completedAt || null,
+    priority: TASK_PRIORITIES.includes(t.priority) ? t.priority : "normal",   // 2026-10-01
     wantAnswer: t.wantAnswer === true,
     urgentClaude: t.urgentClaude === true,
     createdAt: t.createdAt || Date.now(),
@@ -2101,8 +2134,13 @@ function loadLocalState() {
   return JSON.parse(JSON.stringify(DEFAULT_STATE));
 }
 function saveLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+// 2026-10-01 x1qaj4uow「いつ保存されたか分からない」: 保存・同期の表示に時刻を添える
+function hhmm(ts) { const d = new Date(ts || Date.now()); return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
+let lastLocalSaveAt = 0;
 function saveState() {
   saveLocal();
+  lastLocalSaveAt = Date.now();
+  setSyncStatus("syncing", "💾 保存 " + hhmm(lastLocalSaveAt));
   hasPendingLocalChanges = true; // 未push編集フラグ(復帰時同期で先にpushするため)
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(pushToCloud, 500);
@@ -2507,7 +2545,7 @@ async function pushToCloud() {
         setSyncBase(state);
         lastSyncedData = JSON.stringify(state);
         hasPendingLocalChanges = false;
-        setSyncStatus("synced", "同期済");
+        setSyncStatus("synced", "同期済 " + hhmm());
         return;
       }
       const remote = cloneNormalized(row.data);
@@ -2536,7 +2574,7 @@ async function pushToCloud() {
       saveLocal();
       if (gotRemote) safeRenderAll("push-merge");
       hasPendingLocalChanges = stableStr(state) !== mergedStr;
-      setSyncStatus("synced", "同期済");
+      setSyncStatus("synced", "同期済 " + hhmm());
       return;
     }
     throw new Error("sync: 4回続けて割り込まれた");
@@ -2560,7 +2598,7 @@ async function pullFromCloud() {
         lastSyncedData = remoteStr;
       }
     }
-    setSyncStatus("synced", "同期済");
+    setSyncStatus("synced", "同期済 " + hhmm());
   } catch (e) { console.error("Sync pull error:", e); setSyncStatus("error", "同期失敗"); }
 }
 
@@ -2577,7 +2615,7 @@ function subscribeRealtime() {
       // 2026-09-30: 置き換えではなくマージ(こちらで書いたばかりの項目を消さない)
       applyRemoteMerged(newData, "realtime");
       setSyncStatus("synced", "他端末から更新");
-      setTimeout(() => setSyncStatus("synced", "同期済"), 2000);
+      setTimeout(() => setSyncStatus("synced", "同期済 " + hhmm()), 2000);
     }
   ).subscribe();
 }
@@ -2618,8 +2656,30 @@ function ensureRealtime() {
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") resyncOnReturn();
+  else flushBeforeLeave("hidden");
 });
+window.addEventListener("pagehide", () => flushBeforeLeave("pagehide"));
 window.addEventListener("focus", () => resyncOnReturn());
+
+// 2026-10-01 x1qaj4uow「更新されないでアプリを閉じてしまって記録されていない」対策。
+// タスク名・タスクのメモ・雑メモ本文は「欄の外をタップした時(blur)」に保存する作りなので、
+// 入力したままホームに戻る/アプリを切り替えると blur が起きず、書いた分が宙に浮いていた。
+// 画面が隠れる瞬間に (1) 入力中の欄を強制的に blur して保存経路を通す (2) ノート編集の0.5秒待ちを飛ばす
+// (3) クラウド送信の0.5秒待ちも飛ばして即送る。端末側(localStorage)への保存はこの時点で完了する。
+function flushBeforeLeave(why) {
+  try {
+    const el = document.activeElement;
+    if (el && el !== document.body && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.isContentEditable)) {
+      el.blur();
+    }
+    if (typeof editingNoteId !== "undefined" && editingNoteId) {
+      if (noteEditSaveTimer) { clearTimeout(noteEditSaveTimer); noteEditSaveTimer = null; }
+      saveNoteEditNow();
+    }
+    if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; pushToCloud(); }
+    else if (hasPendingLocalChanges) pushToCloud();
+  } catch (e) { console.warn("flushBeforeLeave", why, e); }
+}
 // 保険: 表示中は5分ごとに軽くpull(realtime切断中の取りこぼし対策)
 setInterval(() => { if (document.visibilityState === "visible") resyncOnReturn(); }, 5 * 60 * 1000);
 
@@ -6285,7 +6345,16 @@ function taskSortValue(t) {
   // 手動の並び位置。未設定なら作成時刻(=これまでの並びと同じ場所に出る)
   return typeof t.order === "number" ? t.order : (t.createdAt || 0);
 }
+function taskPriorityRank(t) {
+  const m = TASK_PRIORITY_META[t.priority] || TASK_PRIORITY_META.normal;
+  return m.rank;
+}
 function taskCompare(a, b) {
+  // 2026-10-01: 🔥高 → 普通 → 低 の順を、選んだ並び順より先に見る(✋手動だけは手で並べた順を優先)
+  if (tasksSort !== "manual") {
+    const pr = taskPriorityRank(a) - taskPriorityRank(b);
+    if (pr !== 0) return pr;
+  }
   switch (tasksSort) {
     case "newest":  return (b.createdAt || 0) - (a.createdAt || 0);
     case "updated": return (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
@@ -6710,19 +6779,23 @@ function renderTasks() {
   }
 
   let renderedAny = false;
+  // 2026-10-01 雑メモ xy85jltqm「完了してないタスクは一番上に」:
+  // それまでは枠(本日/今週…)ごとに未完了→完了が並んでいたので、本日の完了済みが今週の未完了より上に来ていた。
+  // 完了済みは枠から外して、いちばん下の「✓ 完了」ひとつにまとめる。
+  const doneTasks = [];
   includeBuckets.forEach(bucket => {
     const meta = TASK_BUCKET_META[bucket];
     const filtered = all.filter(t => {
       if (taskBucketOf(t) !== bucket) return false;
       if (!t.completed && /^🖥/.test(t.title || "")) return false;   // 上の「PCでやる」に出しているので重複させない
       if (tasksTypeFilter !== "all" && t.type !== tasksTypeFilter) return false;
-      if (tasksHideDone && t.completed) return false;
+      if (t.completed) { if (!tasksHideDone) doneTasks.push(t); return false; }
       return true;
     });
     if (filtered.length === 0) return;
 
-    // 未完了 → 完了 の順。同じ群の中では選んだ並び順(既定=作成順・古いものが上)
-    filtered.sort((a, b) => (a.completed - b.completed) || taskCompare(a, b));
+    // 同じ枠の中では 🔥高→普通→低、その中で選んだ並び順(既定=作成順・古いものが上)
+    filtered.sort(taskCompare);
 
     const catEl = document.createElement("div");
     catEl.className = "tasks-category";
@@ -6737,6 +6810,22 @@ function renderTasks() {
     listEl.appendChild(catEl);
     renderedAny = true;
   });
+
+  if (doneTasks.length) {
+    doneTasks.sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));   // 最近終えたものが上
+    const doneEl = document.createElement("div");
+    doneEl.className = "tasks-category tasks-done";
+    doneEl.innerHTML = `
+      <div class="tasks-category-h">
+        <div class="tasks-category-title">✓ 完了</div>
+        <div class="tasks-category-count">${doneTasks.length}</div>
+      </div>
+      <div class="tasks-pc-hint">済んだもの。上の「完了は隠す」で畳めます。□を外せば元の枠に戻ります。</div>
+    `;
+    doneTasks.forEach(t => doneEl.appendChild(taskItemEl(t, doneTasks)));
+    listEl.appendChild(doneEl);
+    renderedAny = true;
+  }
 
   if (!renderedAny) emptyEl.style.display = "block";
   // 並び順チップの表示状態
@@ -7144,8 +7233,9 @@ if (!window.__taskDueMenuBound) {
 // 1タスク分の DOM(完了 / タイトル編集 / 時間軸・タイプ変更 / メモ / 削除)
 function taskItemEl(t, siblings) {
   const item = document.createElement("div");
-  item.className = "task-item copy-scope" + (t.completed ? " completed" : "");
-  item.dataset.taskid = t.id;   // カレンダーの日別行から飛んで来るための目印(2026-08-24)
+  item.className = "task-item copy-scope" + (t.completed ? " completed" : "") + (t.priority === "high" && !t.completed ? " prio-high" : "") + (t.priority === "low" ? " prio-low" : "");
+  item.dataset.taskid = t.id;
+  const pm = TASK_PRIORITY_META[t.priority] || TASK_PRIORITY_META.normal;   // カレンダーの日別行から飛んで来るための目印(2026-08-24)
   const badge = t.type === "action"
     ? `<span class="task-type-badge task-type-action">🎯 行動</span>`
     : `<span class="task-type-badge task-type-decision">🤔 判断</span>`;
@@ -7163,6 +7253,7 @@ function taskItemEl(t, siblings) {
         <button class="task-chip" data-act="bucket" title="タップで期限を選び直す(本日/今週/今月/先・日付指定)">${bm.icon} ${escapeHtml(bm.label)} ▾</button>
         ${t.dueAt ? `<button class="task-chip task-due-chip ${taskDueState(t.dueAt)}" data-act="due" title="タップで期限を変更">📌 ${escapeHtml(taskRangeLabel(t))}</button>` : ""}
         <button class="task-chip" data-act="type" title="タップで 🎯/🤔 を切替">${t.type === "action" ? "🎯 行動" : "🤔 判断"}</button>
+        <button class="task-chip task-prio-chip prio-${t.priority || "normal"}" data-act="prio" title="優先度(タップで 高→普通→低 と切替)。高いものが枠の上に来ます">${pm.label}</button>
         <button class="task-chip" data-act="note">${hasNote ? "📝 メモ" : "＋ メモ"}</button>
         <button class="log-want-toggle ${t.wantAnswer ? 'on' : ''}" data-act="want" title="タップでClaude回答&実行希望を切替">${t.wantAnswer ? '☑ 回答希望' : '☐ 回答希望'}</button>
         ${t.wantAnswer ? `<button class="log-urgent-btn ${t.urgentClaude ? 'on' : ''}" data-act="urgent">${t.urgentClaude ? '🚀 起動待ち…' : '🚀 今すぐ'}</button>` : ''}
@@ -7210,6 +7301,10 @@ function taskItemEl(t, siblings) {
       } else if (act === "type") {
         updateTask(t.id, { type: t.type === "action" ? "decision" : "action" });
         renderTasks();
+      } else if (act === "prio") {
+        const cur = TASK_PRIORITIES.indexOf(t.priority || "normal");
+        updateTask(t.id, { priority: TASK_PRIORITIES[(cur + 1) % TASK_PRIORITIES.length] });
+        renderTasks();
       } else if (act === "note") {
         const ta = item.querySelector(".task-note-input");
         const show = ta.style.display === "none";
@@ -7255,6 +7350,17 @@ function taskItemEl(t, siblings) {
 
   return item;
 }
+
+// ❓ 意味 の開閉(タスク・雑メモ共通 / 2026-10-01)
+document.querySelectorAll(".help-toggle[data-help]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const box = document.getElementById(btn.dataset.help);
+    if (!box) return;
+    const open = box.style.display === "none";
+    box.style.display = open ? "block" : "none";
+    btn.classList.toggle("active", open);
+  });
+});
 
 // イベントバインド(初回 1 度だけ)
 document.querySelectorAll('.tasks-filter-btn[data-filter]').forEach(btn => {
