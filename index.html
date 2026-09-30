@@ -8933,6 +8933,50 @@ loadShirei();  // 2026-08-16: 起動時の初期表示は司令塔タブ
   subscribeInboxRealtime();
 })();
 
+// ===== 新しい版が出たら自動で読み直す(2026-09-30) =====
+// 開きっぱなしのタブ(特にPC)は、デプロイしても古いコードのまま動き続ける。
+// 古いコードは同期のやり方も古いので、直した不具合を持ち込み続ける。
+// 本番の index.html を取り直し、中のスクリプトが今動いているものと違えば、入力中でない時に読み直す。
+function ichibouScriptHash(text) {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
+  return h + ":" + text.length;
+}
+if (new URLSearchParams(location.search).has("v")) {
+  try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
+}
+const RUNNING_HASH = (() => {
+  const sc = [...document.scripts].filter(x => !x.src).sort((a, b) => b.text.length - a.text.length)[0];
+  return sc ? ichibouScriptHash(sc.text) : null;
+})();
+let versionCheckAt = 0;
+async function checkForNewVersion() {
+  if (!RUNNING_HASH || !navigator.onLine) return;
+  if (Date.now() - versionCheckAt < 60 * 1000) return;
+  versionCheckAt = Date.now();
+  try {
+    const html = await fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" }).then(r => r.ok ? r.text() : "");
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const sc = [...doc.scripts].filter(x => !x.src).sort((a, b) => b.text.length - a.text.length)[0];
+    if (!sc) return;
+    if (ichibouScriptHash(sc.text) === RUNNING_HASH) return;
+    const tryReload = () => {
+      if (isTypingNow() || hasPendingLocalChanges) { setTimeout(tryReload, 5000); return; }
+      // 読み直しが止まらなくなるのを防ぐ(2分に1回まで)
+      let last = 0;
+      try { last = Number(sessionStorage.getItem("ichibou_reload_at")) || 0; } catch (e) {}
+      if (Date.now() - last < 2 * 60 * 1000) return;
+      try { sessionStorage.setItem("ichibou_reload_at", String(Date.now())); } catch (e) {}
+      // ?v= を付けてブラウザのキャッシュを確実に避ける(付けた ?v= は起動時に消す)
+      location.replace(location.pathname + "?v=" + Date.now() + location.hash);
+    };
+    tryReload();
+  } catch (e) { /* 取れなければ次の機会に */ }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForNewVersion(); });
+setInterval(checkForNewVersion, 5 * 60 * 1000);
+setTimeout(checkForNewVersion, 15 * 1000);
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(err => { console.log('SW registration failed:', err); });
