@@ -277,6 +277,27 @@ nav.tabs::-webkit-scrollbar { display: none; }
 .modal h3 { font-family: "Shippori Mincho", serif; font-size: 18px; margin-bottom: 12px; letter-spacing: 0.05em; }
 .modal p { color: var(--ink-soft); font-size: 14px; margin-bottom: 20px; line-height: 1.7; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+/* 司令塔: 今日の依頼(2026-09-30) — カレンダーの【要対応】と同じ型 */
+.rq-list { display: flex; flex-direction: column; gap: 10px; }
+.rq { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--bg); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.rq.overdue { border-left-color: #b03a2e; }
+.rq-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; letter-spacing: 0.06em; font-family: "JetBrains Mono", monospace; color: var(--ink-mute); }
+.rq-tag { color: var(--accent); font-weight: 700; }
+.rq.overdue .rq-tag { color: #b03a2e; }
+.rq-min { border: 1px solid var(--accent); color: var(--accent); border-radius: 10px; padding: 1px 7px; }
+.rq-dec { border: 1px solid var(--line); border-radius: 10px; padding: 1px 7px; }
+.rq-dec.yes { border-color: #b08540; color: #b08540; }
+.rq-since { color: #b03a2e; }
+.rq-title { font-size: 15px; font-weight: 500; line-height: 1.7; color: var(--ink); }
+.rq-proj { font-size: 11px; color: var(--ink-mute); letter-spacing: 0.05em; }
+.rq-body { font-size: 13px; line-height: 1.8; color: var(--ink-soft); white-space: pre-wrap; word-break: break-word; }
+.rq-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.rq-btn { padding: 6px 12px; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-size: 12px; font-family: "Zen Kaku Gothic New", sans-serif; letter-spacing: 0.05em; cursor: pointer; transition: all 0.15s; }
+.rq-btn:hover { border-color: var(--ink-soft); color: var(--ink); }
+.rq-btn.done { border-color: var(--green, #4a6b3a); color: var(--green, #4a6b3a); }
+.rq-btn.done:hover { background: rgba(74,107,58,0.08); }
+.rq-btn.ghost { color: var(--ink-mute); border-style: dashed; }
+.rq-ask { margin-top: 4px; }
 /* 司令塔: 全体マップ(2026-09-21) — 1画面で全部見える札 */
 .shirei-map { border: 1px solid var(--line); padding: 10px 12px; margin: 10px 0 14px; display: flex; flex-direction: column; gap: 9px; }
 .map-row { display: flex; flex-direction: column; gap: 5px; }
@@ -4414,6 +4435,12 @@ document.getElementById("note-edit-modal").addEventListener("click", (e) => {
 let shireiProjects = null;
 let shireiActivity = [];
 let shireiSteps    = [];
+// 2026-09-30: Claude→晃良の「手を動かしてほしいこと」は ichibou_requests に一本化。
+// 司令塔の一番上は「今日の依頼」になり、案件の owner_wait は使わない。
+let shireiRequests = [];
+const shireiReqOpen = new Set();     // 返事欄を開いている依頼
+let shireiReqSending = null;
+let shireiFutureOpen = false;        // 「先の依頼」を開いているか
 let shireiThreads  = [];
 let shireiError    = "";
 let shireiOpen     = new Set();   // 展開中のプロジェクトid
@@ -4436,15 +4463,17 @@ const SHIREI_BLOCKER_LABEL = { owner: "晃良の判断・手作業が要る", te
 async function loadShirei() {
   if (!navigator.onLine) { shireiError = "オフラインです。最後に読めた内容を表示しています。"; loadShireiCache(); renderShirei(); return; }
   try {
-    const [p, a, s] = await Promise.all([
+    const [p, a, s, r] = await Promise.all([
       sb.from("ichibou_projects").select("*").order("sort", { ascending: true }),
       sb.from("ichibou_activity").select("*").order("created_at", { ascending: false }).limit(200),
-      sb.from("ichibou_steps").select("*").order("seq", { ascending: true })
+      sb.from("ichibou_steps").select("*").order("seq", { ascending: true }),
+      sb.from("ichibou_requests").select("*").eq("status", "open").order("due", { ascending: true })
     ]);
     if (p.error) throw p.error;
     shireiProjects = p.data || [];
     shireiActivity = (a && !a.error && a.data) ? a.data : [];
     shireiSteps    = (s && !s.error && s.data) ? s.data : [];
+    shireiRequests = (r && !r.error && r.data) ? r.data : [];
 
     const tids = shireiProjects.map(x => x.thread_id).filter(Boolean);
     if (tids.length) {
@@ -4905,6 +4934,161 @@ function shireiToPc(pid) {
   });
 }
 
+// ===== 依頼(2026-09-30 晃良指示)=====
+// カレンダーの【要対応】と同じ型で出す: やること1文・約N分・判断の有無・手順。
+// 1件=1つのやること。今日と期限切れだけを見せ、先のものは畳む。その場で「終わった」「返事する」。
+function shireiTodayYmd() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function shireiReqCard(r, today) {
+  const overdue = r.due && r.due < today;
+  const open = shireiReqOpen.has(r.id);
+  const more = shireiLongOpen.has("rq:" + r.id);
+  const body = (r.body || "").trim();
+  const proj = r.project_id ? (shireiProjects || []).find(p => String(p.id) === String(r.project_id)) : null;
+
+  let h = '<div class="rq' + (overdue ? ' overdue' : '') + '" data-rq="' + r.id + '">';
+  h += '<div class="rq-head">'
+     + '<span class="rq-tag">' + (overdue ? "期限切れ" : "要対応") + '</span>'
+     + (r.minutes ? '<span class="rq-min">約' + r.minutes + '分</span>' : '')
+     + '<span class="rq-dec' + (r.needs_decision ? ' yes' : '') + '">' + (r.needs_decision ? "判断あり" : "判断なし") + '</span>'
+     + (overdue ? '<span class="rq-since">' + escapeHtml(String(r.due).slice(5).replace("-", "/")) + ' から</span>' : '')
+     + '</div>';
+  h += '<div class="rq-title">' + escapeHtml(r.title || "") + '</div>';
+  if (proj) h += '<div class="rq-proj">' + escapeHtml(proj.name) + '</div>';
+  if (body) {
+    h += '<div class="rq-body' + (!more && body.length > 120 ? ' clamp c3' : '') + '">' + escapeHtml(body) + '</div>';
+    if (body.length > 120) {
+      h += '<button class="shirei-more" data-more="rq:' + r.id + '">' + (more ? "▴ 畳む" : "▾ くわしく(" + body.length + "字)") + '</button>';
+    }
+  }
+  h += '<div class="rq-actions">'
+     + '<button class="rq-btn done" data-rqdone="' + r.id + '">✓ 終わった</button>'
+     + '<button class="rq-btn" data-rqreply="' + r.id + '">' + (open ? "閉じる" : "返事する") + '</button>'
+     + '<button class="rq-btn ghost" data-rqlater="' + r.id + '">明日へ</button>'
+     + '</div>';
+  if (open) {
+    const draft = getDraft("rq:" + r.id) || "";
+    h += '<div class="shirei-ask rq-ask">'
+       + '<textarea data-rqtext="' + r.id + '" placeholder="やった / できない / ここが分からない — そのまま書いて送ってください">' + escapeHtml(draft) + '</textarea>'
+       + '<div class="row"><button class="mic-btn mini" data-rqmic="' + r.id + '" type="button" title="音声入力" aria-label="音声入力">🎙</button>'
+       + '<button class="shirei-send" data-rqsend="' + r.id + '"' + (shireiReqSending === r.id ? ' disabled' : '') + '>'
+       + (shireiReqSending === r.id ? '送信中…' : '送る') + '</button>'
+       + '<span class="hint">Ctrl+Enter でも送れます</span></div></div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function shireiRequestsSection() {
+  const today = shireiTodayYmd();
+  const openReqs = (shireiRequests || []).filter(r => r.status === "open");
+  const now = openReqs.filter(r => !r.due || r.due <= today)
+    .sort((a, b) => (a.due || "").localeCompare(b.due || "") || (a.minutes || 999) - (b.minutes || 999));
+  const later = openReqs.filter(r => r.due && r.due > today).sort((a, b) => a.due.localeCompare(b.due));
+  const mins = now.reduce((s, r) => s + (r.minutes || 0), 0);
+
+  let h = '<div class="shirei-sec rq-sec"><div class="shirei-h wait">今日の依頼'
+        + '<span class="n">' + (now.length ? now.length + '件' + (mins ? '・約' + mins + '分' : '') : 'なし') + '</span></div>';
+  if (!now.length) {
+    h += '<div class="shirei-empty">今日、あなたの手が要るものはありません。</div>';
+  } else {
+    h += '<div class="rq-list">' + now.map(r => shireiReqCard(r, today)).join("") + '</div>';
+  }
+  h += '</div>';
+
+  if (later.length) {
+    h += '<div class="shirei-sec"><div class="shirei-h shirei-fold" data-fold="future">'
+       + '<span class="caret">' + (shireiFutureOpen ? "▾" : "▸") + '</span>先の依頼'
+       + '<span class="n">' + later.length + '件</span></div>';
+    if (shireiFutureOpen) h += '<div class="rq-list">' + later.map(r => shireiReqCard(r, today)).join("") + '</div>';
+    h += '</div>';
+  }
+  return h;
+}
+
+async function shireiReqPatch(id, patch) {
+  const r = (shireiRequests || []).find(x => x.id === id);
+  if (!r) return false;
+  const before = { ...r };
+  Object.assign(r, patch);
+  renderShirei();
+  try {
+    const { error } = await sb.from("ichibou_requests").update(patch).eq("id", id);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error("request patch error:", e);
+    Object.assign(r, before);
+    renderShirei();
+    alert("保存できませんでした。通信を確認してください。");
+    return false;
+  }
+}
+
+async function shireiReqDone(id) {
+  const r = (shireiRequests || []).find(x => x.id === id);
+  if (!r) return;
+  const ok = await shireiReqPatch(id, { status: "done", done_at: new Date().toISOString() });
+  if (!ok) return;
+  try {
+    await sb.from("ichibou_activity").insert({
+      project_id: r.project_id || null, kind: "done", actor: "akira",
+      what: "依頼を終えた: " + (r.title || "").slice(0, 80)
+    });
+  } catch (e) { /* 記録は best-effort */ }
+  offerUndo("終わりにしました", async () => {
+    await shireiReqPatch(id, { status: "open", done_at: null });
+    return { msg: "戻しました" };
+  });
+}
+
+async function shireiReqLater(id) {
+  const d = new Date(); d.setDate(d.getDate() + 1);
+  const ymd = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const ok = await shireiReqPatch(id, { due: ymd });
+  if (ok) showCopyToast("明日に回しました");
+}
+
+/** 依頼への返事。返信レーン(watcher)が拾えるよう ichibou_inbox に reply として入れる。 */
+async function shireiReqReply(id) {
+  const r = (shireiRequests || []).find(x => x.id === id);
+  const ta = document.querySelector('[data-rqtext="' + id + '"]');
+  if (!r || !ta) return;
+  const text = (ta.value || "").trim();
+  if (!text || shireiReqSending) return;
+  ta.blur();
+  shireiReqSending = id;
+  renderShirei();
+  try {
+    let tid = r.thread_id;
+    if (!tid) {
+      tid = "th_rq_" + id.replace(/^rq_/, "") + "_" + Math.random().toString(36).slice(2, 6);
+      await sb.from("ichibou_requests").update({ thread_id: tid }).eq("id", id);
+      r.thread_id = tid;
+    }
+    // 案件に紐づく依頼は、司令塔レーンに乗るよう cw_id を req_shirei_<pid>_ で始める
+    const cw = (r.project_id ? "req_shirei_" + r.project_id + "_" : "req_rq_") + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const detail = text + "\n\n(依頼「" + (r.title || "").slice(0, 60) + "」への返事 / request_id = " + id
+                 + (r.project_id ? " / project_id = " + r.project_id : "") + ")";
+    const { error } = await sb.from("ichibou_inbox").insert({ cw_id: cw, kind: "reply", title: "▶ 返信", detail, thread_id: tid, consumed: false });
+    if (error) throw error;
+    await sb.from("ichibou_requests").update({ reply: text, replied_at: new Date().toISOString() }).eq("id", id);
+    r.reply = text;
+    clearDraft("rq:" + id);
+    shireiReqOpen.delete(id);
+    showCopyToast("送りました。PCが起動していれば1〜2分で回答が届きます");
+  } catch (e) {
+    console.error("request reply error:", e);
+    alert("送れませんでした。通信を確認してもう一度お試しください。");
+  } finally {
+    shireiReqSending = null;
+    renderShirei();
+  }
+}
+
 // ===== 全体マップ(2026-09-21 晃良要望)=====
 // 「動いている・凍結・終わったがスクロールしないと分からない。カレンダーみたいに全体が見えるのがいい」。
 // 23案件を縦に積むと5画面ぶんになる。状態を色、案件を1個の札にして、1画面で全部見えるようにする。
@@ -4966,23 +5150,28 @@ function renderShirei() {
   if (all === null) { if (subEl) subEl.textContent = "読み込み中…"; body.innerHTML = ""; return; }
 
   const live   = all.filter(p => p.status !== "done");
-  const wait   = live.filter(p => p.owner_wait);
-  const rest   = live.filter(p => !p.owner_wait);
+  // 2026-09-30: 「あなた待ち」は案件のフラグではなく依頼(ichibou_requests)で持つ。
+  // 古いフラグが残っていても、案件は通常の状態で並べる
+  const wait   = [];
+  const rest   = live;
   const active = rest.filter(p => p.status === "active");
   const stall  = rest.filter(p => p.status === "waiting" || p.status === "stalled");
   const frozen = rest.filter(p => p.status === "frozen");
   const done   = all.filter(p => p.status === "done");
 
   wait.sort((a, b) => (a.minutes || 999) - (b.minutes || 999));   // 早く終わるものから
-  const waitMins = wait.reduce((s, p) => s + (p.minutes || 0), 0);
+  const todayY = shireiTodayYmd();
+  const todayReqs = (shireiRequests || []).filter(r => r.status === "open" && (!r.due || r.due <= todayY));
+  const waitMins = todayReqs.reduce((s, r) => s + (r.minutes || 0), 0);
+  const waitN = todayReqs.length;
 
   const now = new Date();
   const dow = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
   if (subEl) {
     subEl.innerHTML = (now.getMonth() + 1) + "/" + now.getDate() + "(" + dow + ")　"
-      + (wait.length
-          ? '<span class="warn">あなた待ち ' + wait.length + (waitMins ? '・約' + waitMins + '分' : '') + '</span>'
-          : 'あなた待ち 0')
+      + (waitN
+          ? '<span class="warn">今日の依頼 ' + waitN + (waitMins ? '・約' + waitMins + '分' : '') + '</span>'
+          : '今日の依頼 0')
       + '　動 ' + active.length + '　止 ' + stall.length + '　凍 ' + frozen.length;
   }
 
@@ -4991,16 +5180,12 @@ function renderShirei() {
 
   // 旧「一望(ホーム)」タブの中身をここへ吸収(2026-08-16)。
   // 司令塔とホームは「いま気にすべきことを出す」という同じ仕事をしていて、入口が2つある状態だった。
-  h += shireiStrip(wait.length);
-  h += shireiMap(wait, active, stall, frozen, done);
-
-  if (wait.length) {
-    h += shireiSection("あなたを待っている", "上ほど早く終わる", wait, "wait", "wait", true);
-  } else {
-    h += '<div class="shirei-sec"><div class="shirei-h">あなたを待っている<span class="n">なし</span></div>'
-       + '<div class="shirei-empty">あなたが手を動かさないと進まないものは、いまありません。</div></div>';
-  }
+  h += shireiRequestsSection();
   h += shireiTaskSection();
+  h += shireiStrip(wait.length);
+  h += '<div class="shirei-sec"><div class="shirei-h">案件<span class="n">' + live.length + '件 — 札を押すと下のカードへ</span></div></div>';
+  h += shireiMap([], active, stall, frozen, done);
+
   h += shireiSection("動いている", "", active, "active");
   h += shireiSection("止まっている", "", stall, "stall");
 
@@ -5030,6 +5215,18 @@ function renderShirei() {
     const ta = body.querySelector('[data-ask="' + mic.dataset.shireimic + '"]');
     if (ta && window.bindMicEl) window.bindMicEl(mic, ta, null);
   });
+  // 依頼の返事欄(2026-09-30): 音声・下書き保存・Ctrl+Enter
+  body.querySelectorAll("[data-rqmic]").forEach(mic => {
+    const ta = body.querySelector('[data-rqtext="' + mic.dataset.rqmic + '"]');
+    if (ta && window.bindMicEl) window.bindMicEl(mic, ta, null);
+  });
+  body.querySelectorAll("[data-rqtext]").forEach(ta => {
+    const id = ta.dataset.rqtext;
+    ta.addEventListener("input", () => setDraft("rq:" + id, ta.value));
+    ta.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); void shireiReqReply(id); }
+    });
+  });
   // 決めたこと欄(2026-09-18): 音声・下書き保存・Ctrl+Enter
   body.querySelectorAll("[data-decmic]").forEach(mic => {
     const ta = body.querySelector('[data-dec="' + mic.dataset.decmic + '"]');
@@ -5044,7 +5241,7 @@ function renderShirei() {
   });
 
   const cnt = document.getElementById("count-shirei");
-  if (cnt) cnt.textContent = wait.length;
+  if (cnt) cnt.textContent = waitN;
 }
 
 // ===== 気がかりを司令塔に置く(2026-09-16 晃良要望)=====
@@ -5127,6 +5324,7 @@ async function shireiAddConcern() {
     const fold = ev.target.closest("[data-fold]");
     if (fold) {
       if (fold.dataset.fold === "done") shireiDoneOpen = !shireiDoneOpen;
+      else if (fold.dataset.fold === "future") shireiFutureOpen = !shireiFutureOpen;
       else shireiFrozenOpen = !shireiFrozenOpen;
       renderShirei();
       return;
@@ -5148,6 +5346,22 @@ async function shireiAddConcern() {
       });
       return;
     }
+
+    const rqd = ev.target.closest("[data-rqdone]");
+    if (rqd) { ev.stopPropagation(); await shireiReqDone(rqd.dataset.rqdone); return; }
+    const rqr = ev.target.closest("[data-rqreply]");
+    if (rqr) {
+      ev.stopPropagation();
+      const id = rqr.dataset.rqreply;
+      if (shireiReqOpen.has(id)) shireiReqOpen.delete(id); else shireiReqOpen.add(id);
+      renderShirei();
+      const t = document.querySelector('[data-rqtext="' + id + '"]'); if (t) t.focus();
+      return;
+    }
+    const rql = ev.target.closest("[data-rqlater]");
+    if (rql) { ev.stopPropagation(); await shireiReqLater(rql.dataset.rqlater); return; }
+    const rqs = ev.target.closest("[data-rqsend]");
+    if (rqs) { ev.stopPropagation(); await shireiReqReply(rqs.dataset.rqsend); return; }
 
     const dk = ev.target.closest("[data-deckind]");
     if (dk) { ev.stopPropagation(); decideKind = dk.dataset.deckind; renderShirei(); return; }
@@ -7090,6 +7304,10 @@ function subscribeInboxRealtime() {
   inboxChannel = sb.channel("ichibou-inbox-sync").on("postgres_changes",
     { event: "*", schema: "public", table: "ichibou_inbox" },
     () => pullInbox()
+  ).on("postgres_changes",
+    // 依頼が増えた/終わった時に司令塔の「今日」を描き直す(2026-09-30)
+    { event: "*", schema: "public", table: "ichibou_requests" },
+    () => { if (typeof loadShirei === "function") loadShirei(); }
   ).subscribe();
 }
 
