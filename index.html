@@ -1914,6 +1914,12 @@ const DEFAULT_STATE = {
 let state = loadLocalState();
 let syncTimer = null;
 let lastSyncedData = null;
+// 2026-09-30: 3方向マージ同期の「基準」= 最後にクラウドと一致していた状態。localStorage にも残す。
+// 無い(この版を初めて開いた)ときは、端末に残っていた状態を基準にする。
+const SYNC_BASE_KEY = "ichibou_v3_base";
+let syncBase = null;
+try { const _b = localStorage.getItem(SYNC_BASE_KEY); if (_b) syncBase = JSON.parse(_b); } catch (e) {}
+if (!syncBase) setSyncBase(state);
 
 // ===== 更新履歴(案C)の共通ヘルパ(2026-09-08) =====
 // 2026-08-24 にノートだけへ入れた仕組みを、雑メモ・タスク・もやにも広げる。
@@ -2305,6 +2311,124 @@ function setSyncStatus(status, text) {
   document.getElementById("sync-text").textContent = text;
 }
 
+// ========================================================================
+// ===== 3方向マージ同期 (2026-09-30 新設) =====
+// それまでは「状態まるごと1行」を後勝ちで上書きしていた。そのため
+//  ・スマホで開いた直後、クラウドの読み込みが終わる前に書いたタスクが、読み込み完了で消える
+//  ・古い状態を持った端末が保存すると、別端末で足したタスクを丸ごと上書きして消す
+// ということが起きていた(晃良「スマホで書いたタスクが表示されない」)。
+// 対策: 基準(最後に一致した状態)・この端末・クラウドの3つを見比べ、項目(id)ごとに
+// 「変えた側」を採用する。追加は両方残し、削除は変えていない側に反映、両方編集は新しい方。
+// 書き込みは updated_at が読んだ時のままの場合だけ通す(割り込まれたら読み直してやり直す)。
+// ========================================================================
+// Postgres の jsonb はキーの並びを入れ替えて返すので、比較は必ずキーを並べ替えた文字列で行う。
+// (素の JSON.stringify で比べると、同じ中身でも「違う」と判定されて送り返しが止まらなくなる)
+function stableStr(v) {
+  if (v === undefined) return undefined;
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return "[" + v.map(x => x === undefined ? "null" : stableStr(x)).join(",") + "]";
+  return "{" + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ":" + stableStr(v[k])).join(",") + "}";
+}
+function setSyncBase(obj) {
+  syncBase = JSON.parse(JSON.stringify(obj || {}));
+  try { localStorage.setItem(SYNC_BASE_KEY, JSON.stringify(syncBase)); } catch (e) {}
+}
+function syncItemTime(x) {
+  return (x && (x.updatedAt || x.prevSavedAt || x.ts || x.createdAt)) || 0;
+}
+function isIdArray(v) {
+  return Array.isArray(v) && v.every(x => x && typeof x === "object" && typeof x.id === "string");
+}
+function mergeIdArray(base, local, remote) {
+  const bMap = new Map((base || []).map(x => [x.id, stableStr(x)]));
+  const lMap = new Map(local.map(x => [x.id, x]));
+  const rMap = new Map(remote.map(x => [x.id, x]));
+  const pick = (id) => {
+    const l = lMap.get(id), r = rMap.get(id), b = bMap.get(id);
+    if (l && r) {
+      const ls = stableStr(l), rs = stableStr(r);
+      if (ls === rs) return l;
+      if (b === ls) return r;          // こちらは触っていない → 相手の変更を取る
+      if (b === rs) return l;          // 相手は触っていない → こちらの変更を残す
+      return syncItemTime(r) > syncItemTime(l) ? r : l;   // 両方編集 → 新しい方
+    }
+    if (l) {                           // 相手側に無い
+      if (b === undefined) return l;   // こちらで新しく足した
+      if (b === stableStr(l)) return null;   // 相手が消した(こちらは無変更)
+      return l;                        // 相手は消したが、こちらで編集していた → 残す
+    }
+    if (r) {                           // こちら側に無い
+      if (b === undefined) return r;   // 相手が新しく足した
+      if (b === stableStr(r)) return null;   // こちらで消した
+      return r;                        // こちらは消したが、相手が編集していた → 残す
+    }
+    return null;
+  };
+  // 並びはこの端末の順が基本。相手にだけある項目は、相手側で直前にあった項目の後ろに差し込む
+  const out = [];
+  const seen = new Set();
+  for (const x of local) { seen.add(x.id); const v = pick(x.id); if (v) out.push(v); }
+  let prevId = null;
+  for (const x of remote) {
+    if (!seen.has(x.id)) {
+      seen.add(x.id);
+      const v = pick(x.id);
+      if (v) {
+        const i = prevId ? out.findIndex(y => y.id === prevId) : -1;
+        out.splice(i + 1, 0, v);
+        prevId = x.id;
+      }
+      continue;
+    }
+    if (out.some(y => y.id === x.id)) prevId = x.id;
+  }
+  return out;
+}
+function mergeStates(base, local, remote) {
+  base = base || {};
+  const out = {};
+  const keys = new Set([...Object.keys(local || {}), ...Object.keys(remote || {})]);
+  for (const k of keys) {
+    const l = local ? local[k] : undefined;
+    const r = remote ? remote[k] : undefined;
+    const b = base[k];
+    if ((Array.isArray(l) || Array.isArray(r)) && (l === undefined || isIdArray(l)) && (r === undefined || isIdArray(r))) {
+      out[k] = mergeIdArray(isIdArray(b) ? b : [], l || [], r || []);
+      continue;
+    }
+    const v = stableStr(l) === stableStr(b) ? r : l;   // 変えた側を採用。両方変えたらこの端末
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+function cloneNormalized(obj) {
+  const c = normalizeState(JSON.parse(JSON.stringify(obj || {})));
+  for (const k of ["projects", "logs", "moyas", "notes", "noteFolders", "tasks"]) if (!Array.isArray(c[k])) c[k] = [];
+  return c;
+}
+// クラウドから来た状態を、この端末の未送信の変更を残したまま取り込む
+function applyRemoteMerged(remoteData, source) {
+  const remote = cloneNormalized(remoteData);
+  const remoteStr = stableStr(remote);
+  const editingSnap = captureEditingNote();
+  const editingLog = captureEditingLog();
+  const merged = cloneNormalized(mergeStates(syncBase, state, remote));
+  setSyncBase(remote);
+  const changedLocally = stableStr(merged) !== stableStr(state);
+  state = merged;
+  restoreEditingNote(editingSnap);
+  restoreEditingLog(editingLog);
+  saveLocal();
+  lastSyncedData = JSON.stringify(remoteData);
+  if (changedLocally) safeRenderAll(source);
+  // この端末にしか無い変更が残っていれば送り返す
+  if (stableStr(state) !== remoteStr) {
+    hasPendingLocalChanges = true;
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(pushToCloud, 500);
+  }
+}
+
 async function pushToCloud() {
   if (!navigator.onLine) { setSyncStatus("offline", "オフライン"); return; }
   // ===== 空上書きガード(2026-07-02 新設 / 2026-06-26 データ消失事故の再発防止)=====
@@ -2330,11 +2454,42 @@ async function pushToCloud() {
   }
   setSyncStatus("syncing", "同期中");
   try {
-    const { error } = await sb.from("ichibou_state").upsert({ id: SYNC_ROW_ID, data: state, updated_at: new Date().toISOString() });
-    if (error) throw error;
-    lastSyncedData = JSON.stringify(state);
-    hasPendingLocalChanges = false;
-    setSyncStatus("synced", "同期済");
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const startSnap = JSON.parse(JSON.stringify(state));   // 送信中に打たれた分を後で守るため
+      const { data: row, error: e1 } = await sb.from("ichibou_state").select("data, updated_at").eq("id", SYNC_ROW_ID).maybeSingle();
+      if (e1) throw e1;
+      if (!row || !row.data) {
+        const { error } = await sb.from("ichibou_state").upsert({ id: SYNC_ROW_ID, data: state, updated_at: new Date().toISOString() });
+        if (error) throw error;
+        setSyncBase(state);
+        lastSyncedData = JSON.stringify(state);
+        hasPendingLocalChanges = false;
+        setSyncStatus("synced", "同期済");
+        return;
+      }
+      const remote = cloneNormalized(row.data);
+      const merged = cloneNormalized(mergeStates(syncBase, startSnap, remote));
+      const nowIso = new Date().toISOString();
+      const { data: upd, error: e2 } = await sb.from("ichibou_state")
+        .update({ data: merged, updated_at: nowIso })
+        .eq("id", SYNC_ROW_ID).eq("updated_at", row.updated_at)
+        .select("updated_at");
+      if (e2) throw e2;
+      if (!upd || upd.length === 0) continue;   // 読んでから書くまでに別の端末が書いた → 読み直す
+      const mergedStr = stableStr(merged);
+      setSyncBase(merged);
+      lastSyncedData = mergedStr;
+      // 送信中にこの端末で打たれた変更は残し、相手から来た分だけ取り込む
+      const now = cloneNormalized(mergeStates(startSnap, state, merged));
+      const gotRemote = stableStr(now) !== stableStr(state);
+      state = now;
+      saveLocal();
+      if (gotRemote) safeRenderAll("push-merge");
+      hasPendingLocalChanges = stableStr(state) !== mergedStr;
+      setSyncStatus("synced", "同期済");
+      return;
+    }
+    throw new Error("sync: 4回続けて割り込まれた");
   } catch (e) { console.error("Sync push error:", e); setSyncStatus("error", "同期失敗"); }
 }
 
@@ -2345,25 +2500,14 @@ async function pullFromCloud() {
     const { data, error } = await sb.from("ichibou_state").select("data, updated_at").eq("id", SYNC_ROW_ID).single();
     if (error) throw error;
     if (data && data.data) {
-      const remoteStr = JSON.stringify(data.data);
-      const localStr = JSON.stringify(state);
+      const remoteStr = stableStr(cloneNormalized(data.data));
+      const localStr = stableStr(state);
       if (remoteStr !== localStr) {
-        const editingSnap = captureEditingNote();
-      const editingLog = captureEditingLog();
-        state = data.data;
-        if (!state.projects) state.projects = [];
-        if (!state.logs) state.logs = [];
-        if (!state.moyas) state.moyas = [];
-        if (!state.notes) state.notes = [];
-        if (!state.noteFolders) state.noteFolders = [];
-        if (!state.tasks) state.tasks = [];
-        normalizeState(state);
-        restoreEditingNote(editingSnap);
-      restoreEditingLog(editingLog);
-        restoreEditingLog(editingLog);
-        saveLocal();
+        // 2026-09-30: 置き換えではなくマージ(読み込み中に書いたタスクが消える問題の対策)
+        applyRemoteMerged(data.data, "pullFromCloud");
+      } else {
+        setSyncBase(cloneNormalized(data.data));
         lastSyncedData = remoteStr;
-        safeRenderAll("pullFromCloud");
       }
     }
     setSyncStatus("synced", "同期済");
@@ -2379,21 +2523,9 @@ function subscribeRealtime() {
       const newStr = JSON.stringify(newData);
       if (newStr === lastSyncedData) return;
       if (newStr === JSON.stringify(state)) return;
-      const editingSnap = captureEditingNote();
-      const editingLog = captureEditingLog();
-      state = newData;
-      if (!state.projects) state.projects = [];
-      if (!state.logs) state.logs = [];
-      if (!state.moyas) state.moyas = [];
-      if (!state.notes) state.notes = [];
-      if (!state.noteFolders) state.noteFolders = [];
-      if (!state.tasks) state.tasks = [];
-      normalizeState(state);
-      restoreEditingNote(editingSnap);
-      restoreEditingLog(editingLog);
-      saveLocal();
-      lastSyncedData = newStr;
-      safeRenderAll("realtime");
+      if (stableStr(cloneNormalized(newData)) === stableStr(state)) { setSyncBase(cloneNormalized(newData)); lastSyncedData = newStr; return; }
+      // 2026-09-30: 置き換えではなくマージ(こちらで書いたばかりの項目を消さない)
+      applyRemoteMerged(newData, "realtime");
       setSyncStatus("synced", "他端末から更新");
       setTimeout(() => setSyncStatus("synced", "同期済"), 2000);
     }
