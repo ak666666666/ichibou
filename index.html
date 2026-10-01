@@ -1329,6 +1329,7 @@ html { zoom: var(--ui-zoom, 1); }
 .kasegu-off { font-size: 13px; color: var(--ink-mute); line-height: 1.9; }
 .kasegu-off b { color: var(--ink-soft); font-weight: 400; }
 @media (max-width: 560px) { .goal-row { gap: 16px; } .goal-left { margin-left: 0; width: 100%; } }
+.task-prio-menu-h{width:100%;font-size:12px;opacity:.7;margin-bottom:2px}
 </style>
 </head>
 <body>
@@ -7164,6 +7165,32 @@ function taskDueState(ts) {
 function closeTaskDueMenus(except) {
   document.querySelectorAll(".task-due-menu").forEach(el => { if (el !== except) el.remove(); });
 }
+// 2026-10-01: 優先度を 高/普通/低 から自分で選ぶメニュー(期限メニューと同じ置き場所・同じ閉じ方)
+function openTaskPrioMenu(t, itemEl) {
+  const exist = itemEl.querySelector(".task-due-menu.task-prio-menu");
+  closeTaskDueMenus();
+  if (exist) return;
+  const menu = document.createElement("div");
+  menu.className = "task-due-menu task-prio-menu";
+  const curP = t.priority || "normal";
+  menu.innerHTML = `<div class="task-prio-menu-h">優先度を選ぶ</div>`
+    + TASK_PRIORITIES.map(p => {
+      const cur = p === curP ? " cur" : "";
+      return `<button class="task-due-opt${cur}" data-p="${p}">${TASK_PRIORITY_META[p].label}${cur ? " ✓" : ""}</button>`;
+    }).join("")
+    + `<button class="task-due-opt task-due-close" data-close="1">閉じる</button>`;
+  const acts = itemEl.querySelector(".task-actions");
+  acts.parentNode.insertBefore(menu, acts.nextSibling);
+  menu.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    if (btn.dataset.close) { menu.remove(); return; }
+    if (btn.dataset.p) {
+      if (btn.dataset.p !== curP) updateTask(t.id, { priority: btn.dataset.p });
+      closeTaskDueMenus(); renderTasks();
+    }
+  });
+}
 // 期限メニューを該当タスクの操作行の下に開く(モバイルでも位置ズレしないブロック表示)
 function openTaskDueMenu(t, itemEl) {
   const exist = itemEl.querySelector(".task-due-menu");
@@ -7225,7 +7252,7 @@ function openTaskDueMenu(t, itemEl) {
 if (!window.__taskDueMenuBound) {
   window.__taskDueMenuBound = true;
   document.addEventListener("click", (e) => {
-    if (e.target.closest(".task-due-menu") || e.target.closest('[data-act="bucket"]') || e.target.closest('[data-act="due"]')) return;
+    if (e.target.closest(".task-due-menu") || e.target.closest('[data-act="bucket"]') || e.target.closest('[data-act="due"]') || e.target.closest('[data-act="prio"]')) return;
     closeTaskDueMenus();
   });
 }
@@ -7253,7 +7280,7 @@ function taskItemEl(t, siblings) {
         <button class="task-chip" data-act="bucket" title="タップで期限を選び直す(本日/今週/今月/先・日付指定)">${bm.icon} ${escapeHtml(bm.label)} ▾</button>
         ${t.dueAt ? `<button class="task-chip task-due-chip ${taskDueState(t.dueAt)}" data-act="due" title="タップで期限を変更">📌 ${escapeHtml(taskRangeLabel(t))}</button>` : ""}
         <button class="task-chip" data-act="type" title="タップで 🎯/🤔 を切替">${t.type === "action" ? "🎯 行動" : "🤔 判断"}</button>
-        <button class="task-chip task-prio-chip prio-${t.priority || "normal"}" data-act="prio" title="優先度(タップで 高→普通→低 と切替)。高いものが枠の上に来ます">${pm.label}</button>
+        <button class="task-chip task-prio-chip prio-${t.priority || "normal"}" data-act="prio" title="優先度(タップで 高/普通/低 を選ぶ)。高いものが枠の上に来ます">${pm.label}</button>
         <button class="task-chip" data-act="note">${hasNote ? "📝 メモ" : "＋ メモ"}</button>
         <button class="log-want-toggle ${t.wantAnswer ? 'on' : ''}" data-act="want" title="タップでClaude回答&実行希望を切替">${t.wantAnswer ? '☑ 回答希望' : '☐ 回答希望'}</button>
         ${t.wantAnswer ? `<button class="log-urgent-btn ${t.urgentClaude ? 'on' : ''}" data-act="urgent">${t.urgentClaude ? '🚀 起動待ち…' : '🚀 今すぐ'}</button>` : ''}
@@ -7302,9 +7329,8 @@ function taskItemEl(t, siblings) {
         updateTask(t.id, { type: t.type === "action" ? "decision" : "action" });
         renderTasks();
       } else if (act === "prio") {
-        const cur = TASK_PRIORITIES.indexOf(t.priority || "normal");
-        updateTask(t.id, { priority: TASK_PRIORITIES[(cur + 1) % TASK_PRIORITIES.length] });
-        renderTasks();
+        // 2026-10-01: タップで勝手に切り替わる方式をやめ、選択メニュー方式へ(晃良指示)
+        openTaskPrioMenu(t, item);
       } else if (act === "note") {
         const ta = item.querySelector(".task-note-input");
         const show = ta.style.display === "none";
