@@ -7717,6 +7717,7 @@ function renderInbox() {
       <div class="inbox-header">
         ${kindHtml}${priorityHtml}${dueHtml}${hintHtml}${destHtml}
         <span class="inbox-time">${formatTs(ts)}</span>
+        ${copyBtnHtml(true)}
       </div>
       <div class="inbox-title-text">${escapeHtml(item.title || "(無題)")}</div>
       ${item.detail ? `<div class="inbox-detail">${escapeHtml(item.detail)}</div>` : ""}
@@ -7725,6 +7726,11 @@ function renderInbox() {
     el.querySelectorAll("[data-act]").forEach(btn => {
       btn.addEventListener("click", () => handleInboxAction(item, btn.dataset.act));
     });
+    // 2026-10-02 晃良要望「受信箱にもコピペ欄欲しい」(雑メモ x1c326kr5):
+    // 他タブ(回答・ノート・タスク・雑メモ・もや)と同じ 📋 を受信箱カードにも付ける。
+    // タイトルと本文の両方を渡したいので、DOM ではなく _copyText に全文を持たせる。
+    const ibCopyBtn = el.querySelector("[data-copy]");
+    if (ibCopyBtn) ibCopyBtn._copyText = [item.title || "", item.detail || ""].filter(Boolean).join("\n\n");
 
     // 2026-08-06: 受信箱の項目にもその場で返信できるようにする。
     // 送ると受信箱からは消え、以後のやり取りは回答タブに集約される(晃良指示)。
