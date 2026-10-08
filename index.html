@@ -729,6 +729,9 @@ html { zoom: var(--ui-zoom, 1); }
 .tasks-input-add:hover { opacity: 0.88; }
 .task-title-row { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
 .task-title { flex: 1 1 auto; min-width: 140px; }
+/* 2026-10-08: 編集中の欄の真下に出る「✓ 保存」。押すと確定してキーボードを閉じる */
+.edit-save-chip { position: absolute; z-index: 9000; display: none; align-items: center; gap: 6px; padding: 7px 14px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; font-family: inherit; box-shadow: 0 4px 14px rgba(0,0,0,.18); cursor: pointer; touch-action: manipulation; }
+.edit-save-chip.show { display: inline-flex; }
 .task-title[contenteditable="true"] { outline: none; border-radius: 3px; padding: 1px 3px; white-space: pre-wrap; }
 .task-title[contenteditable="true"]:hover { background: rgba(255,255,255,0.75); }
 .task-title[contenteditable="true"]:focus { background: #fff; box-shadow: inset 0 0 0 1px var(--accent); }
@@ -2487,6 +2490,28 @@ function cloneNormalized(obj) {
   return c;
 }
 // クラウドから来た状態を、この端末の未送信の変更を残したまま取り込む
+// 2026-10-08: 同期で state を差し替えるとき、項目(id)ごとに「今あるオブジェクト」に中身を書き戻す。
+// 以前は毎回まるごと新しいオブジェクトに入れ替えていたため、画面の編集欄が握っている項目が
+// 「もう state に無い古いオブジェクト」になり、欄外タップで保存しても state に反映されず消えていた
+// (晃良「記録したメモを編集して、別の場所をタップしたら編集が全部消える」)。
+function adoptState(next) {
+  for (const k of Object.keys(state)) if (!(k in next)) delete state[k];
+  for (const [k, v] of Object.entries(next)) {
+    if (isIdArray(v) && Array.isArray(state[k])) {
+      const cur = new Map(state[k].filter(x => x && x.id).map(x => [x.id, x]));
+      state[k] = v.map(item => {
+        const old = cur.get(item.id);
+        if (!old || old === item) return item;
+        for (const key of Object.keys(old)) if (!(key in item)) delete old[key];
+        Object.assign(old, item);
+        return old;
+      });
+    } else {
+      state[k] = v;
+    }
+  }
+}
+
 function applyRemoteMerged(remoteData, source) {
   recordLocalDeletions();
   const remote = cloneNormalized(remoteData);
@@ -2496,7 +2521,7 @@ function applyRemoteMerged(remoteData, source) {
   const merged = cloneNormalized(mergeStates(syncBase, state, remote));
   setSyncBase(remote);
   const changedLocally = stableStr(merged) !== stableStr(state);
-  state = merged;
+  adoptState(merged);
   restoreEditingNote(editingSnap);
   restoreEditingLog(editingLog);
   saveLocal();
@@ -2571,7 +2596,7 @@ async function pushToCloud() {
       // 送信中にこの端末で打たれた変更は残し、相手から来た分だけ取り込む
       const now = cloneNormalized(mergeStates(startSnap, state, merged));
       const gotRemote = stableStr(now) !== stableStr(state);
-      state = now;
+      adoptState(now);
       saveLocal();
       if (gotRemote) safeRenderAll("push-merge");
       hasPendingLocalChanges = stableStr(state) !== mergedStr;
@@ -9164,6 +9189,50 @@ async function checkForNewVersion() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForNewVersion(); });
 setInterval(checkForNewVersion, 5 * 60 * 1000);
 setTimeout(checkForNewVersion, 15 * 1000);
+
+// ===== 編集欄の「✓ 保存」ボタン(2026-10-08 晃良要望) =====
+// 記録済みのメモ・タスク名・タスクメモ・もや・案件欄などを編集し始めると、欄の右下に「✓ 保存」が出る。
+// 押すと欄を確定(blur)して、いつもの保存経路(各欄の blur 保存)を通す。欄外タップでも今までどおり保存される。
+// 押した瞬間にフォーカスが移ると blur が先に走ってボタンが消えるので、pointerdown を止めてから自分で確定する。
+const EDIT_SAVE_SELECTOR = '[contenteditable="true"], .task-note-input';
+const editSaveChip = document.createElement("button");
+editSaveChip.type = "button";
+editSaveChip.className = "edit-save-chip";
+editSaveChip.textContent = "✓ 保存";
+document.body.appendChild(editSaveChip);
+let editSaveTarget = null;
+function placeEditSaveChip() {
+  if (!editSaveTarget || !editSaveTarget.isConnected) { hideEditSaveChip(); return; }
+  const r = editSaveTarget.getBoundingClientRect();
+  const w = editSaveChip.offsetWidth || 80;
+  const left = Math.max(8, Math.min(window.scrollX + r.right - w, window.scrollX + document.documentElement.clientWidth - w - 8));
+  editSaveChip.style.left = left + "px";
+  editSaveChip.style.top = (window.scrollY + r.bottom + 6) + "px";
+}
+function hideEditSaveChip() { editSaveTarget = null; editSaveChip.classList.remove("show"); }
+document.addEventListener("focusin", (e) => {
+  const el = e.target;
+  if (!(el instanceof Element) || !el.matches(EDIT_SAVE_SELECTOR)) { hideEditSaveChip(); return; }
+  editSaveTarget = el;
+  editSaveChip.classList.add("show");
+  placeEditSaveChip();
+});
+document.addEventListener("focusout", (e) => {
+  // ボタン自身を押した場合は pointerdown で止めているのでここには来ない
+  setTimeout(() => { if (!document.activeElement || !document.activeElement.matches || !document.activeElement.matches(EDIT_SAVE_SELECTOR)) hideEditSaveChip(); }, 0);
+});
+document.addEventListener("input", (e) => { if (e.target === editSaveTarget) placeEditSaveChip(); }, true);
+window.addEventListener("scroll", () => { if (editSaveTarget) placeEditSaveChip(); }, { passive: true });
+window.addEventListener("resize", () => { if (editSaveTarget) placeEditSaveChip(); });
+if (window.visualViewport) window.visualViewport.addEventListener("resize", () => { if (editSaveTarget) placeEditSaveChip(); });
+editSaveChip.addEventListener("pointerdown", (e) => e.preventDefault());   // 押した瞬間にフォーカスを奪わない
+editSaveChip.addEventListener("mousedown", (e) => e.preventDefault());
+editSaveChip.addEventListener("click", () => {
+  const el = editSaveTarget;
+  hideEditSaveChip();
+  if (el && el.isConnected) el.blur();   // 各欄の blur 保存がここで走る
+  if (typeof showCopyToast === "function") showCopyToast("保存しました");
+});
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
