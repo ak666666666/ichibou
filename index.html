@@ -1333,6 +1333,24 @@ html { zoom: var(--ui-zoom, 1); }
 .kasegu-off b { color: var(--ink-soft); font-weight: 400; }
 @media (max-width: 560px) { .goal-row { gap: 16px; } .goal-left { margin-left: 0; width: 100%; } }
 .task-prio-menu-h{width:100%;font-size:12px;opacity:.7;margin-bottom:2px}
+/* 雑メモ ⇄ ノート紐付け(2026-11-04) */
+.log-notes-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.log-note-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #efe7d4; color: var(--ink); border: 1px solid var(--line-soft); font-size: 11px; cursor: pointer; font-family: "Zen Kaku Gothic New", sans-serif; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-note-chip .remove { margin-left: 4px; opacity: 0.6; padding: 0 2px; }
+.log-item.cal-flash { animation: calFlash 1.6s ease-out; }
+#link-modal { z-index: 120; }   /* ノート編集画面(100)の上に出す */
+.link-search-row { display: flex; gap: 6px; margin-bottom: 10px; }
+.link-search-row input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); font-size: 15px; background: #fff; }
+.link-list { max-height: 48vh; overflow-y: auto; margin-bottom: 10px; }
+.link-item .pick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; margin-right: 8px; }
+.link-item.on { border-color: var(--accent); background: rgba(200,80,46,0.07); }
+.link-item.on .pick-name { font-weight: 700; }
+.note-memos { width: 100%; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.note-memos:empty { display: none; }
+.note-memo-item { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; background: #fbf9f3; border: 1px solid var(--line-soft); cursor: pointer; font-size: 13px; }
+.note-memo-time { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); white-space: nowrap; padding-top: 2px; }
+.note-memo-text { flex: 1; min-width: 0; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.note-memo-x { background: none; border: none; color: var(--ink-mute); cursor: pointer; font-size: 13px; padding: 0 2px; }
 </style>
 </head>
 <body>
@@ -1806,6 +1824,23 @@ html { zoom: var(--ui-zoom, 1); }
   </div>
 </div>
 
+<!-- 雑メモ ⇄ ノートの紐付け(2026-11-04) -->
+<div class="modal-backdrop" id="link-modal">
+  <div class="modal">
+    <h3 id="link-modal-title">どのノートに紐付ける?</h3>
+    <p id="link-modal-sub" style="font-size:13px;"></p>
+    <div class="link-search-row">
+      <input type="search" id="link-search" placeholder="🔍 絞り込み(タイトル・本文・フォルダ)" autocomplete="off" />
+      <button class="mic-btn" id="link-search-mic" type="button" title="音声で絞り込み" aria-label="音声で絞り込み">🎙</button>
+    </div>
+    <div class="pick-list link-list" id="link-list"></div>
+    <div id="link-create-row"><button class="pick-none" id="link-create-btn" type="button" style="width:100%;">＋ このメモの1行目で新しいノートを作って紐付け</button></div>
+    <div class="modal-actions" style="margin-top:12px;">
+      <button class="btn" id="link-done">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <!-- フォルダの移動(2026-08-17 新設。作成後にフォルダを入れ子へ出し入れする手段が無かった) -->
 <div class="modal-backdrop" id="folder-move-modal">
   <div class="modal">
@@ -1894,6 +1929,11 @@ html { zoom: var(--ui-zoom, 1); }
       <span>🔗 リンク:</span>
       <span id="note-edit-attach-chips" style="display:flex;flex-wrap:wrap;gap:6px;flex:1;"></span>
       <button class="attach-add" id="note-edit-attach-add">＋追加</button>
+    </div>
+    <div class="note-edit-folder-row note-memo-row" style="flex-wrap:wrap;">
+      <span>💭 雑メモ<span id="note-edit-memo-count"></span>:</span>
+      <button class="attach-add" id="note-edit-memo-add" type="button">＋紐付け</button>
+      <div class="note-memos" id="note-edit-memos"></div>
     </div>
     <input type="text" class="note-edit-title" id="note-edit-title" placeholder="タイトル">
     <div class="note-edit-folder-row" style="justify-content:flex-start;gap:14px;flex-wrap:wrap;">
@@ -2002,6 +2042,8 @@ function normalizeLog(l) {
     completed: false, completedAt: null, tags: [], wantAnswer: false, urgentClaude: false, ...src
   });
   o.trackDone = src.trackDone === undefined ? true : src.trackDone === true;
+  // noteIds(2026-11-04): この雑メモを紐付けたノートの id(複数可)。消えたノートの id は表示時に無視する
+  o.noteIds = Array.isArray(src.noteIds) ? [...new Set(src.noteIds.filter(x => typeof x === "string" && x))] : [];
   return o;
 }
 function normalizeNote(n) {
@@ -3442,6 +3484,7 @@ function renderLogs() {
         <div class="log-time">${timeStr}${editedLabel}${completedLabel}</div>
         <div class="log-text" ${editableAttr} data-copy-src data-id="${log.id}">${escapeHtml(logDisplayText(log))}</div>
         ${tagsRowHtml}
+        ${logNotesRowHtml(log)}
         <div class="log-actions">${tagHtml}${wantBtn}${urgentBtn}${revertHtml}${completeHtml}<button class="log-attach-btn" data-attach title="URLリンクを添付">📎</button><button class="log-delete">削除</button></div>
       `;
 
@@ -3494,6 +3537,15 @@ function renderLogs() {
 
       const assignBtn = item.querySelector("[data-assign]");
       if (assignBtn) assignBtn.addEventListener("click", () => openPickModal(log));
+      // 📓 ノート紐付け(2026-11-04)
+      const notesRow = item.querySelector(".log-notes-row");
+      if (notesRow) notesRow.addEventListener("click", (e) => {
+        const un = e.target.closest("[data-unlinknote]");
+        if (un) { e.stopPropagation(); unlinkLogNote(log, un.dataset.unlinknote); saveState(); renderLogs(); renderNotes(); return; }
+        const op = e.target.closest("[data-opennote]");
+        if (op) { openNoteEdit(op.dataset.opennote); return; }
+        if (e.target.closest("[data-linknote]")) openLinkPicker("notes", log);
+      });
       const retagBtn = item.querySelector("[data-retag]");
       if (retagBtn) retagBtn.addEventListener("click", () => openPickModal(log));
       // 完了チェックを持たないメモにはボタンが無い(2026-09-16)
@@ -3634,6 +3686,144 @@ document.getElementById("capture-input").addEventListener("input", autoGrowCaptu
 document.getElementById("capture-input").addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); saveLog(); }
 });
+
+// ===== 雑メモ ⇄ ノートの紐付け(2026-11-04 晃良要望「雑メモをノートの各ノートに紐付けたい」)=====
+// 持ち方: 雑メモ側に noteIds[] を持つ(ノート側には持たない=片側だけ更新すれば同期の衝突が起きない)。
+// ノート側の「💭 紐付いた雑メモ」はこの noteIds から逆引きして出す。
+function logLinkedNotes(log) {
+  const ids = Array.isArray(log.noteIds) ? log.noteIds : [];
+  return ids.map(id => (state.notes || []).find(n => n.id === id)).filter(Boolean);
+}
+function noteLinkedLogs(noteId) {
+  return state.logs.filter(l => !isSystemLog(l) && Array.isArray(l.noteIds) && l.noteIds.includes(noteId))
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+}
+function noteLabel(n) {
+  const t = (n.title || "").trim() || (n.body || "").split("\n")[0].trim();
+  return t ? t.slice(0, 40) : "(無題)";
+}
+function linkLogNote(log, noteId) {
+  if (!Array.isArray(log.noteIds)) log.noteIds = [];
+  if (!log.noteIds.includes(noteId)) log.noteIds.push(noteId);
+}
+function unlinkLogNote(log, noteId) {
+  if (Array.isArray(log.noteIds)) log.noteIds = log.noteIds.filter(x => x !== noteId);
+}
+function logNotesRowHtml(log) {
+  const chips = logLinkedNotes(log).map(n =>
+    `<button class="log-note-chip" data-opennote="${n.id}" title="タップでノートを開く">📓 ${escapeHtml(noteLabel(n))}<span class="remove" data-unlinknote="${n.id}" title="紐付けを外す">✕</span></button>`
+  ).join("");
+  return `<div class="log-notes-row">${chips}<button class="log-assign-btn" data-linknote>＋ ノートに紐付け</button></div>`;
+}
+function jumpToLog(logId) {
+  if (document.getElementById("note-edit-modal").classList.contains("open")) closeNoteEdit();
+  const tab = document.querySelector('.tab[data-view="capture"]');
+  if (tab) tab.click();
+  setTimeout(() => {
+    const t = document.querySelector(`#log-list .log-text[data-id="${logId}"]`);
+    const el = t && t.closest(".log-item");
+    if (!el) { showCopyToast("このメモは今の絞り込み(タグ・完了は隠す等)で見えていません"); return; }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("cal-flash");
+    setTimeout(() => el.classList.remove("cal-flash"), 1700);
+  }, 80);
+}
+// mode "notes": 雑メモ(log)にノートを紐付ける / mode "logs": ノート(note)に雑メモを紐付ける
+let linkPick = null;
+function openLinkPicker(mode, target) {
+  linkPick = { mode, target };
+  document.getElementById("link-modal-title").textContent = mode === "notes" ? "どのノートに紐付ける?" : "どの雑メモを紐付ける?";
+  document.getElementById("link-modal-sub").textContent = mode === "notes"
+    ? "タップで付け外し(複数OK)。紐付けたノートを開くと、このメモが一覧で見えます。"
+    : "タップで付け外し(複数OK)。新しい順に出ます。";
+  document.getElementById("link-create-row").hidden = mode !== "notes";
+  const q = document.getElementById("link-search");
+  q.value = "";
+  renderLinkList();
+  document.getElementById("link-modal").classList.add("open");
+}
+function renderLinkList() {
+  if (!linkPick) return;
+  const list = document.getElementById("link-list");
+  const q = document.getElementById("link-search").value.trim().toLowerCase();
+  const hit = (str) => !q || String(str || "").toLowerCase().includes(q);
+  let rows = [];
+  if (linkPick.mode === "notes") {
+    const log = linkPick.target;
+    const folderName = (n) => n.folderId ? (state.noteFolders.find(f => f.id === n.folderId)?.name || "") : "";
+    rows = (state.notes || []).slice()
+      .filter(n => hit(n.title) || hit(n.body) || hit(folderName(n)))
+      .sort((a, b) => {
+        const la = (log.noteIds || []).includes(a.id) ? 0 : 1, lb = (log.noteIds || []).includes(b.id) ? 0 : 1;
+        return la - lb || (b.updatedAt || 0) - (a.updatedAt || 0);
+      })
+      .slice(0, 120)
+      .map(n => ({ id: n.id, on: (log.noteIds || []).includes(n.id), name: noteLabel(n), meta: folderName(n) ? "📂 " + folderName(n) : formatTsShort(n.updatedAt || n.createdAt) }));
+  } else {
+    const note = linkPick.target;
+    rows = state.logs.filter(l => !isSystemLog(l) && hit(logDisplayText(l)))
+      .sort((a, b) => {
+        const la = (a.noteIds || []).includes(note.id) ? 0 : 1, lb = (b.noteIds || []).includes(note.id) ? 0 : 1;
+        return la - lb || (b.ts || 0) - (a.ts || 0);
+      })
+      .slice(0, 120)
+      .map(l => ({ id: l.id, on: (l.noteIds || []).includes(note.id), name: logDisplayText(l).replace(/\s+/g, " ").slice(0, 70), meta: formatTsShort(l.ts) }));
+  }
+  if (rows.length === 0) {
+    list.innerHTML = `<div class="empty" style="padding:16px;">${q ? "見つからない。" : (linkPick.mode === "notes" ? "ノートがまだない。下のボタンで作れます。" : "雑メモがまだない。")}</div>`;
+    return;
+  }
+  list.innerHTML = rows.map(r =>
+    `<div class="pick-item link-item${r.on ? " on" : ""}" data-lid="${r.id}"><span class="pick-name">${r.on ? "✓ " : ""}${escapeHtml(r.name)}</span><span class="pick-meta">${escapeHtml(r.meta || "")}</span></div>`
+  ).join("");
+}
+function toggleLinkPick(id) {
+  if (!linkPick) return;
+  if (linkPick.mode === "notes") {
+    const log = linkPick.target;
+    if ((log.noteIds || []).includes(id)) unlinkLogNote(log, id); else linkLogNote(log, id);
+  } else {
+    const log = state.logs.find(l => l.id === id);
+    if (!log) return;
+    if ((log.noteIds || []).includes(linkPick.target.id)) unlinkLogNote(log, linkPick.target.id); else linkLogNote(log, linkPick.target.id);
+  }
+  saveState();
+  renderLinkList();
+}
+function closeLinkPicker() {
+  const lp = linkPick;
+  document.getElementById("link-modal").classList.remove("open");
+  linkPick = null;
+  renderLogs();
+  if (lp && lp.mode === "logs" && editingNoteId === lp.target.id) renderNoteMemoRow(lp.target);
+  else renderNotes();
+}
+function createNoteFromLinkPick() {
+  if (!linkPick || linkPick.mode !== "notes") return;
+  const log = linkPick.target;
+  const text = (log.text || "").trim();
+  const note = normalizeNote({ title: text.split("\n")[0].slice(0, 30), body: "" });
+  state.notes.push(note);
+  linkLogNote(log, note.id);
+  saveState();
+  closeLinkPicker();
+  showCopyToast("ノート「" + noteLabel(note) + "」を作って紐付けました");
+}
+// ノート編集画面の「💭 雑メモ」欄
+function renderNoteMemoRow(note) {
+  const box = document.getElementById("note-edit-memos");
+  const cnt = document.getElementById("note-edit-memo-count");
+  if (!box || !note) return;
+  const logs = noteLinkedLogs(note.id);
+  if (cnt) cnt.textContent = logs.length ? `(${logs.length})` : "";
+  box.innerHTML = logs.map(l =>
+    `<div class="note-memo-item" data-jumplog="${l.id}" title="タップで雑メモの場所へ">
+      <span class="note-memo-time">${formatTsShort(l.ts)}${l.completed ? " ✓" : ""}</span>
+      <span class="note-memo-text">${escapeHtml(logDisplayText(l))}</span>
+      <button class="note-memo-x" data-unlinklog="${l.id}" title="紐付けを外す">✕</button>
+    </div>`
+  ).join("");
+}
 
 // ===== プロジェクト選択モーダル =====
 let pickTargetLog = null;
@@ -4284,6 +4474,7 @@ function renderNotes() {
           <span>${dateStr}</span>
           ${folderName ? `<span>📂 ${escapeHtml(folderName)}</span>` : ''}
           ${projName ? `<span>📎 ${escapeHtml(projName)}</span>` : ''}
+          ${(() => { const c = noteLinkedLogs(n.id).length; return c ? `<span title="紐付いた雑メモ">💭 ${c}</span>` : ''; })()}
           ${wantBadge}
         </div>
       `;
@@ -4575,6 +4766,7 @@ function openNoteEdit(id) {
 
   // 🔗 リンク添付行(機能H①)
   renderNoteAttachRow(note);
+  renderNoteMemoRow(note);   // 💭 紐付いた雑メモ(2026-11-04)
 
   document.getElementById("note-edit-meta").textContent = stampPair(note.createdAt, note.updatedAt);
 
@@ -4644,13 +4836,16 @@ function closeNoteEdit() {
   document.getElementById("note-edit-modal").classList.remove("open");
   editingNoteId = null;
   renderNotes();
+  renderLogs();   // 雑メモ側の 📓 チップにノート名の変更を反映(2026-11-04)
 }
 
 function deleteCurrentNote() {
   if (!editingNoteId) return;
   if (!confirm("このノートを完全に削除します。復元できません。本当によろしいですか?")) return;
   if (noteEditSaveTimer) { clearTimeout(noteEditSaveTimer); noteEditSaveTimer = null; }
+  const deletedId = editingNoteId;
   state.notes = state.notes.filter(n => n.id !== editingNoteId);
+  state.logs.forEach(l => unlinkLogNote(l, deletedId));   // 紐付けの残骸を掃除(2026-11-04)
   document.getElementById("note-edit-modal").classList.remove("open");
   editingNoteId = null;
   saveState();
@@ -4658,6 +4853,34 @@ function deleteCurrentNote() {
 }
 
 // ノート関連イベントバインド
+// 雑メモ ⇄ ノート紐付け(2026-11-04)
+document.getElementById("link-list").addEventListener("click", (e) => {
+  const it = e.target.closest("[data-lid]");
+  if (it) toggleLinkPick(it.dataset.lid);
+});
+document.getElementById("link-search").addEventListener("input", renderLinkList);
+document.getElementById("link-done").onclick = closeLinkPicker;
+document.getElementById("link-create-btn").onclick = createNoteFromLinkPick;
+document.getElementById("link-modal").addEventListener("click", (e) => { if (e.target.id === "link-modal") closeLinkPicker(); });
+window.addEventListener("load", () => {
+  if (window.bindMicEl) window.bindMicEl(document.getElementById("link-search-mic"), document.getElementById("link-search"), null);
+});
+document.getElementById("note-edit-memo-add").onclick = () => {
+  const note = state.notes.find(n => n.id === editingNoteId);
+  if (note) { saveNoteEditNow(); openLinkPicker("logs", note); }
+};
+document.getElementById("note-edit-memos").addEventListener("click", (e) => {
+  const note = state.notes.find(n => n.id === editingNoteId);
+  const un = e.target.closest("[data-unlinklog]");
+  if (un) {
+    e.stopPropagation();
+    const log = state.logs.find(l => l.id === un.dataset.unlinklog);
+    if (log && note) { unlinkLogNote(log, note.id); saveState(); renderNoteMemoRow(note); }
+    return;
+  }
+  const j = e.target.closest("[data-jumplog]");
+  if (j) jumpToLog(j.dataset.jumplog);
+});
 document.getElementById("note-new").onclick = createNote;
 document.getElementById("note-new-folder").onclick = createNoteFolder;
 document.getElementById("folder-move-cancel").onclick = closeFolderMove;
