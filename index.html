@@ -1351,6 +1351,9 @@ html { zoom: var(--ui-zoom, 1); }
 .note-memo-time { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); white-space: nowrap; padding-top: 2px; }
 .note-memo-text { flex: 1; min-width: 0; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .note-memo-x { background: none; border: none; color: var(--ink-mute); cursor: pointer; font-size: 13px; padding: 0 2px; }
+/* 優先度別の枠(2026-11-06) */
+.tasks-category.tasks-prio-group.prio-high { border-left: 3px solid var(--accent); }
+.tasks-category.tasks-prio-group.prio-low { opacity: .92; }
 </style>
 </head>
 <body>
@@ -1621,6 +1624,11 @@ html { zoom: var(--ui-zoom, 1); }
           <option value="thisMonth">🗓 今月</option>
           <option value="future">🌱 先</option>
         </select>
+        <select class="tasks-input-sel" id="task-input-prio" title="優先度">
+          <option value="normal">－ 普通</option>
+          <option value="high">🔥 高</option>
+          <option value="low">↓ 低</option>
+        </select>
         <select class="tasks-input-sel" id="task-input-type">
           <option value="action">🎯 自分でやる</option>
           <option value="decision">🤔 判断するだけ</option>
@@ -1660,6 +1668,12 @@ html { zoom: var(--ui-zoom, 1); }
         <button class="tasks-filter-btn" data-typefilter="all" id="tf-all">🎯+🤔</button>
         <button class="tasks-filter-btn" data-typefilter="action" id="tf-action">🎯 自分でやる</button>
         <button class="tasks-filter-btn" data-typefilter="decision" id="tf-decision">🤔 判断するだけ</button>
+        <span class="tasks-filter-sep">|</span>
+        <button class="tasks-filter-btn" data-priofilter="all" title="優先度で絞らない">全優先度</button>
+        <button class="tasks-filter-btn" data-priofilter="high">🔥 高</button>
+        <button class="tasks-filter-btn" data-priofilter="normal">－ 普通</button>
+        <button class="tasks-filter-btn" data-priofilter="low">↓ 低</button>
+        <button class="tasks-filter-btn" id="tasks-group-prio" type="button" title="本日/今週…の枠ではなく、🔥高/普通/低 の枠で並べる">📊 優先度別に並べる</button>
         <span class="tasks-filter-sep">|</span>
         <label class="tasks-hide-done"><input type="checkbox" id="tasks-hide-done"> 完了は隠す</label>
       </div>
@@ -6586,6 +6600,21 @@ function renderAll() {
 let tasksFilter = "today";        // today / thisWeek / all(時間軸フィルタ)
 let tasksTypeFilter = "all";       // all / action / decision
 let tasksHideDone = false;
+// 優先度での絞り込み・優先度別表示(2026-11-06 晃良要望)。どちらも端末ごとに覚える
+const TASKS_PRIO_KEY = "ichibou_tasks_prio_v1";
+let tasksPrioFilter = "all";     // all / high / normal / low
+let tasksGroupByPrio = false;    // true=枠を 🔥高/普通/低 にする
+try {
+  const v = JSON.parse(localStorage.getItem(TASKS_PRIO_KEY) || "{}");
+  if (["all","high","normal","low"].includes(v.f)) tasksPrioFilter = v.f;
+  tasksGroupByPrio = v.g === true;
+} catch (_) {}
+function saveTasksPrioPref() {
+  try { localStorage.setItem(TASKS_PRIO_KEY, JSON.stringify({ f: tasksPrioFilter, g: tasksGroupByPrio })); } catch (_) {}
+}
+function taskPrioOk(t) {
+  return tasksPrioFilter === "all" || (t.priority || "normal") === tasksPrioFilter;
+}
 // 並び順(2026-09-22 雑メモ xinen3911)。created=古い順(従来どおり既定) / newest / due / updated / manual
 const TASKS_SORT_KEY = "ichibou_tasks_sort_v1";
 let tasksSort = "created";
@@ -6875,7 +6904,7 @@ function stockDecide(action) {
   if (bg) bg.addEventListener("click", (ev) => { if (ev.target === bg) stockClose(); });
 })();
 
-function addTask(title, bucket, type, when) {
+function addTask(title, bucket, type, when, priority) {
   const t = (title || "").trim();
   if (!t) return false;
   const w = when || {};
@@ -6890,20 +6919,22 @@ function addTask(title, bucket, type, when) {
   const newTaskId = uid();
   tasksArr().push(normalizeTask({
     id: newTaskId, title: t, bucket: finalBucket, type,
+    priority: TASK_PRIORITIES.includes(priority) ? priority : "normal",
     dueAt: w.dueAt ?? null,
     dueHasTime: w.dueHasTime === true,
     startAt: w.startAt ?? null
   }));
   saveState();
-  ensureTaskVisible(finalBucket, type);   // 「追加したのに画面に出ない」を防ぐ
+  ensureTaskVisible(finalBucket, type, TASK_PRIORITIES.includes(priority) ? priority : "normal");   // 「追加したのに画面に出ない」を防ぐ
   renderTasks();
   offerUndo("タスクを追加しました", undoStateItem("tasks", newTaskId, renderTasks));
   return true;
 }
 
 // 追加したタスクが現在のフィルタで見えないなら、フィルタを広げる
-function ensureTaskVisible(bucket, type) {
+function ensureTaskVisible(bucket, type, priority) {
   let changed = false;
+  if (tasksPrioFilter !== "all" && priority && tasksPrioFilter !== priority) { tasksPrioFilter = "all"; saveTasksPrioPref(); changed = true; }
   const idx = TASK_BUCKETS.indexOf(bucket);   // bucket は taskBucketOf() で解決済みの値が渡る
   const curIdx = TASK_BUCKETS.indexOf(tasksFilter);
   if (tasksFilter !== "all" && idx > curIdx) { tasksFilter = "all"; changed = true; }
@@ -6918,6 +6949,11 @@ function syncTaskFilterButtons() {
   document.querySelectorAll('.tasks-filter-btn[data-typefilter]').forEach(b => {
     b.classList.toggle("active", b.dataset.typefilter === tasksTypeFilter);
   });
+  document.querySelectorAll('.tasks-filter-btn[data-priofilter]').forEach(b => {
+    b.classList.toggle("active", b.dataset.priofilter === tasksPrioFilter);
+  });
+  const g = document.getElementById("tasks-group-prio");
+  if (g) g.classList.toggle("active", tasksGroupByPrio);
 }
 
 // patch を当てて保存。再描画は呼び出し側の判断
@@ -7011,7 +7047,7 @@ function renderTasks() {
   // 2026-08-19 提案 → 8/21承認の②「PC側: [PC]案件を上部に固定表示」(2026-08-24 実装)
   // 回答タブから 🖥 PCでやる で積んだものを、時間軸に関係なく先頭にまとめる。
   // PCを開いた瞬間に「PCでしかできない用事」が目に入るのが目的。
-  const pcTasks = all.filter(t => !t.completed && /^🖥/.test(t.title || ""));
+  const pcTasks = all.filter(t => !t.completed && /^🖥/.test(t.title || "") && taskPrioOk(t));
   if (pcTasks.length) {
     pcTasks.sort(taskCompare);
     const pcEl = document.createElement("div");
@@ -7032,26 +7068,32 @@ function renderTasks() {
   // それまでは枠(本日/今週…)ごとに未完了→完了が並んでいたので、本日の完了済みが今週の未完了より上に来ていた。
   // 完了済みは枠から外して、いちばん下の「✓ 完了」ひとつにまとめる。
   const doneTasks = [];
-  includeBuckets.forEach(bucket => {
-    const meta = TASK_BUCKET_META[bucket];
+  // 2026-11-06: 「📊 優先度別に並べる」中は、枠を 時間軸 → 優先度 に差し替える(時間軸の絞り込みはそのまま効く)
+  const groups = tasksGroupByPrio
+    ? TASK_PRIORITIES.filter(p => tasksPrioFilter === "all" || p === tasksPrioFilter)
+        .map(p => ({ key: p, title: TASK_PRIORITY_META[p].label, cls: " tasks-prio-group prio-" + p, test: (t) => (t.priority || "normal") === p && includeBuckets.includes(taskBucketOf(t)) }))
+    : includeBuckets.map(b => ({ key: b, title: `${TASK_BUCKET_META[b].icon} ${escapeHtml(TASK_BUCKET_META[b].label)}`, cls: "", test: (t) => taskBucketOf(t) === b }));
+  groups.forEach(grp => {
     const filtered = all.filter(t => {
-      if (taskBucketOf(t) !== bucket) return false;
+      if (!grp.test(t)) return false;
       if (!t.completed && /^🖥/.test(t.title || "")) return false;   // 上の「PCでやる」に出しているので重複させない
       if (tasksTypeFilter !== "all" && t.type !== tasksTypeFilter) return false;
+      if (!taskPrioOk(t)) return false;
       if (t.completed) { if (!tasksHideDone) doneTasks.push(t); return false; }
       return true;
     });
     if (filtered.length === 0) return;
 
-    // 同じ枠の中では 🔥高→普通→低、その中で選んだ並び順(既定=作成順・古いものが上)
-    filtered.sort(taskCompare);
+    // 時間軸の枠: 🔥高→普通→低、その中で選んだ並び順 / 優先度の枠: 本日→明日→…、その中で選んだ並び順
+    if (tasksGroupByPrio) filtered.sort((a, b) => (TASK_BUCKETS.indexOf(taskBucketOf(a)) - TASK_BUCKETS.indexOf(taskBucketOf(b))) || taskCompare(a, b));
+    else filtered.sort(taskCompare);
 
     const catEl = document.createElement("div");
-    catEl.className = "tasks-category";
+    catEl.className = "tasks-category" + grp.cls;
     const remainingInCat = filtered.filter(t => !t.completed).length;
     catEl.innerHTML = `
       <div class="tasks-category-h">
-        <div class="tasks-category-title">${meta.icon} ${escapeHtml(meta.label)}</div>
+        <div class="tasks-category-title">${grp.title}</div>
         <div class="tasks-category-count">${remainingInCat} / ${filtered.length}</div>
       </div>
     `;
@@ -7077,6 +7119,7 @@ function renderTasks() {
   }
 
   if (!renderedAny) emptyEl.style.display = "block";
+  syncTaskFilterButtons();   // 優先度チップ・優先度別ボタンの点灯(2026-11-06)
   // 並び順チップの表示状態
   document.querySelectorAll('#tasks-sort [data-sort]').forEach(b => b.classList.toggle("active", b.dataset.sort === tasksSort));
   const sortHint = document.getElementById("tasks-sort-hint");
@@ -7179,6 +7222,7 @@ function calJumpTo(kind, id) {
     tasksViewMode = "list";
     tasksFilter = "all";
     tasksTypeFilter = "all";
+    tasksPrioFilter = "all";
     tasksHideDone = false;
     syncTaskFilterButtons();
     renderTasks();
@@ -7654,6 +7698,19 @@ document.querySelectorAll('.tasks-filter-btn[data-typefilter]').forEach(btn => {
   });
 });
 document.getElementById("tf-all").classList.add("active");
+// 優先度の絞り込み・優先度別表示(2026-11-06)
+document.querySelectorAll('.tasks-filter-btn[data-priofilter]').forEach(btn => {
+  btn.addEventListener("click", () => {
+    tasksPrioFilter = btn.dataset.priofilter;
+    saveTasksPrioPref();
+    renderTasks();
+  });
+});
+document.getElementById("tasks-group-prio").addEventListener("click", () => {
+  tasksGroupByPrio = !tasksGroupByPrio;
+  saveTasksPrioPref();
+  renderTasks();
+});
 // リスト / カレンダー 切替(2026-07-31)
 document.querySelectorAll('#view-tasks .tasks-viewmode-btn').forEach(btn => {
   btn.addEventListener("click", () => {
@@ -7753,10 +7810,12 @@ function taskInputAdd() {
   const titleEl = document.getElementById("task-input-title");
   const bucketEl = document.getElementById("task-input-bucket");
   const typeEl = document.getElementById("task-input-type");
+  const prioEl = document.getElementById("task-input-prio");
   let when = taskInputWhen();
   // 明日の準備モード中は、期日を指定していなくても明日にする
   if (nightMode && !when.dueAt) when = { ...when, dueAt: tomorrowTs(), dueHasTime: false };
-  if (addTask(titleEl.value, bucketEl.value, typeEl.value, when)) {
+  if (addTask(titleEl.value, bucketEl.value, typeEl.value, when, prioEl ? prioEl.value : "normal")) {
+    if (prioEl) prioEl.value = "normal";   // 次のタスクに優先度を引きずらない
     titleEl.value = "";
     clearDraft("task-title");
     autoGrowTaskInput();           // 伸びた入力欄を1行に戻す
