@@ -1036,6 +1036,31 @@ html { zoom: var(--ui-zoom, 1); }
    この画面は「保存された文章」を表示しているのではなく、開くたびに問い合わせて描く。
    旧 _現況.md は人が書いた文章だったので実態とずれても誰も気づかなかった
    (例: 7/31以降ウォッチャー故障という誤報を8日抱えた)。 */
+
+/* 2026-11-07 司令塔の先頭「1案件1行」一覧 */
+.ich-wrap { margin: 4px 0 18px; }
+.ich-next { border: 1px solid var(--accent); border-left-width: 4px; background: #fdf4f1; padding: 12px 14px; margin-bottom: 14px; cursor: pointer; }
+.ich-next .lab { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--accent); letter-spacing: 0.1em; }
+.ich-next .nm { font-size: 18px; font-weight: 700; margin-top: 3px; color: var(--ink); line-height: 1.5; }
+.ich-next .na { font-size: 15px; margin-top: 2px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ich-next .why { font-size: 11.5px; color: var(--ink-soft); margin-top: 4px; }
+.ich-h { display: flex; align-items: baseline; gap: 8px; font-family: "Shippori Mincho", serif; font-size: 14px; letter-spacing: 0.06em; color: var(--ink-soft); border-bottom: 1px solid var(--line); padding: 4px 0; margin: 16px 0 0; }
+.ich-h.wait { color: var(--accent); border-bottom-color: var(--accent-soft); }
+.ich-row { padding: 9px 2px; border-bottom: 1px solid var(--line-soft, var(--line)); cursor: pointer; }
+.ich-r1 { display: flex; align-items: baseline; gap: 8px; }
+.ich-r1 .nm { flex: 1; min-width: 0; font-weight: 700; font-size: 14.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ich-r1 .rt { flex: none; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-mute); white-space: nowrap; }
+.ich-row.wait .ich-r1 .rt { color: var(--accent); }
+.ich-r2 { font-size: 13px; color: var(--ink); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ich-r3 { font-size: 11px; color: var(--ink-mute); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ich-r3 a { color: var(--accent); text-decoration: none; }
+.ich-det { margin: 6px 0 2px; padding: 8px 10px; background: var(--bg-2); font-size: 12.5px; line-height: 1.75; color: var(--ink-soft); white-space: pre-wrap; word-break: break-word; }
+.ich-det .t { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-mute); margin-right: 6px; }
+.ich-old { margin: 18px 0 8px; }
+.ich-old > summary { cursor: pointer; font-size: 12.5px; color: var(--ink-mute); padding: 8px 0; }
+.ich-peek { border: 1px solid var(--line); border-left: 3px solid var(--accent); padding: 8px 12px; margin-bottom: 14px; }
+.ich-peek .ich-row { cursor: pointer; }
+.ich-peek .hd { font-size: 12px; color: var(--accent); margin-bottom: 4px; }
 .shirei-wrap { max-width: 940px; }
 .shirei-title { font-family: "Shippori Mincho", serif; font-size: 26px; letter-spacing: 0.08em; margin-bottom: 4px; }
 .shirei-sub { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--ink-mute); letter-spacing: 0.06em; margin-bottom: 22px; }
@@ -1608,6 +1633,7 @@ html { zoom: var(--ui-zoom, 1); }
 
   <section class="view" id="view-tasks">
     <div class="tasks-wrap">
+      <div id="tasks-ich-peek"></div>
       <div class="tasks-header">
         <div>
           <div class="tasks-title">タスク</div>
@@ -2807,6 +2833,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     tab.classList.add("active");
     document.getElementById("view-" + tab.dataset.view).classList.add("active");
     if (tab.dataset.view === "shirei") { renderShirei(); loadShirei(); loadAnswers(); }   // 描いてから最新を取り直す
+    if (tab.dataset.view === "tasks") ichPeekRender();
     if (tab.dataset.view === "history") { renderHistory(); loadHistory(); }
     if (tab.dataset.view === "kasegu") { renderKasegu(); loadKasegu(); }
     if (tab.dataset.view === "weekly") renderWeekly();
@@ -5645,6 +5672,125 @@ function shireiSection(title, hint, items, cls, headCls, ranked) {
   return h;
 }
 
+// ===== 2026-11-07 司令塔の先頭「1案件1行」一覧 =====
+// 画面だけの派生表示。保存データ(state)には書かない。データ源は shireiProjects(ichibou_projects)。
+const ichOpen = new Set();           // 展開中の案件id
+const ichAct = {};                   // id -> 取得済みの経過(新しい順3件)
+const ichActLoading = new Set();
+let ichOldOpen = false;
+function ichDays(ymd) {              // 今日からの日数差(ymd - 今日)。ymd無しはnull
+  if (!ymd) return null;
+  const a = new Date(String(ymd).slice(0, 10) + "T00:00:00");
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  if (isNaN(a)) return null;
+  return Math.round((a - t) / 86400000);
+}
+function ichMD(ymd) { const m = String(ymd || "").slice(5, 10).split("-"); return m.length === 2 ? (Number(m[0]) + "/" + Number(m[1])) : ""; }
+function ichGroups() {
+  const live = (shireiProjects || []).filter(p => p.status !== "done" && p.status !== "frozen");
+  const wait = live.filter(p => p.owner_wait === true);
+  wait.sort((a, b) => {
+    const da = a.next_due || "9999-99-99", db = b.next_due || "9999-99-99";
+    if (da !== db) return da < db ? -1 : 1;
+    const la = a.last_touch || "0000-00-00", lb = b.last_touch || "0000-00-00";
+    return la < lb ? -1 : la > lb ? 1 : 0;
+  });
+  const rest = live.filter(p => p.owner_wait !== true);
+  const moving = rest.filter(p => { const d = ichDays(p.last_touch); return d !== null && d >= -14; });
+  moving.sort((a, b) => (b.last_touch || "") < (a.last_touch || "") ? -1 : 1);
+  const stale = rest.filter(p => { const d = ichDays(p.last_touch); return d === null || d < -14; });
+  stale.sort((a, b) => (a.last_touch || "") < (b.last_touch || "") ? -1 : 1);
+  return { wait, moving, stale };
+}
+function ichRowHtml(p, kind) {
+  let rt = "";
+  if (kind === "wait") rt = p.minutes ? p.minutes + "分" : "";
+  else if (kind === "moving") { const d = ichDays(p.last_touch); rt = d === 0 ? "今日" : d === -1 ? "昨日" : ichMD(p.last_touch); }
+  else rt = p.last_touch ? ichMD(p.last_touch) + "〜" : "—";
+  const ct = p.chat_title ? escapeHtml(p.chat_title) : "未登録";
+  const cp = p.chat_project ? "／" + escapeHtml(p.chat_project) : "";
+  const safeUrl = /^https?:\/\//i.test(p.chat_url || "");
+  const line3 = safeUrl
+    ? '<a href="' + escapeHtml(p.chat_url) + '" target="_blank" rel="noopener">チャット：' + ct + cp + ' ↗</a>'
+    : "チャット：" + ct + cp;
+  const id = escapeHtml(String(p.id));
+  return '<div class="ich-row ' + kind + '" data-ichrow="' + id + '">'
+    + '<div class="ich-r1"><span class="nm">' + escapeHtml(p.name || "") + '</span><span class="rt">' + escapeHtml(rt) + '</span></div>'
+    + '<div class="ich-r2">' + escapeHtml(p.next_action || "（次の一手 未登録）") + '</div>'
+    + '<div class="ich-r3">' + line3 + '</div>'
+    + ichDetailHtml(p) + '</div>';
+}
+function ichDetailHtml(p) {
+  if (!ichOpen.has(String(p.id))) return "";
+  let h = '<div class="ich-det">';
+  h += '<b>進み具合</b>　' + escapeHtml(p.progress || "（なし）");
+  if (p.blocker_note) h += '\n<b>詰まり</b>　' + escapeHtml(p.blocker_note);
+  const acts = ichAct[String(p.id)];
+  if (acts === undefined) h += '\n<span class="t">経過を読み込み中…</span>';
+  else if (acts.length) h += '\n' + acts.map(a => '<span class="t">' + escapeHtml(ichMD(String(a.created_at || "").slice(0, 10))) + '</span>' + escapeHtml(a.what || "")).join("\n");
+  h += '</div>';
+  return h;
+}
+async function ichToggle(id) {
+  if (ichOpen.has(id)) ichOpen.delete(id); else ichOpen.add(id);
+  renderShirei(); ichPeekRender();
+  if (ichOpen.has(id) && ichAct[id] === undefined && !ichActLoading.has(id)) {
+    ichActLoading.add(id);
+    try {
+      const { data, error } = await sb.from("ichibou_activity").select("what, kind, created_at")
+        .eq("project_id", id).neq("kind", "log").order("created_at", { ascending: false }).limit(3);
+      ichAct[id] = (!error && data) ? data : [];
+    } catch (e) { ichAct[id] = []; }
+    ichActLoading.delete(id);
+    renderShirei(); ichPeekRender();
+  }
+}
+function ichGroupHtml(title, items, kind, cls, rightNote) {
+  if (!items.length) return "";
+  return '<div class="ich-h ' + (cls || "") + '">' + escapeHtml(title) + '<span style="margin-left:auto;font-size:11px;color:var(--ink-mute)">' + escapeHtml(rightNote || "") + '</span></div>'
+    + items.map(p => ichRowHtml(p, kind)).join("");
+}
+function ichBlockHtml() {
+  const g = ichGroups();
+  if (!g.wait.length && !g.moving.length && !g.stale.length) return "";
+  let h = '<div class="ich-wrap">';
+  if (g.wait.length) {
+    const p = g.wait[0];
+    const dd = ichDays(p.next_due);
+    let why = "";
+    if (p.next_due && dd !== null && dd <= 3) why = "締切 " + ichMD(p.next_due);
+    else { const t = ichDays(p.last_touch); if (t !== null && t < 0) why = (-t) + "日止まっている"; }
+    if (p.minutes) why += (why ? "　" : "") + p.minutes + "分";
+    h += '<div class="ich-next" data-ichrow="' + escapeHtml(String(p.id)) + '"><div class="lab">次はこれ</div>'
+      + '<div class="nm">' + escapeHtml(p.name || "") + '</div>'
+      + '<div class="na">' + escapeHtml(p.next_action || "（次の一手 未登録）") + '</div>'
+      + (why ? '<div class="why">' + escapeHtml(why) + '</div>' : '')
+      + (() => { const safe = /^https?:\/\//i.test(p.chat_url || ""); const t = "チャット：" + (p.chat_title ? escapeHtml(p.chat_title) : "未登録") + (p.chat_project ? "／" + escapeHtml(p.chat_project) : ""); return '<div class="ich-r3">' + (safe ? '<a href="' + escapeHtml(p.chat_url) + '" target="_blank" rel="noopener">' + t + ' ↗</a>' : t) + '</div>'; })()
+      + ichDetailHtml(p) + '</div>';
+  }
+  const mins = g.wait.reduce((s, p) => s + (p.minutes || 0), 0);
+  h += ichGroupHtml("あなたの番 " + g.wait.length + "件" + (mins ? "・計" + mins + "分" : ""), g.wait, "wait", "wait", "");
+  h += ichGroupHtml("Claudeが進めている", g.moving, "moving", "", g.moving.length + "件");
+  h += ichGroupHtml("2週間動いていない（続ける？やめる？）", g.stale, "stale", "", g.stale.length + "件");
+  h += '</div>';
+  return h;
+}
+// タスクタブの先頭に、司令塔の「あなたの番」を読み取り専用で最大5件。タップで司令塔タブへ
+function ichPeekRender() {
+  const el = document.getElementById("tasks-ich-peek");
+  if (!el) return;
+  if (shireiProjects === null) { try { loadShireiCache(); } catch (e) {} }
+  if (!shireiProjects) { el.innerHTML = ""; return; }
+  const w = ichGroups().wait;
+  if (!w.length) { el.innerHTML = ""; return; }
+  el.innerHTML = '<div class="ich-peek"><div class="hd">あなたの番（司令塔より）' + w.length + '件</div>'
+    + w.slice(0, 5).map(p => '<div class="ich-row wait" data-ichgoto="1"><div class="ich-r1"><span class="nm">' + escapeHtml(p.name || "") + '</span><span class="rt">' + (p.minutes ? p.minutes + "分" : "") + '</span></div>'
+      + '<div class="ich-r2">' + escapeHtml(p.next_action || "") + '</div></div>').join("") + '</div>';
+}
+document.addEventListener("click", (ev) => {
+  if (ev.target.closest("#tasks-ich-peek [data-ichgoto]")) shireiGoTab("shirei");
+});
+
 function renderShirei() {
   const body = document.getElementById("shirei-body");
   if (!body) return;
@@ -5685,6 +5831,8 @@ function renderShirei() {
 
   // 旧「一望(ホーム)」タブの中身をここへ吸収(2026-08-16)。
   // 司令塔とホームは「いま気にすべきことを出す」という同じ仕事をしていて、入口が2つある状態だった。
+  h += ichBlockHtml();
+  h += '<details class="ich-old"' + (ichOldOpen ? " open" : "") + '><summary>これまでの詳しい表示</summary>';
   h += shireiRequestsSection();
   h += shireiTaskSection();
   h += shireiStrip(wait.length);
@@ -5713,7 +5861,11 @@ function renderShirei() {
   h += '<div class="shirei-sec"><div class="shirei-h shirei-fold" data-goto2="history">'
      + 'これまでの記録<span class="n">履歴タブ →</span></div></div>';
 
+  h += '</details>';
   body.innerHTML = h;
+  const ichOldEl = body.querySelector("details.ich-old");
+  if (ichOldEl) ichOldEl.addEventListener("toggle", () => { ichOldOpen = ichOldEl.open; });
+  ichPeekRender();
 
   // 2026-08-21: 開いているカードの入力欄に音声入力を繋ぐ(作り直されるたびに繋ぎ直す)
   body.querySelectorAll("[data-shireimic]").forEach(mic => {
@@ -5823,6 +5975,9 @@ async function shireiAddConcern() {
   if (!root) return;
 
   root.addEventListener("click", async (ev) => {
+    if (ev.target.closest(".ich-r3 a")) return;   // チャットへのリンクは素通し(新しいタブで開く)
+    const ichr = ev.target.closest("[data-ichrow]");
+    if (ichr) { ev.stopPropagation(); await ichToggle(ichr.dataset.ichrow); return; }
     const goto2 = ev.target.closest("[data-goto2]");
     if (goto2) { shireiGoTab(goto2.dataset.goto2); return; }
 
