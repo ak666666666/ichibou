@@ -2833,7 +2833,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     tab.classList.add("active");
     document.getElementById("view-" + tab.dataset.view).classList.add("active");
     if (tab.dataset.view === "shirei") { renderShirei(); loadShirei(); loadAnswers(); }   // 描いてから最新を取り直す
-    if (tab.dataset.view === "tasks") ichPeekRender();
+    if (tab.dataset.view === "tasks") { ichPeekRender(); if (shireiProjects === null) loadShirei(); }
     if (tab.dataset.view === "history") { renderHistory(); loadHistory(); }
     if (tab.dataset.view === "kasegu") { renderKasegu(); loadKasegu(); }
     if (tab.dataset.view === "weekly") renderWeekly();
@@ -5689,6 +5689,15 @@ function ichMD(ymd) { const m = String(ymd || "").slice(5, 10).split("-"); retur
 function ichGroups() {
   const live = (shireiProjects || []).filter(p => p.status !== "done" && p.status !== "frozen");
   const wait = live.filter(p => p.owner_wait === true);
+  // 2026-11-07: ichibou_requests(status=open)も「あなたの番」に混ぜる(読み取りのみ)
+  (shireiRequests || []).filter(r => r.status === "open").forEach(r => {
+    const pj = (shireiProjects || []).find(x => String(x.id) === String(r.project_id));
+    wait.push({
+      _rq: true, id: "r:" + r.id, name: r.title || "", next_action: String(r.body || "").split("\n").filter(x => x.trim())[0] || "",
+      minutes: r.minutes, next_due: r.due || null, last_touch: String(r.created_at || "").slice(0, 10) || null,
+      body: r.body || "", reply: r.reply || "", pname: pj ? pj.name : ""
+    });
+  });
   wait.sort((a, b) => {
     const da = a.next_due || "9999-99-99", db = b.next_due || "9999-99-99";
     if (da !== db) return da < db ? -1 : 1;
@@ -5702,26 +5711,34 @@ function ichGroups() {
   stale.sort((a, b) => (a.last_touch || "") < (b.last_touch || "") ? -1 : 1);
   return { wait, moving, stale };
 }
+function ichR3Html(p) {
+  if (p._rq) {
+    return "依頼" + (p.next_due ? "　期限 " + ichMD(p.next_due) : "") + (p.pname ? "／" + escapeHtml(p.pname) : "");
+  }
+  const ct = p.chat_title ? escapeHtml(p.chat_title) : "未登録";
+  const cp = p.chat_project ? "／" + escapeHtml(p.chat_project) : "";
+  if (/^https?:\/\//i.test(p.chat_url || ""))
+    return '<a href="' + escapeHtml(p.chat_url) + '" target="_blank" rel="noopener">チャット：' + ct + cp + ' ↗</a>';
+  return "チャット：" + ct + cp;
+}
 function ichRowHtml(p, kind) {
   let rt = "";
   if (kind === "wait") rt = p.minutes ? p.minutes + "分" : "";
   else if (kind === "moving") { const d = ichDays(p.last_touch); rt = d === 0 ? "今日" : d === -1 ? "昨日" : ichMD(p.last_touch); }
   else rt = p.last_touch ? ichMD(p.last_touch) + "〜" : "—";
-  const ct = p.chat_title ? escapeHtml(p.chat_title) : "未登録";
-  const cp = p.chat_project ? "／" + escapeHtml(p.chat_project) : "";
-  const safeUrl = /^https?:\/\//i.test(p.chat_url || "");
-  const line3 = safeUrl
-    ? '<a href="' + escapeHtml(p.chat_url) + '" target="_blank" rel="noopener">チャット：' + ct + cp + ' ↗</a>'
-    : "チャット：" + ct + cp;
+  const line3 = ichR3Html(p);
   const id = escapeHtml(String(p.id));
   return '<div class="ich-row ' + kind + '" data-ichrow="' + id + '">'
     + '<div class="ich-r1"><span class="nm">' + escapeHtml(p.name || "") + '</span><span class="rt">' + escapeHtml(rt) + '</span></div>'
-    + '<div class="ich-r2">' + escapeHtml(p.next_action || "（次の一手 未登録）") + '</div>'
+    + '<div class="ich-r2">' + escapeHtml(p.next_action || (p._rq ? "" : "（次の一手 未登録）")) + '</div>'
     + '<div class="ich-r3">' + line3 + '</div>'
     + ichDetailHtml(p) + '</div>';
 }
 function ichDetailHtml(p) {
   if (!ichOpen.has(String(p.id))) return "";
+  if (p._rq) {
+    return '<div class="ich-det">' + escapeHtml(p.body || "（本文なし）") + (p.reply ? '\n<b>返信</b>　' + escapeHtml(p.reply) : "") + '</div>';
+  }
   let h = '<div class="ich-det">';
   h += '<b>進み具合</b>　' + escapeHtml(p.progress || "（なし）");
   if (p.blocker_note) h += '\n<b>詰まり</b>　' + escapeHtml(p.blocker_note);
@@ -5734,7 +5751,7 @@ function ichDetailHtml(p) {
 async function ichToggle(id) {
   if (ichOpen.has(id)) ichOpen.delete(id); else ichOpen.add(id);
   renderShirei(); ichPeekRender();
-  if (ichOpen.has(id) && ichAct[id] === undefined && !ichActLoading.has(id)) {
+  if (ichOpen.has(id) && !id.startsWith("r:") && ichAct[id] === undefined && !ichActLoading.has(id)) {
     ichActLoading.add(id);
     try {
       const { data, error } = await sb.from("ichibou_activity").select("what, kind, created_at")
@@ -5759,13 +5776,13 @@ function ichBlockHtml() {
     const dd = ichDays(p.next_due);
     let why = "";
     if (p.next_due && dd !== null && dd <= 3) why = "締切 " + ichMD(p.next_due);
-    else { const t = ichDays(p.last_touch); if (t !== null && t < 0) why = (-t) + "日止まっている"; }
+    else if (!p._rq) { const t = ichDays(p.last_touch); if (t !== null && t < 0) why = (-t) + "日止まっている"; }
     if (p.minutes) why += (why ? "　" : "") + p.minutes + "分";
     h += '<div class="ich-next" data-ichrow="' + escapeHtml(String(p.id)) + '"><div class="lab">次はこれ</div>'
       + '<div class="nm">' + escapeHtml(p.name || "") + '</div>'
       + '<div class="na">' + escapeHtml(p.next_action || "（次の一手 未登録）") + '</div>'
       + (why ? '<div class="why">' + escapeHtml(why) + '</div>' : '')
-      + (() => { const safe = /^https?:\/\//i.test(p.chat_url || ""); const t = "チャット：" + (p.chat_title ? escapeHtml(p.chat_title) : "未登録") + (p.chat_project ? "／" + escapeHtml(p.chat_project) : ""); return '<div class="ich-r3">' + (safe ? '<a href="' + escapeHtml(p.chat_url) + '" target="_blank" rel="noopener">' + t + ' ↗</a>' : t) + '</div>'; })()
+      + '<div class="ich-r3">' + ichR3Html(p) + '</div>'
       + ichDetailHtml(p) + '</div>';
   }
   const mins = g.wait.reduce((s, p) => s + (p.minutes || 0), 0);
