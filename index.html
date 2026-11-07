@@ -5712,14 +5712,16 @@ function ichGroups() {
   return { wait, moving, stale };
 }
 function ichR3Html(p) {
+  const dd = ichDays(p.next_due);
+  const od = (dd !== null && dd < 0) ? ' <b style="color:var(--accent)">期限切れ</b>' : "";
   if (p._rq) {
-    return "依頼" + (p.next_due ? "　期限 " + ichMD(p.next_due) : "") + (p.pname ? "／" + escapeHtml(p.pname) : "");
+    return "依頼" + (p.next_due ? "　期限 " + ichMD(p.next_due) : "") + (p.pname ? "／" + escapeHtml(p.pname) : "") + od;
   }
   const ct = p.chat_title ? escapeHtml(p.chat_title) : "未登録";
   const cp = p.chat_project ? "／" + escapeHtml(p.chat_project) : "";
   if (/^https?:\/\//i.test(p.chat_url || ""))
-    return '<a href="' + escapeHtml(p.chat_url) + '" target="_blank" rel="noopener">チャット：' + ct + cp + ' ↗</a>';
-  return "チャット：" + ct + cp;
+    return '<a href="' + escapeHtml(p.chat_url) + '" target="_blank" rel="noopener">チャット：' + ct + cp + ' ↗</a>' + od;
+  return "チャット：" + ct + cp + od;
 }
 function ichRowHtml(p, kind) {
   let rt = "";
@@ -5730,7 +5732,7 @@ function ichRowHtml(p, kind) {
   const id = escapeHtml(String(p.id));
   return '<div class="ich-row ' + kind + '" data-ichrow="' + id + '">'
     + '<div class="ich-r1"><span class="nm">' + escapeHtml(p.name || "") + '</span><span class="rt">' + escapeHtml(rt) + '</span></div>'
-    + '<div class="ich-r2">' + escapeHtml(p.next_action || (p._rq ? "" : "（次の一手 未登録）")) + '</div>'
+    + (p._rq ? "" : '<div class="ich-r2">' + escapeHtml(p.next_action || "（次の一手 未登録）") + '</div>')
     + '<div class="ich-r3">' + line3 + '</div>'
     + ichDetailHtml(p) + '</div>';
 }
@@ -5772,22 +5774,28 @@ function ichBlockHtml() {
   if (!g.wait.length && !g.moving.length && !g.stale.length) return "";
   let h = '<div class="ich-wrap">';
   if (g.wait.length) {
-    const p = g.wait[0];
-    const dd = ichDays(p.next_due);
-    let why = "";
-    if (p.next_due && dd !== null && dd <= 3) why = "締切 " + ichMD(p.next_due);
-    else if (!p._rq) { const t = ichDays(p.last_touch); if (t !== null && t < 0) why = (-t) + "日止まっている"; }
-    if (p.minutes) why += (why ? "　" : "") + p.minutes + "分";
+    const soon = g.wait.filter(x => { const d = ichDays(x.next_due); return d === 0 || d === 1; })
+      .sort((a, b) => a.next_due < b.next_due ? -1 : a.next_due > b.next_due ? 1 : 0);
+    let p, why;
+    if (soon.length) { p = soon[0]; why = "期限 " + (ichDays(p.next_due) === 0 ? "今日" : "明日"); if (p.minutes) why += "　" + p.minutes + "分"; }
+    else {
+      const byMin = g.wait.slice().sort((a, b) => {
+        const ma = a.minutes || 99999, mb = b.minutes || 99999;
+        if (ma !== mb) return ma - mb;
+        return (a.last_touch || "") < (b.last_touch || "") ? -1 : 1;
+      });
+      p = byMin[0]; why = p.minutes ? "すぐ終わる・" + p.minutes + "分" : "";
+    }
     h += '<div class="ich-next" data-ichrow="' + escapeHtml(String(p.id)) + '"><div class="lab">次はこれ</div>'
       + '<div class="nm">' + escapeHtml(p.name || "") + '</div>'
-      + '<div class="na">' + escapeHtml(p.next_action || "（次の一手 未登録）") + '</div>'
+      + (p._rq ? "" : '<div class="na">' + escapeHtml(p.next_action || "（次の一手 未登録）") + '</div>')
       + (why ? '<div class="why">' + escapeHtml(why) + '</div>' : '')
       + '<div class="ich-r3">' + ichR3Html(p) + '</div>'
       + ichDetailHtml(p) + '</div>';
   }
   const mins = g.wait.reduce((s, p) => s + (p.minutes || 0), 0);
   h += ichGroupHtml("あなたの番 " + g.wait.length + "件" + (mins ? "・計" + mins + "分" : ""), g.wait, "wait", "wait", "");
-  h += ichGroupHtml("Claudeが進めている", g.moving, "moving", "", g.moving.length + "件");
+  h += ichGroupHtml("進行中（Claude・兄・相手）", g.moving, "moving", "", g.moving.length + "件");
   h += ichGroupHtml("2週間動いていない（続ける？やめる？）", g.stale, "stale", "", g.stale.length + "件");
   h += '</div>';
   return h;
@@ -5802,7 +5810,7 @@ function ichPeekRender() {
   if (!w.length) { el.innerHTML = ""; return; }
   el.innerHTML = '<div class="ich-peek"><div class="hd">あなたの番（司令塔より）' + w.length + '件</div>'
     + w.slice(0, 5).map(p => '<div class="ich-row wait" data-ichgoto="1"><div class="ich-r1"><span class="nm">' + escapeHtml(p.name || "") + '</span><span class="rt">' + (p.minutes ? p.minutes + "分" : "") + '</span></div>'
-      + '<div class="ich-r2">' + escapeHtml(p.next_action || "") + '</div></div>').join("") + '</div>';
+      + (p._rq ? "" : '<div class="ich-r2">' + escapeHtml(p.next_action || "") + '</div>') + '</div>').join("") + '</div>';
 }
 document.addEventListener("click", (ev) => {
   if (ev.target.closest("#tasks-ich-peek [data-ichgoto]")) shireiGoTab("shirei");
